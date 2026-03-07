@@ -1,0 +1,58 @@
+# Environment & Secrets
+.env
+.env.local
+.env.production
+.claude_settings.json
+.mcp.json
+includes/master_password.php
+
+# Local agent tooling
+.claude/
+.trae/
+
+# Encrypted Data Files (don't commit encrypted data to git)
+data/
+!data/PROTECTED.md
+!data/.htaccess
+!data/index.php
+
+*.log
+
+# Composer
+/vendor/
+composer.lock
+composer.phar
+
+# Testing
+.phpunit.result.cache
+phpunit.xml
+phpstan.neon
+test_output*.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary
+nul
+temp_*
+*.tmp
+
+# Screenshots & samples
+screenshot.png
+*.demo.*
+/sample/
+
+# Portable Cron/Scheduler PID files
+*.pid
+cron/*.pid
+cron/scheduler_status.json
+server.pid
