@@ -1,0 +1,205 @@
+/* LazyMan Tools - Custom Styles */
+
+/* Base Styles */
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Animations */
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-slide-in {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Hover Effects */
+.hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Sidebar */
+.sidebar-item {
+    transition: all 0.2s ease;
+}
+
+.sidebar-item.active {
+    background-color: #f3f4f6;
+    font-weight: 500;
+}
+
+.sidebar-item:hover {
+    background-color: #f9fafb;
+}
+
+/* Kanban Board */
+.kanban-column {
+    min-height: 200px;
+    transition: background-color 0.2s ease;
+}
+
+.kanban-column.drag-over {
+    background-color: #f0f9ff;
+}
+
+.task-card {
+    cursor: grab;
+    transition: all 0.2s ease;
+}
+
+.task-card:active {
+    cursor: grabbing;
+}
+
+.task-card.dragging {
+    opacity: 0.5;
+    transform: rotate(2deg);
+}
+
+.sortable-ghost {
+    opacity: 0.3;
+}
+
+.sortable-chosen {
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* Pomodoro Timer */
+.pomodoro-display {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Invoice Builder */
+.invoice-preview {
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+
+/* Focus Styles */
+input:focus, 
+select:focus, 
+textarea:focus,
+button:focus {
+    outline: none;
+    ring: 2px;
+    ring-color: #000;
+}
+
+/* Priority Colors */
+.priority-urgent { background-color: #fee2e2; color: #991b1b; }
+.priority-high { background-color: #ffedd5; color: #9a3412; }
+.priority-medium { background-color: #fef3c7; color: #92400e; }
+.priority-low { background-color: #dcfce7; color: #166534; }
+
+/* Status Colors */
+.status-done { background-color: #dcfce7; color: #166534; }
+.status-in-progress { background-color: #dbeafe; color: #1e40af; }
+.status-review { background-color: #f3e8ff; color: #7c3aed; }
+.status-todo { background-color: #f3f4f6; color: #374151; }
+.status-overdue { background-color: #fee2e2; color: #991b1b; }
+
+/* Charts */
+.chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+
+/* Loading Spinner */
+.spinner {
+    border: 3px solid #f3f4f6;
+    border-top-color: #000;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Checkbox Custom Style */
+input[type="checkbox"] {
+    accent-color: #000;
+}
+
+/* Select Arrow */
+select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+}
+
+/* Modal Backdrop */
+.modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+}
+
+/* Print Styles */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    body {
+        background: white;
+    }
+    
+    .invoice-preview {
+        box-shadow: none;
+    }
+}

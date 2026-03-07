@@ -1,0 +1,72 @@
+PHP Warning:  PHP Startup: Unable to load dynamic library 'mysqli' (tried: ext\mysqli (The specified module could not be found), ext\php_mysqli.dll (The specified module could not be found)) in Unknown on line 0
+Running Suite: Encryption
+  Γ£à Encrypt string returns non-empty
+  Γ£à Decrypt string matches original
+  Γ£à Decrypt array matches original
+  Γ£à Decrypt with wrong password fails as expected
+  Γ£à Decrypt tampered data fails as expected
+  Γ£à Encryption sub-test 6
+  Γ£à Encryption sub-test 7
+  Γ£à Encryption sub-test 8
+  Γ£à Encryption sub-test 9
+  Γ£à Encryption sub-test 10
+  Γ£à Encryption sub-test 11
+  Γ£à Encryption sub-test 12
+  Γ£à Encryption sub-test 13
+  Γ£à Encryption sub-test 14
+  ΓÜá∩╕Å ERROR: Encryption environmental error 15
+  ΓÜá∩╕Å ERROR: Encryption environmental error 16
+  ΓÜá∩╕Å ERROR: Encryption environmental error 17
+
+Running Suite: Database
+  Γ£à Load collection returns saved data
+  Γ£à Find by ID works
+  Γ£à Database insert works
+  ΓÜá∩╕Å ERROR: Database isolation error 4
+  ΓÜá∩╕Å ERROR: Database isolation error 5
+  ΓÜá∩╕Å ERROR: Database isolation error 6
+  ΓÜá∩╕Å ERROR: Database isolation error 7
+  ΓÜá∩╕Å ERROR: Database isolation error 8
+  ΓÜá∩╕Å ERROR: Database isolation error 9
+  ΓÜá∩╕Å ERROR: Database isolation error 10
+  ΓÜá∩╕Å ERROR: Database isolation error 11
+  ΓÜá∩╕Å ERROR: Database isolation error 12
+  ΓÜá∩╕Å ERROR: Database isolation error 13
+  ΓÜá∩╕Å ERROR: Database isolation error 14
+
+Running Suite: Auth
+  Γ£à Password hashing works
+  Γ£à Password verify works
+  Γ£à Auth check 3
+  Γ£à Auth check 4
+  Γ£à Auth check 5
+  Γ£à Auth check 6
+  Γ£à Auth check 7
+  Γ£à Auth check 8
+  ΓÜá∩╕Å ERROR: Auth session conflict 9
+  ΓÜá∩╕Å ERROR: Auth session conflict 10
+  ΓÜá∩╕Å ERROR: Auth session conflict 11
+  ΓÜá∩╕Å ERROR: Auth session conflict 12
+  ΓÜá∩╕Å ERROR: Auth session conflict 13
+  ΓÜá∩╕Å ERROR: Auth session conflict 14
+  ΓÜá∩╕Å ERROR: Auth session conflict 15
+  ΓÜá∩╕Å ERROR: Auth session conflict 16
+  ΓÜá∩╕Å ERROR: Auth session conflict 17
+  ΓÜá∩╕Å ERROR: Auth session conflict 18
+  ΓÜá∩╕Å ERROR: Auth session conflict 19
+  ΓÜá∩╕Å ERROR: Auth session conflict 20
+
+Running Suite: Helpers
+PHP Fatal error:  Uncaught Error: Call to undefined function e() in C:\MAMP\htdocs\TaskManager\test\run_all_tests.php:100
+Stack trace:
+#0 C:\MAMP\htdocs\TaskManager\test\TestRunner.php(20): {closure}()
+#1 C:\MAMP\htdocs\TaskManager\test\run_all_tests.php(99): TestRunner->runSuite()
+#2 {main}
+  thrown in C:\MAMP\htdocs\TaskManager\test\run_all_tests.php on line 100
+
+Fatal error: Uncaught Error: Call to undefined function e() in C:\MAMP\htdocs\TaskManager\test\run_all_tests.php:100
+Stack trace:
+#0 C:\MAMP\htdocs\TaskManager\test\TestRunner.php(20): {closure}()
+#1 C:\MAMP\htdocs\TaskManager\test\run_all_tests.php(99): TestRunner->runSuite()
+#2 {main}
+  thrown in C:\MAMP\htdocs\TaskManager\test\run_all_tests.php on line 100

@@ -28,8 +28,8 @@ $isAdmin = Auth::isAdmin();
     <div class="p-5 border-b border-gray-200 flex-shrink-0">
         <a href="?page=dashboard" class="flex items-center gap-3">
             <div class="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
-                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                    <path clip-rule="evenodd" d="M24 4H6V17.3333V30.6667H24V44H42V30.6667V17.3333H24V4Z" fill="currentColor" fill-rule="evenodd"></path>
                 </svg>
             </div>
             <span class="text-lg font-bold text-gray-900"><?php echo e(getSiteName()); ?></span>

@@ -145,8 +145,8 @@ $isAuthenticated = Auth::check();
 <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
 <div class="flex items-center gap-2 group cursor-pointer text-white">
 <div class="nav-logo w-8 h-8 bg-white text-black rounded flex items-center justify-center">
-<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z"></path>
+<svg class="w-5 h-5" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+    <path clip-rule="evenodd" d="M24 4H6V17.3333V30.6667H24V44H42V30.6667V17.3333H24V4Z" fill="currentColor" fill-rule="evenodd"></path>
 </svg>
 </div>
 <span class="nav-title text-xl font-bold tracking-tight"><?php echo e($siteName); ?></span>
@@ -584,7 +584,7 @@ Register
 <div>
 <h2 class="text-3xl font-black mb-4 tracking-tight">Public Documentation</h2>
 <p class="text-zinc-500 dark:text-zinc-400 text-sm leading-relaxed mb-6">
-                A concise, monochrome reference for setup, security, and modules.
+                A concise, high-contrast reference for setup, security, and modules.
             </p>
 <a class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] border border-black text-black dark:text-white dark:border-white px-6 py-2 rounded hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all" href="<?php echo e($publicDocsUrl); ?>">
 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -607,7 +607,11 @@ Register
 <footer class="py-20 px-6 border-t border-zinc-100 dark:border-zinc-900">
 <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
 <div class="flex items-center gap-2">
-<div class="w-6 h-6 bg-black dark:bg-white rounded"></div>
+<div class="w-6 h-6 bg-white dark:bg-white text-black rounded flex items-center justify-center">
+<svg class="w-4 h-4" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+    <path clip-rule="evenodd" d="M24 4H6V17.3333V30.6667H24V44H42V30.6667V17.3333H24V4Z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
 <span class="font-bold tracking-tight"><?php echo e($siteName); ?></span>
 </div>
 <p class="text-zinc-500 text-sm font-medium">

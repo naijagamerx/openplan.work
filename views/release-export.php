@@ -216,10 +216,46 @@ function releaseExportRecursiveDelete(string $dir): void {
         if (is_dir($path)) {
             releaseExportRecursiveDelete($path);
         } else {
-            unlink($path);
+            if (!releaseExportDeleteFileWithRetry($path)) {
+                error_log('Release export cleanup: failed to delete file ' . $path);
+            }
         }
     }
-    rmdir($dir);
+    if (!releaseExportDeleteDirWithRetry($dir)) {
+        error_log('Release export cleanup: failed to delete directory ' . $dir);
+    }
+}
+
+function releaseExportDeleteFileWithRetry(string $path, int $retries = 5, int $delayMicros = 120000): bool {
+    if (!file_exists($path)) {
+        return true;
+    }
+
+    for ($i = 0; $i < $retries; $i++) {
+        clearstatcache(true, $path);
+        if (@unlink($path) || !file_exists($path)) {
+            return true;
+        }
+        usleep($delayMicros);
+    }
+
+    return !file_exists($path);
+}
+
+function releaseExportDeleteDirWithRetry(string $path, int $retries = 5, int $delayMicros = 120000): bool {
+    if (!is_dir($path)) {
+        return true;
+    }
+
+    for ($i = 0; $i < $retries; $i++) {
+        clearstatcache(true, $path);
+        if (@rmdir($path) || !is_dir($path)) {
+            return true;
+        }
+        usleep($delayMicros);
+    }
+
+    return !is_dir($path);
 }
 
 function releaseExportShouldExclude(string $path, array $patterns): bool {
