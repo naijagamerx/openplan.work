@@ -84,7 +84,17 @@ if ($method === 'POST') {
         ];
 
         if ($exportType === 'hosted' && file_exists(ROOT_PATH . '/.env')) {
-            $includedRootFiles[] = '.env';
+            // Read .env file
+            $envContent = file_get_contents(ROOT_PATH . '/.env');
+            
+            // Remove sensitive lines
+            $cleanEnv = preg_replace('/^LAZYMAN_MASTER_PASSWORD=.*$/m', 'LAZYMAN_MASTER_PASSWORD=', $envContent);
+            $cleanEnv = preg_replace('/^DB_PASSWORD=.*$/m', 'DB_PASSWORD=', $cleanEnv);
+            $cleanEnv = preg_replace('/^GROQ_API_KEY=.*$/m', 'GROQ_API_KEY=', $cleanEnv);
+            $cleanEnv = preg_replace('/^OPENROUTER_API_KEY=.*$/m', 'OPENROUTER_API_KEY=', $cleanEnv);
+            
+            // Write cleaned .env to staging
+            file_put_contents($stagingPath . '/.env', $cleanEnv);
         }
 
         if ($exportType === 'local') {
@@ -125,6 +135,10 @@ if ($method === 'POST') {
         foreach ($includedRootFiles as $file) {
             $sourcePath = ROOT_PATH . '/' . $file;
             if (file_exists($sourcePath)) {
+                // If file is .env and we already processed it, skip
+                if ($file === '.env' && file_exists($stagingPath . '/.env')) {
+                    continue;
+                }
                 copy($sourcePath, $stagingPath . '/' . $file);
             }
         }
