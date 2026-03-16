@@ -4,12 +4,14 @@
  */
 
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../includes/ProjectsAPI.php';
 
 if (!Auth::check()) {
     errorResponse('Unauthorized', 401);
 }
 
-if (requestMethod() !== 'GET') {
+// CSRF validation for non-GET requests (bypass for MCP)
+if (requestMethod() !== 'GET' && !Auth::isMcp()) {
     $body = getJsonBody();
     $token = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if (!Auth::validateCsrf($token)) {
@@ -17,122 +19,86 @@ if (requestMethod() !== 'GET') {
     }
 }
 
-$db = new Database(getMasterPassword());
+$db = new Database(getMasterPassword(), Auth::userId());
+
+// Verify database connection works
+try {
+    $db->load('projects', true);
+} catch (Exception $e) {
+    errorResponse('Database connection failed: Wrong master password', 401, ERROR_UNAUTHORIZED);
+}
+
 $id = $_GET['id'] ?? null;
+$action = $_GET['action'] ?? null;
+
+$projectsAPI = new ProjectsAPI($db, 'projects');
 
 switch (requestMethod()) {
     case 'GET':
-        $projects = $db->load('projects');
-        
         if ($id) {
-            foreach ($projects as $project) {
-                if ($project['id'] === $id) {
-                    successResponse($project);
-                }
+            $project = $projectsAPI->find($id);
+            if ($project) {
+                // Add counts for single project too
+                $tasks = $project['tasks'] ?? [];
+                $project['taskCount'] = count($tasks);
+                $project['completedCount'] = count(array_filter($tasks, fn($t) => isTaskDone($t['status'] ?? '')));
+                successResponse($project);
             }
-            errorResponse('Project not found', 404);
+            $projectsAPI->notFound('Project');
         }
-        
-        // Add task counts
-        foreach ($projects as $key => $project) {
-            $tasks = $project['tasks'] ?? [];
-            $projects[$key]['taskCount'] = count($tasks);
-            $projects[$key]['completedCount'] = count(array_filter($tasks, fn($t) => ($t['status'] ?? '') === 'done'));
-        }
-        
-        successResponse($projects);
+        successResponse($projectsAPI->findAll());
         break;
-        
+
     case 'POST':
         $body = getJsonBody();
-        $action = $_GET['action'] ?? 'add';
-        
+
         if ($action === 'update' && $id) {
-            $projects = $db->load('projects');
-            $found = false;
-            foreach ($projects as $key => $project) {
-                if ($project['id'] === $id) {
-                    $allowedFields = ['name', 'description', 'clientId', 'status', 'color'];
-                    foreach ($allowedFields as $field) {
-                        if (isset($body[$field])) {
-                            $projects[$key][$field] = $body[$field];
-                        }
-                    }
-                    $projects[$key]['updatedAt'] = date('c');
-                    $db->save('projects', $projects);
-                    $found = true;
-                    successResponse($projects[$key], 'Project updated');
-                    break;
-                }
+            $project = $projectsAPI->update($id, $body);
+            if ($project) {
+                successResponse($project, 'Project updated');
             }
-            if (!$found) errorResponse('Project not found', 404);
-        } else {
-            // New project
-            if (empty($body['name'])) {
-                errorResponse('Project name is required');
-            }
-            
-            $projects = $db->load('projects');
-            $newProject = [
-                'id' => $db->generateId(),
-                'name' => $body['name'],
-                'description' => $body['description'] ?? '',
-                'clientId' => $body['clientId'] ?? null,
-                'status' => $body['status'] ?? 'planning',
-                'color' => $body['color'] ?? '#000000',
-                'tasks' => [],
-                'createdAt' => date('c'),
-                'updatedAt' => date('c')
-            ];
-            
-            $projects[] = $newProject;
-            $db->save('projects', $projects);
-            successResponse($newProject, 'Project created');
+            $projectsAPI->notFound('Project');
         }
+
+        // Create new project
+        $validationError = $projectsAPI->validateRequired($body, ['name']);
+        if ($validationError) {
+            $projectsAPI->validationError($validationError);
+        }
+
+        $project = $projectsAPI->create($body);
+        if ($project) {
+            successResponse($project, 'Project created');
+        }
+
+        errorResponse('Failed to create project', 500, ERROR_SERVER);
         break;
-        
+
     case 'PUT':
         if (!$id) {
-            errorResponse('Project ID required');
+            errorResponse('Project ID required', 400, ERROR_VALIDATION);
         }
-        
+
         $body = getJsonBody();
-        $projects = $db->load('projects');
-        
-        foreach ($projects as $key => $project) {
-            if ($project['id'] === $id) {
-                $allowedFields = ['name', 'description', 'clientId', 'status', 'color'];
-                foreach ($allowedFields as $field) {
-                    if (isset($body[$field])) {
-                        $projects[$key][$field] = $body[$field];
-                    }
-                }
-                $projects[$key]['updatedAt'] = date('c');
-                
-                $db->save('projects', $projects);
-                successResponse($projects[$key], 'Project updated');
-            }
+        $project = $projectsAPI->update($id, $body);
+
+        if ($project) {
+            successResponse($project, 'Project updated');
         }
-        
-        errorResponse('Project not found', 404);
+
+        $projectsAPI->notFound('Project');
         break;
         
     case 'DELETE':
         if (!$id) {
-            errorResponse('Project ID required');
+            errorResponse('Project ID required', 400, ERROR_VALIDATION);
         }
         
-        $projects = $db->load('projects');
-        $filtered = array_filter($projects, fn($p) => $p['id'] !== $id);
-        
-        if (count($filtered) === count($projects)) {
-            errorResponse('Project not found', 404);
+        if ($projectsAPI->delete($id)) {
+            successResponse(null, 'Project deleted');
         }
         
-        $db->save('projects', array_values($filtered));
-        successResponse(null, 'Project deleted');
+        $projectsAPI->notFound('Project');
         break;
-        
-    default:
-        errorResponse('Method not allowed', 405);
 }
+

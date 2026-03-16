@@ -10,6 +10,11 @@ includes/master_password.php
 .claude/
 .trae/
 
+# Prompts and Tasks
+prompt.md
+tasks/
+todos.md
+
 # Encrypted Data Files (don't commit encrypted data to git)
 data/
 !data/PROTECTED.md
@@ -24,6 +29,7 @@ composer.lock
 composer.phar
 
 # Testing
+test/
 .phpunit.result.cache
 phpunit.xml
 phpstan.neon
@@ -56,3 +62,6 @@ screenshot.png
 cron/*.pid
 cron/scheduler_status.json
 server.pid
+
+# Release artifacts (backups are large and shouldn't be in git)
+release-artifacts/

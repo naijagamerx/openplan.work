@@ -2,7 +2,7 @@
 /**
  * Project Form View (Add/Edit)
  */
-$db = new Database(getMasterPassword());
+$db = new Database(getMasterPassword(), Auth::userId());
 $id = $_GET['id'] ?? null;
 $project = null;
 
@@ -157,3 +157,4 @@ async function generateDescriptionWithAI() {
     }
 }
 </script>
+

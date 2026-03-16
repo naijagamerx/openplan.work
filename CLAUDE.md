@@ -3,9 +3,11 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
+
 LazyMan Tools is a PHP-based task management system with encrypted JSON storage. It provides task/project management, CRM, invoicing, finance tracking, inventory management, and AI-powered features. The system uses AES-256-GCM encryption for all data at rest and implements session-based authentication with CSRF protection.
 
 ## Architecture
+
 - **Type**: PHP monolithic application with RESTful API endpoints
 - **Frontend**: Vanilla JavaScript with Tailwind CSS (CDN) + Inter font
 - **Backend**: PHP 8.0+ with no external dependencies
@@ -13,42 +15,18 @@ LazyMan Tools is a PHP-based task management system with encrypted JSON storage.
 - **Authentication**: Session-based with bcrypt password hashing
 - **Security**: AES-256-GCM encryption, CSRF tokens, XSS protection, .htaccess data protection
 
-## Key Files Structure
-```
-/
-├── index.php              # Main router and entry point
-├── config.php             # App configuration and initialization
-├── includes/              # Core PHP classes
-│   ├── Database.php       # JSON file handling with encryption
-│   ├── Encryption.php     # AES-256-GCM encryption/decryption
-│   ├── Auth.php           # Session management and authentication
-│   ├── GroqAPI.php        # Groq AI integration
-│   ├── OpenRouterAPI.php  # OpenRouter AI integration
-│   ├── Mailer.php         # Email functionality
-│   └── Helpers.php        # Utility functions
-├── api/                   # REST API endpoints
-│   ├── auth.php           # Authentication endpoints
-│   ├── tasks.php          # Task CRUD operations
-│   ├── projects.php       # Project CRUD operations
-│   ├── clients.php        # CRM operations
-│   ├── invoices.php       # Invoice management
-│   ├── finance.php        # Finance tracking
-│   ├── inventory.php      # Stock management
-│   ├── ai.php             # AI integration endpoints
-│   └── export.php         # Data import/export
-├── views/                 # HTML templates
-│   ├── layouts/           # Main layouts (main.php, auth.php)
-│   ├── partials/          # Reusable components (sidebar, header)
-│   └── pages/             # Individual page views
-├── assets/                # Static assets
-│   ├── css/               # Custom CSS
-│   └── js/                # Frontend JavaScript
-├── data/                  # Encrypted JSON storage (.htaccess protected)
-│   ├── *.json.enc         # Encrypted data files
-│   └── backups/           # Automatic backups
-├── templates/             # Email/Invoice templates
-└── docs/                  # Documentation
-```
+## Quick Reference
+
+### Critical Recovery Fixes
+- **Notes Tag Manager Fix**: See `## Recovery Fixes` section below
+- **AI Assistant Fix**: See `## Recovery Fixes` section below
+- **PHP/JS Variable Mixing Bug**: See `## Common Pitfalls` section below
+
+### Code Exploration (Use Skills)
+- **Page Routing**: Use `CodebaseContextMapper` skill - do not document page tables here
+- **UI Generation**: Use `StitchUI` skill for creating new interfaces
+- **Specification Creation**: Use `Speckitty` skill for generating requirements
+- **Task Management**: Use `DevMarket` MCP for external task tracking
 
 ## Common Development Commands
 
@@ -67,7 +45,10 @@ chmod 644 data/*.json.enc  # If they exist
 
 ### Testing
 ```bash
-# Run encryption test
+# Run all tests
+php test/run_all_tests.php
+
+# Run encryption test only
 php test/encryption_test.php
 
 # Manual testing checklist:
@@ -100,9 +81,6 @@ ini_set('display_errors', 1);
 
 # Check PHP error logs
 tail -f /path/to/php/error.log
-
-# Test database operations directly:
-# Create a test script in root directory
 ```
 
 ## Core Class Usage
@@ -164,60 +142,194 @@ All API endpoints return JSON in format:
 }
 ```
 
-### Authentication
-- `POST /api/auth.php?action=login` - User login
-- `POST /api/auth.php?action=logout` - User logout
-- `POST /api/auth.php?action=register` - User registration
-- `GET /api/auth.php?action=status` - Check session status
+### Authentication (`api/auth.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `?action=login` | User login with email, password, master_password |
+| POST | `?action=logout` | User logout |
+| POST | `?action=register` | User registration |
+| GET | `?action=status` | Check session status |
+| GET | `?action=config` | Load user configuration |
+| POST | `?action=update_config` | Update business settings |
 
-### Tasks & Projects
-- `GET /api/tasks.php` - List all tasks (with filters for status, priority, project_id)
-- `POST /api/tasks.php` - Create task
-- `PUT /api/tasks.php?id={id}` - Update task
-- `DELETE /api/tasks.php?id={id}` - Delete task
-- `GET /api/projects.php` - List projects
-- `POST /api/projects.php` - Create project
-- `PUT /api/projects.php?id={id}` - Update project
-- `DELETE /api/projects.php?id={id}` - Delete project
+### Tasks (`api/tasks.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?id={id}` | Get task by ID |
+| GET | `?projectId={id}` | List tasks with filters (status, priority) |
+| GET | `?action=templates` | Get task templates |
+| POST | `?action=add` | Create new task |
+| POST | `?action=template` | Save task template |
+| POST | `?action=create_from_template` | Create task from template |
+| POST | `?action=bulk` | Bulk operations (delete, status update) |
+| POST | `?action=subtask&id={id}&projectId={pid}` | Add subtask |
+| PUT | `?id={id}` | Update task |
+| DELETE | `?id={id}` | Delete task |
 
-### Business Management Features
-- `GET/POST/PUT/DELETE /api/clients.php` - CRM operations (client management)
-- `GET/POST/PUT/DELETE /api/invoices.php` - Invoice management (with PDF generation)
-- `GET/POST/PUT/DELETE /api/finance.php` - Finance tracking (expenses, revenue)
-- `GET/POST/PUT/DELETE /api/inventory.php` - Inventory management (stock, reorder points)
+### Projects (`api/projects.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?id={id}` | Get project by ID |
+| GET | `?action=list` | List all projects |
+| POST | `?action=create` | Create project |
+| PUT | `?id={id}` | Update project |
+| DELETE | `?id={id}` | Delete project |
 
-### Time Management Features
-- `GET /api/tasks.php?action=time_entries` - Time tracking data
-- `POST /api/tasks.php?action=time_entry` - Add time entry to task
-- Pomodoro timer functionality integrated in JavaScript frontend
+### Clients (`api/clients.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?id={id}` | Get client by ID |
+| GET | `?action=list` | List all clients |
+| POST | `?action=create` | Create client |
+| PUT | `?id={id}` | Update client |
+| DELETE | `?id={id}` | Delete client |
 
-### AI Integration
-- `POST /api/ai.php?action=generate_tasks` - Generate tasks from project descriptions
-- `POST /api/ai.php?action=generate_prd` - Generate product requirement documents
-- `POST /api/ai.php?action=chat` - General AI chat assistant
-- `POST /api/ai.php?action=generate_project_tasks` - AI project breakdown
-- **AI Providers**: Support for both Groq and OpenRouter APIs
+### Invoices (`api/invoices.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?id={id}` | Get invoice by ID |
+| GET | `?action=list` | List invoices (filter by status) |
+| POST | `?action=create` | Create invoice |
+| PUT | `?id={id}` | Update invoice |
+| DELETE | `?id={id}` | Delete invoice |
 
-### Data Management
-- `GET /api/export.php?format=json` - Export all data as JSON
-- `GET /api/export.php?format=zip` - Export all data as ZIP backup
-- `POST /api/export.php?action=import` - Import data from JSON/ZIP
-- Backup functionality with automatic backup creation
+### Finance (`api/finance.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?action=list` | List transactions |
+| POST | `?action=add` | Add transaction (expense/revenue) |
+| PUT | `?id={id}` | Update transaction |
+| DELETE | `?id={id}` | Delete transaction |
 
-### Settings and Configuration
-- `GET /api/auth.php?action=config` - Load user configuration
-- `POST /api/auth.php?action=update_config` - Update business settings
-- Business information, API keys, and preferences management
+### Inventory (`api/inventory.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?action=list` | List inventory items |
+| POST | `?action=add` | Add inventory item |
+| PUT | `?id={id}` | Update item |
+| DELETE | `?id={id}` | Delete item |
+
+### Notes (`api/notes.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?action=list` | List notes |
+| GET | `?action=tag_stats` | Get tag statistics |
+| POST | `?action=create` | Create note |
+| PUT | `?id={id}` | Update note |
+| DELETE | `?id={id}` | Delete note |
+| POST | `?action=delete_tag` | Delete tag globally |
+
+### Habits (`api/habits.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?action=list` | List habits |
+| POST | `?action=create` | Create habit |
+| POST | `?action=complete` | Mark habit complete |
+| PUT | `?id={id}` | Update habit |
+| DELETE | `?id={id}` | Delete habit |
+
+### Water Tracker (`api/water.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?action=status` | Get today's status |
+| POST | `?action=log` | Log water intake |
+| POST | `?action=set_goal` | Set daily goal |
+| POST | `?action=generate_plan` | Generate AI hydration plan |
+
+### AI Integration (`api/ai.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `?action=generate_tasks` | Generate tasks from description |
+| POST | `?action=generate_prd` | Generate PRD document |
+| POST | `?action=chat` | AI chat assistant |
+| POST | `?action=verify` | Verify AI connection |
+
+### AI Agent (`api/ai-agent.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `?action=chat` | Agent chat with tool execution |
+| POST | `?action=clear_history` | Clear conversation history |
+
+### Export/Import (`api/export.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?format=json` | Export all data as JSON |
+| GET | `?format=zip` | Export as ZIP backup |
+| POST | `?action=import` | Import data from JSON/ZIP |
+
+### Users (`api/users.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?action=list` | List users (admin) |
+| POST | `?action=create` | Create user |
+| PUT | `?id={id}` | Update user |
+| DELETE | `?id={id}` | Delete user |
+| POST | `?action=promote` | Promote to admin |
+
+### Backup (`api/backup.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?action=list` | List backups |
+| POST | `?action=create` | Create backup |
+| POST | `?action=restore` | Restore from backup |
+| DELETE | `?id={id}` | Delete backup |
+
+### Advanced Invoices (`api/advanced-invoices.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?action=list` | List advanced invoices |
+| POST | `?action=create` | Create advanced invoice |
+| PUT | `?id={id}` | Update invoice |
+| DELETE | `?id={id}` | Delete invoice |
+
+### Knowledge Base (`api/knowledge-base.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?action=list_folders` | List folders |
+| GET | `?action=list_files` | List files in folder |
+| POST | `?action=create_folder` | Create folder |
+| POST | `?action=upload` | Upload file |
+| DELETE | `?id={id}` | Delete file/folder |
+
+### Todos (`api/todos.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?action=list` | List todos |
+| POST | `?action=create` | Create todo |
+| PUT | `?id={id}` | Update todo |
+| DELETE | `?id={id}` | Delete todo |
+
+### Settings (`api/settings.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?action=get` | Get settings |
+| POST | `?action=update` | Update settings |
+| POST | `?action=reset` | Reset to defaults |
+
+### Attachments (`api/attachments.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `?action=upload` | Upload attachment |
+| GET | `?id={id}` | Download attachment |
+| DELETE | `?id={id}` | Delete attachment |
+
+### Audit Logs (`api/audit.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?action=list` | List audit logs |
+| GET | `?action=export` | Export logs |
+
+### Health Check (`api/health.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | System health status |
+
+### Cron (`api/cron.php`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `?action=run` | Execute scheduled tasks |
 
 ## Frontend Architecture
-
-### JavaScript Architecture
-**Single File Architecture**: All frontend JavaScript in `/assets/js/app.js` with modular organization:
-- **API Helper Module**: Centralized `api` object for all HTTP requests
-- **UI Utilities**: Toast notifications, modal management, form handling
-- **Helper Functions**: Formatting (currency, dates, timeAgo), utilities (debounce)
-- **Confirmation System**: `confirmAction(message, onConfirm)` for user confirmations
-- **Event Handling**: DOM event delegation for dynamic content
 
 ### JavaScript API Helper
 ```javascript
@@ -238,49 +350,40 @@ const result = await api.post('api/tasks.php', {
 });
 ```
 
-### UI Components and Utilities
+### UI Components
 - **Toast notifications**: `showToast(message, type)` - success, error, warning, info
 - **Modals**: `openModal(htmlContent)`, `closeModal()` - dynamic modal system
-- **Forms**: JavaScript-enhanced form handling with CSRF tokens
-- **Utility functions**:
-  - `formatCurrency(amount, currency)` - Currency formatting with symbols (USD $, EUR €, etc.)
-  - `formatDate(dateStr)` - Date formatting
-  - `timeAgo(dateStr)` - Relative time formatting
-  - `debounce(func, wait)` - Function rate limiting
-- **Confirmation dialogs**: `confirmAction(message, onConfirm)` - Safe action confirmations
+- **Confirmation dialogs**: `confirmAction(message, onConfirm)`
 
-### Frontend Integration with Backend
-- **Global Configuration**: `APP_URL` and `CSRF_TOKEN` passed from PHP to JavaScript in `/views/layouts/main.php`
-- **API Integration**: All backend communication through centralized `api` helper
-- **Security**: CSRF tokens included in all write requests
-- **Data Flow**: PHP generates initial HTML, JavaScript provides interactive features
+### Icon System: Heroicons (CRITICAL!)
+**⚠️ IMPORTANT: This app uses ONLY Heroicons (inline SVG). Never use icon fonts or other icon systems.**
 
-### External Libraries and Assets
-- **Tailwind CSS**: CDN version with custom configuration
-- **Chart.js**: Data visualization for finance charts
-- **Sortable.js**: Drag-and-drop functionality (Kanban boards)
-- **html2pdf**: PDF generation for invoices and reports
-- **Heroicons**: SVG icons for UI components
+#### Standard Pattern
+```html
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="PATH_DATA"></path>
+</svg>
+```
 
-### Custom CSS Classes
-- Design system uses Tailwind CSS with custom extensions
-- Priority badges: `bg-red-100 text-red-800`, `bg-orange-100 text-orange-800`, etc.
-- Status badges: `bg-green-100 text-green-800` for completed, etc.
-- Animation classes: `animate-fade-in`, hover effects
-- Layout classes: Sidebar (256px), responsive breakpoints
+#### Icon Sizing
+- `w-4 h-4` - Small (meta info, inline)
+- `w-5 h-5` - Standard (buttons, list items)
+- `w-6 h-6` - Large (modals, headers)
+- `w-8 h-8` - Extra large (empty states)
+
+#### Common Icons Reference
+| Icon | Path Data |
+|------|-----------|
+| Plus | `M12 4v16m8-8H4` |
+| Edit | `M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z` |
+| Trash | `M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16` |
+| Search | `M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z` |
+| Check | `M5 13l4 4L19 7` |
+| X/Close | `M6 18L18 6M6 6l12 12` |
+
+**Find Heroicons:** https://heroicons.com/ (Always use "Outline" versions)
 
 ## Data Models
-
-### Encrypted Collections
-Each collection is stored as encrypted JSON in `/data/`:
-- `users.json.enc` - User accounts with bcrypt password hashes
-- `projects.json.enc` - Projects with embedded tasks (structured as parent container)
-- `clients.json.enc` - CRM contact information with business details
-- `invoices.json.enc` - Invoice records with line items, totals, and payment status
-- `finance.json.enc` - Financial records including expenses and revenue
-- `inventory.json.enc` - Stock items with SKU, pricing, and quantity tracking
-- `config.json.enc` - System configuration including business info and API keys
-- `templates/` - Not used (templates are inline in code)
 
 ### Project Structure (with embedded tasks)
 ```json
@@ -288,7 +391,7 @@ Each collection is stored as encrypted JSON in `/data/`:
     "id": "uuid",
     "name": "Project Name",
     "description": "Project description",
-    "clientId": "uuid", // Reference to client
+    "clientId": "uuid",
     "status": "active|completed|on-hold|cancelled",
     "color": "hex color code for UI",
     "createdAt": "ISO timestamp",
@@ -303,20 +406,8 @@ Each collection is stored as encrypted JSON in `/data/`:
             "dueDate": "ISO timestamp",
             "estimatedMinutes": 0,
             "actualMinutes": 0,
-            "subtasks": [
-                {
-                    "title": "string",
-                    "completed": "boolean",
-                    "estimatedMinutes": 0
-                }
-            ],
-            "timeEntries": [
-                {
-                    "date": "ISO timestamp",
-                    "minutes": "integer",
-                    "description": "string"
-                }
-            ],
+            "subtasks": [{"title": "string", "completed": boolean, "estimatedMinutes": 0}],
+            "timeEntries": [{"date": "ISO timestamp", "minutes": integer, "description": "string"}],
             "completedAt": "ISO timestamp",
             "createdAt": "ISO timestamp",
             "updatedAt": "ISO timestamp"
@@ -333,13 +424,7 @@ Each collection is stored as encrypted JSON in `/data/`:
     "email": "email address",
     "phone": "phone number",
     "company": "Company name",
-    "address": {
-        "street": "Street address",
-        "city": "City",
-        "state": "State",
-        "zip": "ZIP code",
-        "country": "Country"
-    },
+    "address": {"street": "", "city": "", "state": "", "zip": "", "country": ""},
     "notes": "Additional notes",
     "createdAt": "ISO timestamp",
     "updatedAt": "ISO timestamp"
@@ -350,62 +435,35 @@ Each collection is stored as encrypted JSON in `/data/`:
 ```json
 {
     "id": "uuid",
-    "invoiceNumber": "Formatted invoice number (e.g. 2024-0001)",
+    "invoiceNumber": "2024-0001",
     "clientId": "uuid",
-    "projectId": "uuid", // Optional project reference
-    "lineItems": [
-        {
-            "description": "Item description",
-            "quantity": "number",
-            "unitPrice": "number",
-            "total": "number"
-        }
-    ],
-    "subtotal": "number",
-    "taxRate": "number", // Percentage
-    "taxAmount": "number",
-    "total": "number",
+    "projectId": "uuid",
+    "lineItems": [{"description": "", "quantity": 0, "unitPrice": 0, "total": 0}],
+    "subtotal": 0,
+    "taxRate": 0,
+    "taxAmount": 0,
+    "total": 0,
     "currency": "USD|EUR|GBP|ZAR",
     "status": "draft|sent|paid|overdue|cancelled",
-    "dueDate": "ISO date string",
-    "issueDate": "ISO date string",
-    "notes": "Additional notes",
+    "dueDate": "ISO date",
+    "issueDate": "ISO date",
     "createdAt": "ISO timestamp",
     "updatedAt": "ISO timestamp"
 }
 ```
 
-### Inventory Item Structure
+### Note Structure
 ```json
 {
     "id": "uuid",
-    "name": "Product name",
-    "sku": "Stock keeping unit",
-    "description": "Product description",
-    "category": "Product category",
-    "cost": "number", // Cost price
-    "price": "number", // Selling price
-    "quantity": "integer",
-    "minQuantity": "integer", // Reorder point
-    "supplier": "Supplier name",
-    "notes": "Additional notes",
-    "createdAt": "ISO timestamp",
-    "updatedAt": "ISO timestamp"
-}
-```
-
-### Finance Record Structure
-```json
-{
-    "id": "uuid",
-    "type": "expense|revenue",
-    "category": "Expense/revenue category",
-    "amount": "number",
-    "currency": "USD|EUR|GBP|ZAR",
-    "date": "ISO date string",
-    "description": "Description of transaction",
-    "projectId": "uuid", // Optional project reference
-    "clientId": "uuid", // Optional client reference
+    "title": "Note title",
+    "content": "Note content (max 10000 chars)",
+    "tags": ["work", "ideas"],
+    "color": "#fef3c7",
+    "isPinned": false,
+    "isFavorite": false,
+    "linkedEntityType": "task|project|null",
+    "linkedEntityId": "uuid|null",
     "createdAt": "ISO timestamp",
     "updatedAt": "ISO timestamp"
 }
@@ -445,82 +503,95 @@ $response = $openrouter->chatCompletion($messages, $model);
 ```
 Models: `anthropic/claude-3.5-sonnet`, `openai/gpt-4-turbo`, `meta-llama/llama-3.3-70b`
 
-### AI Prompts
-- **Task Generation**: Creates structured task breakdowns with subtasks and estimates
-- **PRD Generation**: Creates comprehensive product requirement documents
-- **Chat**: General AI assistance
+### AI Troubleshooting (Common Failures)
+- **500 errors**: Check `data/php_error.log` for root cause first
+- **Missing cURL**: Enable `php_curl` in `php.ini`
+- **API key used as model**: Keep keys in Settings → AI API Keys, use real model IDs in Model Settings
+- **Decryption failed**: Wrong master password/session - log out/in
 
 ## Email/Mailer Functionality
 
-### Mailer Class Implementation
-- **File**: `/includes/Mailer.php` - Complete email handling system
-- **Method**: Uses native PHP `mail()` function (no external libraries like PHPMailer currently integrated)
-- **Template System**: Professional HTML template with inline CSS, responsive design, business branding
-- **Business Integration**: Uses business configuration from encrypted `config.json.enc`
-- **Features**: Send generic emails and dedicated invoice emails with proper headers
+### Mailer Class
+- **File**: `/includes/Mailer.php`
+- **Method**: Native PHP `mail()` function
+- **Template System**: Professional HTML template with inline CSS
+- **Business Integration**: Uses config from encrypted `config.json.enc`
 
-### Configuration and Settings
-- **Storage**: Business email configuration stored in encrypted JSON (`/data/config.json.enc`)
-- **Manageable Settings**: Business Name, Email, Phone, Address, Currency, Tax Rate
-- **UI**: Configurable via Settings page (`/views/settings.php`)
-- **Security**: Business settings encrypted at rest with master password
-- **Email Headers**: Uses "From" and "Reply-To" based on business configuration
+### Configuration
+- **Storage**: Business settings in `/data/config.json.enc`
+- **Settings**: Business Name, Email, Phone, Address, Currency, Tax Rate
+- **UI**: Configurable via Settings page
 
-### Email Use Cases
-- **Primary Use**: Invoice sending functionality (`sendInvoice()` method in Mailer class)
-- **Template System**: Professional HTML email template with business branding
-- **Current Status**: Mailer class is implemented but not integrated into UI workflows
-- **PDF Integration**: Can combine with PDF generation for invoice attachments (planned)
-- **Future Enhancements**: SMTP support, email queue, additional email types
+## Recovery Fixes
 
-### Email Architecture Notes
-- **Transport**: Currently uses native PHP `mail()` function (requires local mail server)
-- **Template Location**: Templates are inline in PHP code (not separate files)
-- **Security**: XSS protection with proper escaping, CSRF protection on configuration
-- **Design**: Professional monochrome theme (black/white) with responsive layout
+### Notes Tag Manager Recovery Fix
 
-## Common Development Tasks
+**Symptoms**: Manage Tags modal shows `All Tags (0)` even though sidebar has tags; Tag names show as `undefined`; Deleting a tag triggers `500 Internal Server Error`.
 
-### Adding a New Feature
-1. Add API endpoint in `/api/`
-2. Create Database collection methods if needed
-3. Add frontend JavaScript functions
-4. Create view template in `/views/`
-5. Update sidebar navigation in `/views/partials/sidebar.php`
+**Fixes Applied**:
 
-### Adding Email Functionality to Features
-1. Ensure business configuration is loaded via Database class
-2. Instantiate Mailer class: `new Mailer($config)`
-3. Call appropriate method (`send()` or `sendInvoice()`)
-4. Add UI elements to trigger email sending
-5. Handle success/failure responses appropriately
-
-### Debugging Data Issues
+1. **API route fix** (`api/notes.php`):
 ```php
-// Temporarily decrypt data to debug
-require_once 'config.php';
-$db = new Database(getMasterPassword());
-$data = $db->load('projects');
-var_dump($data); // Inspect decrypted data
+if ($action === 'tag_stats') {
+    $stats = $notesAPI->getTagStats();
+    successResponse($stats);
+}
 ```
 
-### Testing API Endpoints
-```bash
-# Test authentication
-curl -X POST http://localhost/TaskManager/api/auth.php?action=login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password"}'
+2. **Backend hardening** (`includes/NotesAPI.php`):
+   - `getTagStats()`: Skip non-array tags, non-scalar entries, empty values
+   - `deleteTagGlobal()`: Validate input tag (trim/lowercase), return 0 if empty
 
-# Test tasks endpoint (requires session cookie)
-curl http://localhost/TaskManager/api/tasks.php \
-  -H "Cookie: lazyman_session=<session_id>"
+3. **Frontend safety** (`views/notes.php`):
+   - `showGlobalTagManager()`: Only render rows where `tag` is non-empty string
+   - `confirmDeleteTagGlobal()`: Block empty tags with toast message
+
+### AI Assistant Recovery Fix
+
+**Symptom**: Agent mode executes actions but shows no user-friendly recap or follow-up guidance.
+
+**Fix Applied** (`includes/AIAgent.php`):
+- Added `finalizeAssistantMessage()` method for structured follow-up
+- Added `buildActionFollowUp()` and `buildSuggestedNextSteps()` methods
+- Output now includes: what was done, errors, 2-3 concrete next actions
+
+## Common Pitfalls
+
+### ⚠️ PHP/JavaScript Variable Mixing Bug (CRITICAL!)
+
+**The Problem**: When using PHP to output JavaScript variables in mobile views, mixing PHP constant syntax with JavaScript variables breaks the code.
+
+**Example of the Bug**:
+```javascript
+// Define JavaScript variable from PHP session data
+const CSRF_TOKEN = '<?= $_SESSION['csrf_token'] ?? '' ?>';
+
+// ❌ WRONG - Trying to use PHP constant syntax in JavaScript
+csrf_token: '<?= CSRF_TOKEN ?>'
+
+// ✅ CORRECT - Use the JavaScript variable directly
+csrf_token: CSRF_TOKEN
 ```
 
-### Creating Backups
+**Why It Fails**:
+| Code | Language | Result |
+|------|----------|--------|
+| `<?= CSRF_TOKEN ?>` | PHP | Warning: "Use of undefined constant" |
+| `CSRF_TOKEN` | JavaScript | ✅ Works correctly |
+
+**Correct Pattern for Mobile Views**:
 ```php
-$db = new Database(getMasterPassword());
-$backup = $db->exportAll();
-file_put_contents('backup_' . date('Y-m-d') . '.json', json_encode($backup));
+<script>
+    const CSRF_TOKEN = '<?= $_SESSION['csrf_token'] ?? '' ?>';
+    const APP_URL = '<?= APP_URL ?? '' ?>';
+</script>
+
+<script>
+    const data = {
+        action: 'update',
+        csrf_token: CSRF_TOKEN,  // ✅ Correct - JS variable
+    };
+</script>
 ```
 
 ## Important Notes
@@ -531,41 +602,9 @@ file_put_contents('backup_' . date('Y-m-d') . '.json', json_encode($backup));
 - **Session dependency**: Requires active PHP session for authentication
 - **CSRF required**: All non-GET API requests must include CSRF token
 - **Environment variables**: Master password can be set via `LAZYMAN_MASTER_PASSWORD`
-- **Error handling**: Check PHP error logs and browser console for debugging
-- **Pomodoro timer**: Built-in time management system with work/break intervals (accessible via `/views/pomodoro.php`)
-- **Kanban boards**: Drag-and-drop task management with Sortable.js integration
-- **PDF generation**: Invoice PDFs generated client-side with html2pdf.js
-- **Time tracking**: Task-specific time entries with estimated vs. actual tracking
-- **Business management**: Complete suite including CRM, invoicing, finance, and inventory
+- **Embedded tasks**: Tasks are stored within project records, not separate entities
 - **Multi-currency**: Support for USD, EUR, GBP, ZAR with automatic symbol formatting
-- **Embedded tasks**: Tasks are stored within project records rather than as separate entities
-- **Automatic backups**: Backup files created in `/data/backups/` directory
-- **AI integration**: Both Groq and OpenRouter API support for various business tasks
-
-## First-Time Setup Flow
-1. Navigate to `/?page=setup`
-2. System will prompt for master password and admin user creation
-3. Create first user account
-4. Login with new credentials
-5. System creates initial encrypted data files
-6. Redirect to dashboard
 
 ## Project Version
-Current: v1.0.0
-- **Complete Business Suite**: Task management, CRM, invoicing, finance, inventory, and time tracking
-- **Security-First Design**: End-to-end encryption with AES-256-GCM, session-based auth, CSRF protection
-- **AI Integration**: Multiple AI provider support (Groq, OpenRouter) with specialized business tools
-- **Modern UI**: Responsive design with Tailwind CSS, drag-and-drop Kanban, and professional templates
-- **Offline-Ready**: Self-hosted with no external dependencies beyond PHP extensions
-- **Scalable Architecture**: Modular design with clean separation of concerns
-- **Time Management**: Built-in Pomodoro timer and detailed time tracking capabilities
-- **Email System**: Complete but currently unused email infrastructure available (see Mailer.php notes)
-- **No Breaking Changes Expected**: Stable API and data structure
 
-## First-Time Setup Flow
-1. Navigate to `/?page=setup`
-2. System will prompt for master password and admin user creation
-3. Create first user account
-4. Login with new credentials
-5. System creates initial encrypted data files
-6. Redirect to dashboard
+v1.0.0 - Complete business suite with task management, CRM, invoicing, finance, inventory, time tracking, and AI integration.

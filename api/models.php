@@ -9,8 +9,39 @@ if (!Auth::check()) {
     errorResponse('Unauthorized', 401);
 }
 
-$db = new Database(getMasterPassword());
+// CSRF validation for non-GET requests (bypass for MCP)
+if (requestMethod() !== 'GET' && !Auth::isMcp()) {
+    $body = getJsonBody();
+    $token = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    if (!Auth::validateCsrf($token)) {
+        errorResponse('Invalid CSRF token', 403);
+    }
+}
+
+$db = new Database(getMasterPassword(), Auth::userId());
+
+// Verify database connection works
+try {
+    $db->load('models', true);
+} catch (Exception $e) {
+    errorResponse('Database connection failed: Wrong master password', 401, ERROR_UNAUTHORIZED);
+}
+
 $action = $_GET['action'] ?? 'list';
+
+function modelLooksLikeApiKey(string $modelId, string $provider): bool {
+    $trimmed = trim($modelId);
+    if ($trimmed === '') {
+        return false;
+    }
+    if ($provider === 'groq' && str_starts_with($trimmed, 'gsk_')) {
+        return true;
+    }
+    if ($provider === 'openrouter' && str_starts_with($trimmed, 'sk-or-')) {
+        return true;
+    }
+    return false;
+}
 
 // Helper to seed default models if collection is empty
 function seedModels(Database $db) {
@@ -62,7 +93,7 @@ function seedModels(Database $db) {
 
 switch ($action) {
     case 'list':
-        $models = $db->load('models');
+        $models = $db->load('models', true);
         if (empty($models)) {
             $models = seedModels($db);
         }
@@ -70,17 +101,22 @@ switch ($action) {
         break;
 
     case 'add':
-        if (requestMethod() !== 'POST') errorResponse('Method not allowed', 405);
+        if (requestMethod() !== 'POST') errorResponse('Method not allowed', 405, ERROR_NOT_IMPLEMENTED);
         $body = getJsonBody();
         $provider = $body['provider'] ?? '';
-        if (!in_array($provider, ['groq', 'openrouter'])) errorResponse('Invalid provider');
+        if (!in_array($provider, ['groq', 'openrouter'])) errorResponse('Invalid provider', 400, ERROR_VALIDATION);
+        $modelId = trim((string)($body['modelId'] ?? ''));
+        if ($modelId === '') errorResponse('Model ID is required', 400, ERROR_VALIDATION);
+        if (modelLooksLikeApiKey($modelId, $provider)) {
+            errorResponse('Model ID looks like an API key. Add API keys in Settings and use a real model ID here.', 400, ERROR_VALIDATION);
+        }
         
-        $models = $db->load('models');
+        $models = $db->load('models', true);
         if (empty($models)) $models = seedModels($db);
         
         $newModel = [
             'id' => $db->generateId(),
-            'modelId' => $body['modelId'] ?? '',
+            'modelId' => $modelId,
             'displayName' => $body['displayName'] ?? '',
             'description' => $body['description'] ?? '',
             'enabled' => (bool)($body['enabled'] ?? true),
@@ -94,16 +130,23 @@ switch ($action) {
         break;
 
     case 'update':
-        if (requestMethod() !== 'POST') errorResponse('Method not allowed', 405);
+        if (requestMethod() !== 'POST') errorResponse('Method not allowed', 405, ERROR_NOT_IMPLEMENTED);
         $id = $_GET['id'] ?? '';
         $body = getJsonBody();
-        $models = $db->load('models');
+        $models = $db->load('models', true);
         $found = false;
         
         foreach (['groq', 'openrouter'] as $provider) {
             foreach ($models[$provider] as &$model) {
                 if ($model['id'] === $id) {
-                    $model['modelId'] = $body['modelId'] ?? $model['modelId'];
+                    $modelId = trim((string)($body['modelId'] ?? $model['modelId']));
+                    if ($modelId === '') {
+                        errorResponse('Model ID is required', 400, ERROR_VALIDATION);
+                    }
+                    if (modelLooksLikeApiKey($modelId, $provider)) {
+                        errorResponse('Model ID looks like an API key. Add API keys in Settings and use a real model ID here.', 400, ERROR_VALIDATION);
+                    }
+                    $model['modelId'] = $modelId;
                     $model['displayName'] = $body['displayName'] ?? $model['displayName'];
                     $model['description'] = $body['description'] ?? $model['description'];
                     $model['enabled'] = isset($body['enabled']) ? (bool)$body['enabled'] : $model['enabled'];
@@ -117,17 +160,17 @@ switch ($action) {
             $db->save('models', $models);
             successResponse(null, 'Model updated');
         } else {
-            errorResponse('Model not found');
+            errorResponse('Model not found', 404, ERROR_NOT_FOUND);
         }
         break;
 
     case 'set-default':
-        if (requestMethod() !== 'POST') errorResponse('Method not allowed', 405);
+        if (requestMethod() !== 'POST') errorResponse('Method not allowed', 405, ERROR_NOT_IMPLEMENTED);
         $id = $_GET['id'] ?? '';
         $provider = $_GET['provider'] ?? '';
-        $models = $db->load('models');
-        
-        if (!isset($models[$provider])) errorResponse('Invalid provider');
+        $models = $db->load('models', true);
+
+        if (!isset($models[$provider])) errorResponse('Invalid provider', 400, ERROR_VALIDATION);
         
         foreach ($models[$provider] as &$model) {
             $model['isDefault'] = ($model['id'] === $id);
@@ -138,15 +181,15 @@ switch ($action) {
         break;
 
     case 'delete':
-        if (requestMethod() !== 'DELETE') errorResponse('Method not allowed', 405);
+        if (requestMethod() !== 'DELETE') errorResponse('Method not allowed', 405, ERROR_NOT_IMPLEMENTED);
         $id = $_GET['id'] ?? '';
-        $models = $db->load('models');
+        $models = $db->load('models', true);
         $found = false;
         
         foreach (['groq', 'openrouter'] as $provider) {
             foreach ($models[$provider] as $key => $model) {
                 if ($model['id'] === $id) {
-                    if ($model['isDefault']) errorResponse('Cannot delete default model');
+                    if ($model['isDefault']) errorResponse('Cannot delete default model', 400, ERROR_VALIDATION);
                     array_splice($models[$provider], $key, 1);
                     $found = true;
                     break 2;
@@ -158,10 +201,11 @@ switch ($action) {
             $db->save('models', $models);
             successResponse(null, 'Model deleted');
         } else {
-            errorResponse('Model not found');
+            errorResponse('Model not found', 404, ERROR_NOT_FOUND);
         }
         break;
 
     default:
-        errorResponse('Invalid action');
+        errorResponse('Invalid action', 400, ERROR_VALIDATION);
 }
+

@@ -40,6 +40,10 @@ class Auth {
                 continue;
             }
 
+            if (!empty($user['banned'])) {
+                return ['success' => false, 'error' => 'Account has been banned.'];
+            }
+
             if (!Encryption::verifyPassword($password, $user['passwordHash'] ?? '')) {
                 return ['success' => false, 'error' => 'Invalid password'];
             }
@@ -49,6 +53,11 @@ class Auth {
             }
 
             $timeoutPreference = self::normalizeSessionTimeoutPreference($user['sessionTimeoutPreference'] ?? null);
+            if ($rememberMe) {
+                // Explicit remember-me from login should immediately enable
+                // persistent token restoration for this user.
+                $timeoutPreference = self::SESSION_TIMEOUT_INDEFINITE;
+            }
             $now = time();
 
             // Keep stored preference normalized and clear persistent tokens for timed sessions.
@@ -749,6 +758,123 @@ class Auth {
     }
 
     /**
+     * Check if a user is banned
+     */
+    public static function isBanned(string $userId): bool {
+        $masterPassword = getMasterPassword();
+        if ($masterPassword === '' || $userId === '') {
+            return false;
+        }
+
+        try {
+            $db = new Database($masterPassword);
+            $users = $db->load('users', true);
+            foreach ($users as $user) {
+                if (($user['id'] ?? '') === $userId) {
+                    return !empty($user['banned']);
+                }
+            }
+        } catch (Exception $e) {
+            return false;
+        }
+
+        return false;
+    }
+
+    /**
+     * Toggle user ban status
+     */
+    public function toggleBan(string $userId): array {
+        // 1. Validate user exists
+        $users = $this->db->load('users', true);
+        $targetIndex = null;
+        $targetUser = null;
+
+        foreach ($users as $index => $user) {
+            if (($user['id'] ?? '') === $userId) {
+                $targetIndex = $index;
+                $targetUser = $user;
+                break;
+            }
+        }
+
+        if ($targetUser === null) {
+            return ['success' => false, 'error' => 'User not found'];
+        }
+
+        // 2. Prevent banning admin
+        if (self::normalizeRole($targetUser['role'] ?? null) === self::ROLE_ADMIN) {
+            return ['success' => false, 'error' => 'Administrators cannot be banned'];
+        }
+
+        // 3. Toggle status
+        $isBanned = !empty($targetUser['banned']);
+        $users[$targetIndex]['banned'] = !$isBanned;
+        $users[$targetIndex]['updatedAt'] = date('c');
+
+        // 4. Save
+        if ($this->db->save('users', $users)) {
+            // If banning, revoke tokens immediately
+            if (!$isBanned) {
+                $this->revokeAllTokens($userId);
+            }
+            return ['success' => true, 'banned' => !$isBanned];
+        }
+
+        return ['success' => false, 'error' => 'Failed to update user status'];
+    }
+
+    /**
+     * Bulk ban users with disposable or plus-addressed emails
+     */
+    public function bulkBanSpamUsers(): array {
+        require_once __DIR__ . '/Validator.php';
+        
+        $users = $this->db->load('users', true);
+        $bannedCount = 0;
+        $modified = false;
+
+        foreach ($users as $index => $user) {
+            // Skip admins
+            if (self::normalizeRole($user['role'] ?? null) === self::ROLE_ADMIN) {
+                continue;
+            }
+
+            // Skip already banned users
+            if (!empty($user['banned'])) {
+                continue;
+            }
+
+            $email = $user['email'] ?? '';
+            if (Validator::isDisposableEmail($email) || Validator::isPlusAddress($email)) {
+                $users[$index]['banned'] = true;
+                $users[$index]['updatedAt'] = date('c');
+                $bannedCount++;
+                $modified = true;
+                
+                // Revoke tokens immediately for this user
+                $this->revokeAllTokens($user['id']);
+            }
+        }
+
+        if ($modified) {
+            if ($this->db->save('users', $users)) {
+                return ['success' => true, 'count' => $bannedCount];
+            }
+            return ['success' => false, 'error' => 'Failed to save updated users'];
+        }
+
+        return ['success' => true, 'count' => 0];
+    }
+
+    /**
+     * Static logout helper for internal use
+     */
+    private static function logoutStatic(): void {
+        self::destroyCurrentSession(true);
+    }
+
+    /**
      * Helper to recursively delete a directory
      */
     private function recursiveDelete(string $dir): bool {
@@ -814,6 +940,9 @@ class Auth {
                     $users = $db->load('users', true);
                     foreach ($users as $user) {
                         if (($user['email'] ?? '') === $mcpUserEmail) {
+                            if (!empty($user['banned'])) {
+                                return false; // Reject banned MCP user
+                            }
                             self::$mcpUserId = $user['id'];
                             break;
                         }
@@ -847,6 +976,12 @@ class Auth {
                             if (!isset($_SESSION[SESSION_MASTER_KEY])) {
                                 $_SESSION[SESSION_MASTER_KEY] = $masterPassword;
                             }
+                            // Verify banned status after restoration
+                            $currentUser = self::user();
+                            if ($currentUser && self::isBanned($currentUser['id'])) {
+                                self::logoutStatic();
+                                return false;
+                            }
                             return true;
                         }
                     }
@@ -858,6 +993,13 @@ class Auth {
             } else {
                 $_SERVER['AUTH_LOGOUT_REASON'] = 'session_missing';
             }
+            return false;
+        }
+
+        // Periodically verify banned status (every request is safe with JSON, but we can optimize if needed)
+        // For strict enforcement, we check on every request.
+        if (self::isBanned($_SESSION[SESSION_USER_ID])) {
+            self::logoutStatic();
             return false;
         }
 

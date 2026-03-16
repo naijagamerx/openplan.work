@@ -2,7 +2,7 @@
 /**
  * Product Form View (Add/Edit)
  */
-$db = new Database(getMasterPassword());
+$db = new Database(getMasterPassword(), Auth::userId());
 $id = $_GET['id'] ?? null;
 $product = null;
 
@@ -50,9 +50,16 @@ $title = $id ? 'Edit Product' : 'New Product';
                 </div>
                 <div>
                     <label class="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-widest">Category</label>
-                    <input type="text" name="category" value="<?php echo e($product['category'] ?? 'General'); ?>"
-                           placeholder="Hardware, Software, Service..."
-                           class="w-full px-4 py-3 border-2 border-gray-50 rounded-xl focus:border-black outline-none transition-colors font-medium">
+                    <select name="category" class="w-full px-4 py-3 border-2 border-gray-50 rounded-xl focus:border-black outline-none transition-colors font-medium appearance-none bg-gray-50">
+                        <option value="General">General</option>
+                        <option value="Office Supplies">Office Supplies</option>
+                        <option value="Electronics">Electronics</option>
+                        <option value="Furniture">Furniture</option>
+                        <option value="Raw Materials">Raw Materials</option>
+                        <option value="Packaging">Packaging</option>
+                        <option value="Maintenance">Maintenance</option>
+                        <option value="Groceries">Groceries</option>
+                    </select>
                 </div>
 
                 <!-- Pricing -->
@@ -64,6 +71,16 @@ $title = $id ? 'Edit Product' : 'New Product';
                                placeholder="0.00"
                                class="w-full pl-8 pr-4 py-3 border-2 border-gray-50 rounded-xl focus:border-black outline-none transition-colors font-medium">
                     </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-widest">Cost Price</label>
+                    <div class="relative">
+                        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+                        <input type="number" name="costPrice" value="<?php echo e($product['costPrice'] ?? ''); ?>" step="0.01"
+                               placeholder="0.00"
+                               class="w-full pl-8 pr-4 py-3 border-2 border-gray-50 rounded-xl focus:border-black outline-none transition-colors font-medium">
+                    </div>
+                    <p class="mt-1 text-[10px] text-gray-400 font-bold uppercase tracking-tight">Internal cost for profit calculation.</p>
                 </div>
 
                 <!-- Stock Management -->
@@ -116,3 +133,4 @@ document.getElementById('product-form').addEventListener('submit', async (e) => 
     }
 });
 </script>
+

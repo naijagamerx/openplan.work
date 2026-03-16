@@ -1,0 +1,779 @@
+/**
+ * LazyMan Tools - Mobile Stylesheet
+ *
+ * Mobile-specific styles for touch-optimized interface
+ * Includes animations, safe area support, and component overrides
+ *
+ * @version 1.0.0
+ */
+
+/* ============================================
+   CSS Variables - Design Tokens
+   ============================================ */
+
+:root {
+    --primary-black: #000000;
+    --primary-white: #FFFFFF;
+    --gray-subtle: #F5F5F5;
+    --gray-border: #EEEEEE;
+    --success-green: #22C55E;
+    --error-red: #EF4444;
+    --warning-yellow: #EAB308;
+    --info-blue: #3B82F6;
+
+    --safe-area-top: env(safe-area-inset-top, 0px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-left: env(safe-area-inset-left, 0px);
+    --safe-area-right: env(safe-area-inset-right, 0px);
+
+    --transition-fast: 150ms ease-out;
+    --transition-normal: 300ms ease-out;
+    --transition-slow: 500ms ease-out;
+}
+
+/* ============================================
+   Base Styles & Reset
+   ============================================ */
+
+* {
+    /* Disable tap highlight on iOS */
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    /* Safe area padding for notched devices */
+    padding-left: var(--safe-area-left);
+    padding-right: var(--safe-area-right);
+
+    /* Smooth text rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================
+   Touch Targets (48px minimum)
+   ============================================ */
+
+button,
+a,
+.input,
+select,
+textarea,
+.touch-target {
+    min-height: 44px;
+    min-width: 44px;
+}
+
+/* ============================================
+   Bottom Navigation Safe Area
+   ============================================ */
+
+nav {
+    padding-bottom: calc(0.5rem + var(--safe-area-bottom));
+}
+
+/* ============================================
+   Page Transitions
+   ============================================ */
+
+.page-transition {
+    opacity: 0.8;
+    transform: scale(0.98);
+    pointer-events: none;
+}
+
+/* ============================================
+   Animations
+   ============================================ */
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slide-in-from-bottom {
+    from {
+        transform: translateY(100%);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
+
+@keyframes slide-in-from-right {
+    from {
+        transform: translateX(100%);
+    }
+    to {
+        transform: translateX(0);
+    }
+}
+
+@keyframes slide-in-from-left {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(0);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.animate-fade-in {
+    animation: fade-in var(--transition-normal) ease-out;
+}
+
+.animate-slide-in-bottom {
+    animation: slide-in-from-bottom var(--transition-normal) ease-out;
+}
+
+.animate-slide-in-right {
+    animation: slide-in-from-right var(--transition-normal) ease-out;
+}
+
+.animate-slide-in-left {
+    animation: slide-in-from-left var(--transition-normal) ease-out;
+}
+
+.animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* ============================================
+   Task Card Styles
+   ============================================ */
+
+.task-card {
+    position: relative;
+    overflow: hidden;
+    transition: background-color var(--transition-fast);
+}
+
+.task-card:active {
+    background-color: var(--gray-subtle);
+}
+
+/* Swipe feedback */
+.task-card.swipe-left {
+    background-color: rgba(34, 197, 94, 0.1);
+}
+
+.task-card.swipe-right {
+    background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* ============================================
+   Checkbox Styles
+   ============================================ */
+
+.checkbox-wrapper {
+    position: relative;
+    cursor: pointer;
+}
+
+.checkbox-wrapper input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+}
+
+.checkbox-wrapper .checkmark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 24px;
+    width: 24px;
+    background-color: transparent;
+    border: 2px solid var(--primary-black);
+    border-radius: 4px;
+    transition: all var(--transition-fast);
+}
+
+.checkbox-wrapper input:checked ~ .checkmark {
+    background-color: var(--primary-black);
+    border-color: var(--primary-black);
+}
+
+.checkbox-wrapper .checkmark::after {
+    content: "";
+    position: absolute;
+    display: none;
+    left: 7px;
+    top: 3px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.checkbox-wrapper input:checked ~ .checkmark::after {
+    display: block;
+}
+
+/* ============================================
+   Modal Styles
+   ============================================ */
+
+#mobile-modal-container {
+    transition: opacity var(--transition-normal);
+}
+
+#mobile-modal-content {
+    transition: transform var(--transition-normal);
+}
+
+/* ============================================
+   Off-Canvas Menu
+   ============================================ */
+
+#offcanvas-menu {
+    transition: transform var(--transition-normal);
+}
+
+#offcanvas-menu .menu-panel {
+    padding-bottom: var(--safe-area-bottom);
+}
+
+/* ============================================
+   Toast Notifications
+   ============================================ */
+
+#mobile-toast {
+    animation: fade-in var(--transition-normal) ease-out;
+}
+
+#mobile-toast.opacity-0 {
+    opacity: 0;
+}
+
+/* ============================================
+   Pull to Refresh
+   ============================================ */
+
+#pull-to-refresh-indicator {
+    transition: transform var(--transition-fast);
+}
+
+/* ============================================
+   Loading Overlay
+   ============================================ */
+
+#mobile-loading-overlay {
+    transition: opacity var(--transition-normal);
+}
+
+#mobile-loading-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* ============================================
+   Form Styles
+   ============================================ */
+
+/* Custom select arrow */
+select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23000000'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    padding-right: 40px;
+}
+
+/* Focus states */
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    ring: 1px solid var(--primary-black);
+}
+
+/* ============================================
+   Button Active States
+   ============================================ */
+
+button:active,
+a:active {
+    transform: scale(0.95);
+    transition: transform var(--transition-fast);
+}
+
+/* FAB active state */
+button[onclick*="openTaskModal"]:active {
+    transform: scale(0.85);
+}
+
+/* ============================================
+   Priority Indicators
+   ============================================ */
+
+.priority-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.priority-urgent { background-color: #DC2626; }
+.priority-high { background-color: #F97316; }
+.priority-medium { background-color: #EAB308; }
+.priority-low { background-color: #22C55E; }
+
+/* ============================================
+   Status Badges
+   ============================================ */
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.status-badge.overdue {
+    background-color: #DC2626;
+    color: white;
+}
+
+.status-badge.completed {
+    background-color: #22C55E;
+    color: white;
+}
+
+.status-badge.in-progress {
+    background-color: #3B82F6;
+    color: white;
+}
+
+/* ============================================
+   Empty States
+   ============================================ */
+
+.empty-state {
+    padding: 48px 24px;
+    text-align: center;
+}
+
+.empty-state svg {
+    width: 48px;
+    height: 48px;
+    color: #D1D5DB;
+    margin: 0 auto 16px;
+}
+
+.empty-state h3 {
+    font-size: 18px;
+    font-weight: 500;
+    color: #111827;
+    margin-bottom: 4px;
+}
+
+.empty-state p {
+    font-size: 14px;
+    color: #6B7280;
+}
+
+/* ============================================
+   Scrollbar Styling (for webkit browsers)
+   ============================================ */
+
+::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #D1D5DB;
+    border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #9CA3AF;
+}
+
+/* ============================================
+   Utility Classes
+   ============================================ */
+
+.touch-feedback {
+    transition: opacity var(--transition-fast);
+}
+
+.touch-feedback:active {
+    opacity: 0.6;
+}
+
+.border-b-last-child-none > *:last-child {
+    border-bottom: none;
+}
+
+.sticky-bottom {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+}
+
+.safe-bottom-padding {
+    padding-bottom: calc(1rem + var(--safe-area-bottom));
+}
+
+.safe-top-padding {
+    padding-top: calc(1rem + var(--safe-area-top));
+}
+
+/* ============================================
+   Dark Mode Support
+   ============================================ */
+
+.dark body {
+    background-color: #09090B;
+    color: #F4F4F5;
+}
+
+.dark .bg-white {
+    background-color: #09090B !important;
+}
+
+.dark .bg-white\/95 {
+    background-color: rgba(9, 9, 11, 0.95) !important;
+}
+
+.dark .bg-gray-50 {
+    background-color: #18181B !important;
+}
+
+.dark .bg-gray-100 {
+    background-color: #27272A !important;
+}
+
+.dark .text-black,
+.dark .text-gray-900 {
+    color: #F4F4F5 !important;
+}
+
+.dark .text-black\/40 {
+    color: #A1A1AA !important;
+}
+
+.dark .text-gray-300 {
+    color: #71717A !important;
+}
+
+.dark .text-gray-400 {
+    color: #A1A1AA !important;
+}
+
+.dark .text-gray-500,
+.dark .text-gray-600 {
+    color: #D4D4D8 !important;
+}
+
+.dark .text-gray-700,
+.dark .text-gray-800 {
+    color: #E4E4E7 !important;
+}
+
+.dark .text-neutral-800 {
+    color: #E4E4E7 !important;
+}
+
+.dark .border-black {
+    border-color: #FFFFFF !important;
+}
+
+.dark .border-black\/5,
+.dark .border-black\/10 {
+    border-color: #3F3F46 !important;
+}
+
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-gray-300 {
+    border-color: #3F3F46 !important;
+}
+
+.dark .hover\:bg-gray-50:hover,
+.dark .active\:bg-gray-50:active {
+    background-color: #18181B !important;
+}
+
+.dark .hover\:bg-gray-100:hover {
+    background-color: #27272A !important;
+}
+
+.dark .hover\:text-black:hover {
+    color: #F4F4F5 !important;
+}
+
+.dark .markdown-content p,
+.dark .markdown-content li,
+.dark .markdown-content h1,
+.dark .markdown-content h2 {
+    color: #E4E4E7 !important;
+}
+
+.dark .checklist-row.completed .checklist-label {
+    color: #71717A !important;
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+    background-color: #18181B !important;
+    color: #F4F4F5 !important;
+    border-color: #3F3F46 !important;
+}
+
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+    border-color: #FFFFFF !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+    color: #71717A !important;
+}
+
+.dark select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23FFFFFF'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+}
+
+.dark [class*="text-[#111317]"] {
+    color: #F4F4F5 !important;
+}
+
+.dark [class*="placeholder:text-gray-300"]::placeholder {
+    color: #71717A !important;
+}
+
+/* ============================================
+   Auth Pages Dark Mode Fixes
+   ============================================ */
+
+/* Input underlines - visible in dark mode */
+.dark .underlined-input {
+    border-bottom-color: #3F3F46 !important;
+}
+
+.dark .underlined-input:focus {
+    border-bottom-color: #FFFFFF !important;
+}
+
+/* Eye icon visibility toggle hover state */
+.dark .auth-visibility-toggle:hover {
+    color: #F4F4F5 !important;
+}
+
+/* Submit button border in dark mode */
+.dark button[type="submit"].bg-black {
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+.dark button[type="submit"].bg-black:hover {
+    border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Checkbox styling for dark mode */
+.dark input[type="checkbox"].border-gray-300 {
+    border-color: #52525B !important;
+    background-color: #18181B !important;
+}
+
+.dark input[type="checkbox"]:checked {
+    background-color: #000000 !important;
+    border-color: #000000 !important;
+}
+
+/* Notification banners for auth pages */
+.dark .bg-red-50 {
+    background-color: #450A0A !important;
+    border-left-color: #EF4444 !important;
+}
+
+.dark .bg-red-50 .text-red-700 {
+    color: #FCA5A5 !important;
+}
+
+.dark .bg-green-50 {
+    background-color: #052E16 !important;
+    border-left-color: #22C55E !important;
+}
+
+.dark .bg-green-50 .text-green-700 {
+    color: #86EFAC !important;
+}
+
+/* Auth page banner close button hover */
+.dark #app-notification button:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ============================================
+   Responsive Typography
+   ============================================ */
+
+@media (max-width: 374px) {
+    /* Extra small devices (iPhone SE) */
+    .text-xs {
+        font-size: 10px;
+    }
+
+    .text-sm {
+        font-size: 12px;
+    }
+
+    .text-base {
+        font-size: 14px;
+    }
+
+    .text-lg {
+        font-size: 16px;
+    }
+
+    .text-xl {
+        font-size: 18px;
+    }
+
+    .text-2xl {
+        font-size: 20px;
+    }
+}
+
+@media (min-width: 375px) and (max-width: 413px) {
+    /* Small devices (iPhone 12/13, most Androids) */
+    /* Default Tailwind sizes work well */
+}
+
+@media (min-width: 414px) {
+    /* Larger devices (iPhone Pro Max, larger Androids) */
+    .text-xs {
+        font-size: 11px;
+    }
+
+    .text-sm {
+        font-size: 13px;
+    }
+}
+
+/* ============================================
+   Landscape Mode Adjustments
+   ============================================ */
+
+@media (max-height: 500px) and (orientation: landscape) {
+    /* Reduce padding in landscape */
+    .py-12 {
+        padding-top: 24px;
+        padding-bottom: 24px;
+    }
+
+    .py-6 {
+        padding-top: 12px;
+        padding-bottom: 12px;
+    }
+
+    /* Hide large empty states */
+    .empty-state {
+        padding: 24px;
+    }
+
+    .empty-state svg {
+        width: 32px;
+        height: 32px;
+    }
+}
+
+/* ============================================
+   Print Styles
+   ============================================ */
+
+@media print {
+    /* Hide mobile-specific elements */
+    nav,
+    #mobile-modal-container,
+    #offcanvas-menu,
+    #pull-to-refresh-indicator,
+    button[onclick*="openTaskModal"] {
+        display: none !important;
+    }
+
+    body {
+        padding: 0;
+    }
+
+    .task-card {
+        break-inside: avoid;
+    }
+}
+
+/* ============================================
+   Accessibility Enhancements
+   ============================================ */
+
+/* Focus visible for keyboard navigation */
+:focus-visible {
+    outline: 2px solid var(--primary-black);
+    outline-offset: 2px;
+}
+
+/* Reduced motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .task-card {
+        border: 1px solid currentColor;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+        border: 2px solid currentColor;
+    }
+}

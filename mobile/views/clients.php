@@ -77,7 +77,8 @@ $siteName = getSiteName() ?? 'LazyMan';
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
 <title>Clients - <?= htmlspecialchars($siteName) ?></title>
 
-<link rel="icon" type="image/png" sizes="32x32" href="<?= APP_URL ?>/assets/favicons/favicon-32x32.png"/>
+<link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/assets/favicons/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="<?= APP_URL ?>/assets/favicons/favicon-32x32.png"/>
 <link rel="icon" type="image/png" sizes="16x16" href="<?= APP_URL ?>/assets/favicons/favicon-16x16.png"/>
 <link rel="shortcut icon" href="<?= APP_URL ?>/assets/favicons/favicon.ico"/>
 <link rel="apple-touch-icon" sizes="180x180" href="<?= APP_URL ?>/assets/favicons/apple-touch-icon.png"/>
@@ -227,8 +228,10 @@ include MOBILE_VIEW_PATH . '/partials/bottom-nav.php';
 <script>
     (function() {
         const path = window.location.pathname;
-        const baseMatch = path.match(/^(\/[^\/]*?)?\//);
-        window.BASE_PATH = baseMatch ? baseMatch[1] || '' : '';
+        let basePath = path.replace(/\/index\.php$/i, '');
+        basePath = basePath.replace(/\/+$/, '');
+        basePath = basePath.replace(/\/mobile$/i, '');
+        window.BASE_PATH = basePath;
     })();
     const APP_URL = window.location.origin + window.BASE_PATH;
     const CSRF_TOKEN = '<?= $_SESSION['csrf_token'] ?? '' ?>';

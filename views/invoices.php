@@ -1,6 +1,6 @@
 <?php
 // Invoices View
-$db = new Database(getMasterPassword());
+$db = new Database(getMasterPassword(), Auth::userId());
 $invoices = $db->load('invoices');
 $clients = $db->load('clients');
 $config = $db->load('config');
@@ -104,18 +104,18 @@ $statusLabels = [
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 text-right">
-                                    <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <a href="?page=invoice-view&id=<?php echo e($invoice['id']); ?>" 
-                                           class="p-2 bg-white border border-gray-100 rounded-lg text-gray-400 hover:text-black hover:border-black transition-all shadow-sm">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <a href="?page=invoice-view&id=<?php echo e($invoice['id']); ?>"
+                                           class="p-2 bg-white border border-gray-100 rounded-lg text-gray-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm" title="View">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                                         </a>
-                                        <a href="?page=invoice-form&id=<?php echo e($invoice['id']); ?>" 
-                                           class="p-2 bg-white border border-gray-100 rounded-lg text-gray-400 hover:text-black hover:border-black transition-all shadow-sm">
+                                        <a href="?page=invoice-form&id=<?php echo e($invoice['id']); ?>"
+                                           class="p-2 bg-white border border-gray-100 rounded-lg text-gray-400 hover:text-black hover:border-black transition-all shadow-sm" title="Edit">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                                         </a>
-                                        <button onclick="downloadInvoice('<?php echo e($invoice['id']); ?>')" 
-                                                class="p-2 bg-white border border-gray-100 rounded-lg text-gray-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                        <button onclick="confirmAction('Delete this invoice?', () => deleteInvoice('<?php echo e($invoice['id']); ?>'))"
+                                                class="p-2 bg-white border border-gray-100 rounded-lg text-gray-400 hover:text-red-600 hover:border-red-100 transition-all shadow-sm" title="Delete">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                         </button>
                                     </div>
                                 </td>
@@ -130,7 +130,24 @@ $statusLabels = [
 
 <script>
 function downloadInvoice(id) {
-    showToast('Generating document...', 'info');
-    window.location.href = `api/invoices.php?id=${id}&action=pdf`;
+    showToast('Preparing document...', 'info');
+    window.location.href = `?page=invoice-view&id=${id}&autodownload=1`;
+}
+
+async function deleteInvoice(id) {
+    try {
+        const response = await api.delete(`api/invoices.php?id=${id}`);
+        if (response.success) {
+            showToast('Invoice deleted', 'success');
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        } else {
+            showToast(response.error || 'Failed to delete invoice', 'error');
+        }
+    } catch (error) {
+        showToast('Failed to delete invoice', 'error');
+    }
 }
 </script>
+

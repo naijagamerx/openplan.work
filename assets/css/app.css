@@ -191,15 +191,167 @@ select {
 
 /* Print Styles */
 @media print {
-    .no-print {
+    /* Hide non-printable elements */
+    .no-print,
+    .sidebar,
+    header,
+    button,
+    .modal-container,
+    #toast-container {
         display: none !important;
     }
-    
+
+    /* Reset body for print */
     body {
+        background: white !important;
+        font-size: 12pt;
+        line-height: 1.4;
+        color: #000;
+    }
+
+    /* Main content takes full width */
+    main {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+    }
+
+    /* Invoice container */
+    .invoice-preview {
+        box-shadow: none !important;
+        border: none !important;
+        margin: 0 !important;
+        padding: 20px !important;
+        width: 100% !important;
+    }
+
+    /* Tables in print */
+    .invoice-table {
+        width: 100% !important;
+        border-collapse: collapse;
+    }
+
+    .invoice-table th,
+    .invoice-table td {
+        border: 1px solid #ddd !important;
+        padding: 8px !important;
+        text-align: left;
+    }
+
+    .invoice-table th {
+        background-color: #f5f5f5 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* Links - show URL in parentheses */
+    a[href^="http"]:after {
+        content: " (" attr(href) ")";
+        font-size: 9pt;
+        color: #666;
+    }
+
+    /* Page settings */
+    @page {
+        margin: 0.5in;
+        size: auto;
+    }
+
+    /* Ensure colors print */
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Avoid page breaks inside items */
+    tr, .invoice-item {
+        page-break-inside: avoid;
+    }
+
+    /* Header/Footer for print */
+    .print-header {
+        display: block !important;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #000;
+    }
+
+    .print-footer {
+        display: block !important;
+        margin-top: 30px;
+        padding-top: 10px;
+        border-top: 1px solid #ddd;
+        font-size: 10pt;
+        color: #666;
+    }
+
+    /* Status badges in print */
+    .invoice-status {
+        padding: 2px 8px;
+        border-radius: 3px;
+        font-size: 10pt;
+    }
+
+    /* Hide elements that should not appear */
+    .hide-on-print {
+        display: none !important;
+    }
+}
+
+/* Show print header/footer only when printing */
+.print-header,
+.print-footer {
+    display: none;
+}
+
+/* Responsive Table Styles */
+.table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.table-wrapper table {
+    min-width: 600px;
+}
+
+/* Mobile-friendly table */
+@media (max-width: 640px) {
+    .invoice-table {
+        font-size: 11px;
+    }
+
+    .invoice-table th,
+    .invoice-table td {
+        padding: 6px 4px;
+    }
+}
+
+/* Card layout for mobile */
+@media (max-width: 640px) {
+    .mobile-card {
+        display: block !important;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 8px;
         background: white;
     }
-    
-    .invoice-preview {
-        box-shadow: none;
+
+    .mobile-card-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 4px 0;
+    }
+
+    .mobile-card-label {
+        font-weight: 500;
+        color: #6b7280;
+        font-size: 12px;
+    }
+
+    .mobile-card-value {
+        color: #111;
     }
 }

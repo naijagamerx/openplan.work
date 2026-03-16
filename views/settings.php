@@ -175,12 +175,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
         <div class="p-5 space-y-4">
             <!-- Current Favicon Preview -->
             <div class="flex items-center gap-4">
-                <div class="w-16 h-16 bg-black rounded-lg flex items-center justify-center">
-                    <img id="favicon-preview" src="assets/favicons/favicon-32x32.png" alt="Current favicon" class="w-10 h-10">
+                <div class="w-16 h-16 bg-black rounded-lg flex items-center justify-center overflow-hidden">
+                    <?php if ($config['customFavicon'] ?? false): ?>
+                        <img id="favicon-preview" src="assets/favicons/favicon-32x32.png" alt="Current favicon" class="w-10 h-10">
+                    <?php elseif (file_exists(ASSETS_PATH . '/favicons/favicon.svg')): ?>
+                        <img id="favicon-preview" src="assets/favicons/favicon.svg" alt="Current favicon" class="w-10 h-10">
+                    <?php else: ?>
+                        <img id="favicon-preview" src="assets/favicons/favicon-32x32.png" alt="Current favicon" class="w-10 h-10">
+                    <?php endif; ?>
                 </div>
                 <div>
                     <p class="font-medium text-gray-900">Current Favicon</p>
-                    <p class="text-sm text-gray-500">Black background with "LM" monogram</p>
+                    <?php if ($config['customFavicon'] ?? false): ?>
+                        <p class="text-sm text-gray-500">Custom favicon uploaded</p>
+                    <?php else: ?>
+                        <p class="text-sm text-gray-500">Default favicon (four-square design)</p>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -406,6 +416,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
         </form>
     </div>
 
+    <!-- Data Management Guide -->
+    <div class="bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200">
+        <div class="p-5 border-b border-gray-200">
+            <h3 class="font-semibold text-gray-900 flex items-center gap-2">
+                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Data Management Guide
+            </h3>
+            <p class="text-sm text-gray-500 mt-1">Quick overview of your data backup, export, and recovery options</p>
+        </div>
+
+        <div class="p-5">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Backup Management -->
+                <div class="p-4 bg-white border border-gray-200 rounded-lg hover:border-black transition">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-10 h-10 bg-black text-white rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                            </svg>
+                        </div>
+                        <h4 class="font-semibold text-gray-900">Backup Management</h4>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-3">Create encrypted snapshots and restore from backups. Use for regular data safety.</p>
+                    <div class="text-xs text-gray-500 bg-gray-50 rounded p-2">
+                        <span class="font-medium">↓ Available below</span> — Create, download, upload & restore
+                    </div>
+                </div>
+
+                <!-- Auto Backup & Export -->
+                <div class="p-4 bg-white border border-gray-200 rounded-lg hover:border-purple-300 transition">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-10 h-10 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                            </svg>
+                        </div>
+                        <h4 class="font-semibold text-gray-900">Auto Backup & Export</h4>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-3">Schedule automatic backups and export all data for offline use or migration.</p>
+                    <a href="?page=import-data" class="text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1">
+                        Open Import/Export Data
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </a>
+                </div>
+
+                <!-- Data Recovery -->
+                <div class="p-4 bg-white border border-gray-200 rounded-lg hover:border-orange-300 transition">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-10 h-10 bg-orange-100 text-orange-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v-4H5v2H3v-4h2V9h2V7h2V5h2v2h2V7a2 2 0 012-2zm0 0V5a2 2 0 114 0v4a2 2 0 01-2 2H9a2 2 0 01-2-2v-2"></path>
+                            </svg>
+                        </div>
+                        <h4 class="font-semibold text-gray-900">Data Recovery</h4>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-3">Recover data encrypted with an <strong>old master password</strong>. Use only after password change.</p>
+                    <a href="?page=data-recovery" class="text-xs text-orange-600 hover:text-orange-800 font-medium flex items-center gap-1">
+                        Open Data Recovery
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Quick tip -->
+            <div class="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-3">
+                <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <div class="text-sm text-blue-800">
+                    <span class="font-medium">Quick tip:</span> Use <strong>Backup Management</strong> for regular snapshots, <strong>Import/Export</strong> for data migration, and <strong>Data Recovery</strong> only if you changed your password and some data became locked.
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Backup Management -->
     <div class="bg-white rounded-xl border border-gray-200">
         <div class="p-5 border-b border-gray-200 flex items-center justify-between">
@@ -446,6 +537,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
                 </button>
             </div>
 
+            <!-- Upload & Restore External Backup -->
+            <div class="border-t border-gray-200 pt-4 mt-4">
+                <h4 class="font-medium text-gray-900 mb-2">Upload & Restore Backup</h4>
+                <p class="text-sm text-gray-500 mb-3">Upload a backup file from another instance (e.g., offline to online migration). This will replace your current data.</p>
+                <div class="flex items-center gap-3">
+                    <input type="file" id="upload-backup-file" accept=".zip"
+                        class="flex-1 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-black file:text-white hover:file:bg-gray-800 cursor-pointer">
+                    <button onclick="uploadAndRestoreBackup()" id="upload-backup-btn" class="px-4 py-2 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition flex items-center gap-2 whitespace-nowrap">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        Upload & Restore
+                    </button>
+                </div>
+                <div id="upload-status" class="mt-2 text-sm hidden"></div>
+            </div>
+
             <!-- Backup List -->
             <div class="border border-gray-200 rounded-lg overflow-hidden">
                 <div class="bg-gray-50 px-4 py-3 border-b border-gray-200">
@@ -477,6 +583,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
                 <h4 class="font-medium text-blue-900 mb-2">Multi-User Backup Scope</h4>
                 <p class="text-sm text-blue-700">These backups are tied to the currently signed-in workspace. Import and restore actions only affect this account's encrypted data.</p>
             </div>
+
+            <?php if (Auth::isAdmin()): ?>
+            <div class="border border-purple-200 rounded-lg p-4 bg-purple-50/40">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h4 class="font-medium text-purple-900">Deep Migration (Admin)</h4>
+                        <p class="text-sm text-purple-800 mt-1">
+                            Full-account migration lane with master-key validation and re-encryption.
+                            Use this for local-to-online account portability. Regular user import/export remains in Data Management.
+                        </p>
+                    </div>
+                    <button onclick="refreshMigrationUsers()" class="px-3 py-1.5 border border-purple-300 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-100 transition">
+                        Refresh Users
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Migration Package (.zip)</label>
+                        <input type="file" id="migration-package-file" accept=".zip"
+                            class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-700 cursor-pointer">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Source Master Key</label>
+                        <input type="password" id="migration-source-master-password"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                               placeholder="Master key used by source package">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Target User (optional)</label>
+                        <select id="migration-target-user" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none">
+                            <option value="">Create/resolve automatically</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Execution Strategy</label>
+                        <select id="migration-strategy" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none">
+                            <option value="replace">Replace target workspace data</option>
+                            <option value="merge">Merge non-conflicting data</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                            <input type="checkbox" id="migration-include-media" class="w-4 h-4 text-purple-600 rounded" checked>
+                            Include shared Pomodoro media
+                        </label>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3 mt-4">
+                    <button id="migration-preview-btn" onclick="previewDeepMigration()" class="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition">
+                        Preview Package
+                    </button>
+                    <button id="migration-execute-btn" onclick="executeDeepMigration()" class="px-4 py-2 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition" disabled>
+                        Execute Migration
+                    </button>
+                    <button onclick="exportDeepMigrationUser()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition">
+                        Export Selected User Package
+                    </button>
+                    <span id="migration-status-text" class="text-sm text-gray-600"></span>
+                </div>
+
+                <div id="migration-progress-wrap" class="hidden mt-4">
+                    <div class="flex items-center justify-between text-xs text-gray-600 mb-1">
+                        <span id="migration-progress-stage">Preparing...</span>
+                        <span id="migration-progress-percent">0%</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div id="migration-progress-bar" class="h-full bg-purple-600 transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div id="migration-preview" class="hidden mt-4 p-3 rounded-lg border border-purple-200 bg-white text-sm text-gray-700"></div>
+            </div>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -562,14 +746,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
 
     <!-- Data Management -->
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden group hover:shadow-lg transition-all">
-        <div class="p-8 flex items-center justify-between">
-            <div>
-                <h3 class="text-xl font-bold text-gray-900">Data & Security</h3>
-                <p class="text-sm text-gray-500 mt-1">Export your data, restore from backup, or manage portable snapshots.</p>
+        <div class="p-8">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h3 class="text-xl font-bold text-gray-900">Data & Security</h3>
+                    <p class="text-sm text-gray-500 mt-1">Export your data, restore from backup, or manage portable snapshots.</p>
+                </div>
             </div>
-            <a href="?page=import-data" class="px-6 py-3 bg-black text-white rounded-xl font-bold text-sm hover:bg-gray-800 transition shadow-sm">
-                Manage Data →
-            </a>
+
+            <!-- Two clear action buttons -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <a href="?page=data-recovery" class="flex items-center gap-4 p-4 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/50 transition group">
+                    <div class="w-12 h-12 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center group-hover:bg-orange-200 transition">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v-4H5v2H3v-4h2V9h2V7h2V5h2V3h2v2h2V7a2 2 0 012-2zm0 0V5a2 2 0 114 0v4a2 2 0 01-2 2H9a2 2 0 01-2-2v-2"></path></svg>
+                    </div>
+                    <div class="flex-1">
+                        <h4 class="font-bold text-gray-900">Data Recovery</h4>
+                        <p class="text-sm text-gray-500">Recover data locked with old password</p>
+                    </div>
+                    <svg class="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </a>
+
+                <a href="?page=import-data" class="flex items-center gap-4 p-4 border border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50/50 transition group">
+                    <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center group-hover:bg-purple-200 transition">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                    </div>
+                    <div class="flex-1">
+                        <h4 class="font-bold text-gray-900">Import/Export Data</h4>
+                        <p class="text-sm text-gray-500">Download backup or migrate data</p>
+                    </div>
+                    <svg class="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </a>
+            </div>
         </div>
         <div class="px-8 py-4 bg-gray-50/50 border-t border-gray-100 flex items-center gap-2">
             <svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M2.166 4.9L10 1.554 17.834 4.9c.45.19.833.454 1.166.791V11c0 4.619-2.526 8.571-6.55 10.463l-.45.21-.45-.21c-4.024-1.892-6.55-5.844-6.55-10.463V5.691c.333-.337.717-.6 1.166-.791zM10 3.144L4 5.691V11c0 3.737 2.015 6.941 5.253 8.583L10 20.012l.747-.329C13.985 18.041 16 14.837 16 11V5.691L10 3.144zM10 7a1 1 0 011 1v3h3a1 1 0 110 2h-4a1 1 0 01-1-1V8a1 1 0 011-1z" clip-rule="evenodd"></path></svg>
@@ -630,7 +838,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
         </div>
     </div>
 
-    <?php if (isAdminUser()): ?>
     <!-- Developer Tools Quick Actions -->
     <div class="bg-gradient-to-br from-gray-900 to-black rounded-2xl p-8 text-white">
         <div class="flex items-center gap-3 mb-6">
@@ -645,6 +852,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
             </div>
         </div>
 
+        <?php if (isAdminUser()): ?>
         <div class="mb-6 rounded-2xl border border-white/10 bg-white/5 p-5">
             <div class="mb-4 flex items-center justify-between gap-4">
                 <div>
@@ -684,8 +892,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
                 </div>
             </div>
         </div>
+        <?php endif; ?>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <?php if (isAdminUser()): ?>
             <!-- Audit Logs -->
             <a href="?page=audit-logs" class="flex items-center gap-3 p-4 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition group">
                 <div class="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center group-hover:bg-amber-500/30 transition">
@@ -717,6 +927,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                 </svg>
             </a>
+            <?php endif; ?>
 
             <!-- MCP Config -->
             <a href="?page=mcp" class="flex items-center gap-3 p-4 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition group">
@@ -734,6 +945,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
                 </svg>
             </a>
 
+            <?php if (isAdminUser()): ?>
             <!-- Speckitty -->
             <a href="?page=speckitty" class="flex items-center gap-3 p-4 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition group">
                 <div class="w-10 h-10 bg-pink-500/20 rounded-lg flex items-center justify-center group-hover:bg-pink-500/30 transition">
@@ -782,6 +994,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
                 </svg>
             </a>
 
+            <!-- Users -->
             <a href="?page=users" class="flex items-center gap-3 p-4 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition group">
                 <div class="w-10 h-10 bg-indigo-500/20 rounded-lg flex items-center justify-center group-hover:bg-indigo-500/30 transition">
                     <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -797,6 +1010,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
                 </svg>
             </a>
 
+            <!-- Shared Music -->
             <a href="?page=shared-music" class="flex items-center gap-3 p-4 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition group">
                 <div class="w-10 h-10 bg-rose-500/20 rounded-lg flex items-center justify-center group-hover:bg-rose-500/30 transition">
                     <svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -812,6 +1026,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
                 </svg>
             </a>
 
+            <!-- Release Export -->
             <a href="?page=release-export" class="flex items-center gap-3 p-4 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition group">
                 <div class="w-10 h-10 bg-orange-500/20 rounded-lg flex items-center justify-center group-hover:bg-orange-500/30 transition">
                     <svg class="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -826,6 +1041,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                 </svg>
             </a>
+            <?php endif; ?>
         </div>
 
         <div class="mt-6 pt-6 border-t border-white/10 flex items-center gap-2 text-xs text-gray-500">
@@ -835,7 +1051,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
             <span>Developer tools are for advanced users and system administrators</span>
         </div>
     </div>
-    <?php endif; ?>
 </div>
 
 <script>
@@ -1072,6 +1287,111 @@ async function cleanupBackups() {
     }
 }
 
+async function uploadAndRestoreBackup() {
+    const fileInput = document.getElementById('upload-backup-file');
+    const statusEl = document.getElementById('upload-status');
+    const btn = document.getElementById('upload-backup-btn');
+
+    if (!fileInput.files.length) {
+        statusEl.textContent = 'Please select a backup file (.zip)';
+        statusEl.className = 'mt-2 text-sm text-orange-600';
+        statusEl.classList.remove('hidden');
+        return;
+    }
+
+    const file = fileInput.files[0];
+
+    // Validate file extension
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+        statusEl.textContent = 'Only .zip files are supported';
+        statusEl.className = 'mt-2 text-sm text-red-600';
+        statusEl.classList.remove('hidden');
+        return;
+    }
+
+    // Show confirmation modal
+    openModal(`
+        <div class="p-6 text-center">
+            <div class="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+            </div>
+            <h3 class="text-xl font-bold text-gray-900 mb-2">Upload & Restore Backup?</h3>
+            <p class="text-gray-600 mb-4">This will <strong>replace all your current data</strong> with the uploaded backup. This action cannot be undone.</p>
+            <p class="text-sm font-medium text-gray-900 mb-4 font-mono">${escapeHtml(file.name)}</p>
+            <p class="text-sm text-gray-500 mb-6">File size: ${escapeHtml(formatBytes(file.size))}</p>
+            <div class="flex gap-3 justify-center">
+                <button onclick="closeModal()" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancel</button>
+                <button onclick="doUploadAndRestore()" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition">Upload & Restore</button>
+            </div>
+        </div>
+    `);
+}
+
+async function doUploadAndRestore() {
+    closeModal();
+
+    const fileInput = document.getElementById('upload-backup-file');
+    const statusEl = document.getElementById('upload-status');
+    const btn = document.getElementById('upload-backup-btn');
+
+    const file = fileInput.files[0];
+    const originalText = btn.innerHTML;
+
+    // Show loading state
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Uploading...';
+
+    statusEl.textContent = 'Uploading and restoring backup... This may take a moment.';
+    statusEl.className = 'mt-2 text-sm text-blue-600';
+    statusEl.classList.remove('hidden');
+
+    try {
+        const formData = new FormData();
+        formData.append('backup_file', file);
+        formData.append('csrf_token', CSRF_TOKEN);
+
+        const response = await api.request('api/backup.php?action=upload_restore', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.success) {
+            const msg = `Backup restored successfully! ${response.data.files_restored ? response.data.files_restored + ' files restored.' : ''}`;
+            showToast(msg, 'success');
+            statusEl.textContent = msg;
+            statusEl.className = 'mt-2 text-sm text-green-600';
+
+            // Refresh backup list after a short delay
+            setTimeout(() => {
+                loadBackupStats();
+                loadBackupList();
+                // Optionally reload the page to show updated data
+                setTimeout(() => location.reload(), 1500);
+            }, 1000);
+        } else {
+            throw new Error(response.error || 'Failed to restore backup');
+        }
+    } catch (error) {
+        const errorMsg = error.message || 'Unknown error';
+        showToast('Upload failed: ' + errorMsg, 'error');
+        statusEl.textContent = 'Failed: ' + errorMsg;
+        statusEl.className = 'mt-2 text-sm text-red-600';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
 function downloadBackup(filename) {
     showToast('Downloading backup...', 'info');
     window.location.href = `api/backup.php?action=download&filename=${encodeURIComponent(filename)}&csrf_token=${CSRF_TOKEN}`;
@@ -1158,6 +1478,261 @@ async function doDeleteBackup(filename) {
     }
 }
 
+let currentMigrationJobId = null;
+let migrationUsersLoaded = false;
+let migrationPollTimer = null;
+
+async function refreshMigrationUsers() {
+    const select = document.getElementById('migration-target-user');
+    if (!select) return;
+
+    try {
+        const response = await api.get('api/deep-migration.php?action=users');
+        const users = response?.data?.users || [];
+        select.innerHTML = '<option value="">Create/resolve automatically</option>' +
+            users.map((user) => {
+                const label = `${escapeHtml(user.name || 'Unnamed')} (${escapeHtml(user.email || 'no-email')})`;
+                return `<option value="${escapeHtml(user.id)}">${label}</option>`;
+            }).join('');
+        migrationUsersLoaded = true;
+    } catch (error) {
+        showToast('Failed to load migration users', 'error');
+    }
+}
+
+function setMigrationStatus(message, type = 'info') {
+    const status = document.getElementById('migration-status-text');
+    if (!status) return;
+
+    const palette = {
+        info: 'text-gray-600',
+        success: 'text-green-600',
+        error: 'text-red-600'
+    };
+    status.className = `text-sm ${palette[type] || palette.info}`;
+    status.textContent = message;
+}
+
+function updateMigrationProgress(progress, stage) {
+    const wrap = document.getElementById('migration-progress-wrap');
+    const bar = document.getElementById('migration-progress-bar');
+    const percentText = document.getElementById('migration-progress-percent');
+    const stageText = document.getElementById('migration-progress-stage');
+    if (!wrap || !bar || !percentText || !stageText) return;
+
+    const safe = Math.max(0, Math.min(100, Number(progress || 0)));
+    wrap.classList.remove('hidden');
+    bar.style.width = `${safe}%`;
+    percentText.textContent = `${safe}%`;
+    stageText.textContent = stage || 'Processing...';
+}
+
+function renderMigrationPreview(previewData) {
+    const container = document.getElementById('migration-preview');
+    const executeBtn = document.getElementById('migration-execute-btn');
+    if (!container || !executeBtn) return;
+
+    if (!previewData) {
+        container.classList.add('hidden');
+        executeBtn.disabled = true;
+        return;
+    }
+
+    const source = previewData.source_user || {};
+    const collections = Array.isArray(previewData.collections) ? previewData.collections : [];
+    const conflicts = previewData.conflicts || {};
+
+    const rows = collections.map((item) => (
+        `<tr class="border-t border-purple-100">
+            <td class="py-1.5 pr-4">${escapeHtml(item.name || '')}</td>
+            <td class="py-1.5 pr-4 text-right">${Number(item.records || 0)}</td>
+            <td class="py-1.5 text-right ${Number(item.conflicts || 0) > 0 ? 'text-orange-600 font-semibold' : ''}">${Number(item.conflicts || 0)}</td>
+        </tr>`
+    )).join('');
+
+    const emailConflict = conflicts.email_conflict
+        ? `<p class="text-orange-700 mt-1">Email conflict: ${escapeHtml(conflicts.email_conflict.email || 'unknown')} (${escapeHtml(conflicts.email_conflict.id || '')})</p>`
+        : '';
+
+    container.innerHTML = `
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <p class="font-semibold text-gray-900">Preview Complete</p>
+                <p class="mt-1">Source: ${escapeHtml(source.name || 'Imported User')} (${escapeHtml(source.email || 'no-email')})</p>
+                <p class="mt-1">Collections: ${collections.length}, Shared Media Files: ${Number(previewData.media_files || 0)}</p>
+                <p class="mt-1">Target User Exists: ${conflicts.target_user_exists ? 'Yes' : 'No'}</p>
+                ${emailConflict}
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-gray-600">Job ID</p>
+                <p class="font-mono text-xs text-gray-700">${escapeHtml(previewData.job_id || '')}</p>
+            </div>
+        </div>
+        <div class="mt-3 overflow-x-auto">
+            <table class="w-full text-xs">
+                <thead>
+                    <tr class="text-left text-gray-500">
+                        <th class="py-1.5 pr-4">Collection</th>
+                        <th class="py-1.5 pr-4 text-right">Records</th>
+                        <th class="py-1.5 text-right">Conflicts</th>
+                    </tr>
+                </thead>
+                <tbody>${rows || '<tr><td colspan="3" class="py-2 text-gray-500">No collections detected</td></tr>'}</tbody>
+            </table>
+        </div>
+    `;
+    container.classList.remove('hidden');
+    executeBtn.disabled = !previewData.job_id;
+}
+
+async function previewDeepMigration() {
+    const fileInput = document.getElementById('migration-package-file');
+    const sourceMasterInput = document.getElementById('migration-source-master-password');
+    const targetUserSelect = document.getElementById('migration-target-user');
+    const btn = document.getElementById('migration-preview-btn');
+
+    if (!fileInput || !sourceMasterInput || !targetUserSelect || !btn) return;
+    if (!fileInput.files?.length) {
+        setMigrationStatus('Select a migration package first.', 'error');
+        return;
+    }
+    if (!sourceMasterInput.value.trim()) {
+        setMigrationStatus('Source master key is required for preview.', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Previewing...';
+    setMigrationStatus('Analyzing package...', 'info');
+    renderMigrationPreview(null);
+    updateMigrationProgress(5, 'Uploading package');
+
+    try {
+        const formData = new FormData();
+        formData.append('package_file', fileInput.files[0]);
+        formData.append('source_master_password', sourceMasterInput.value);
+        formData.append('target_user_id', targetUserSelect.value || '');
+        formData.append('csrf_token', CSRF_TOKEN);
+
+        const response = await api.request('api/deep-migration.php?action=preview', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.success) {
+            throw new Error(response?.error?.message || 'Preview failed');
+        }
+
+        const previewData = response.data || {};
+        currentMigrationJobId = previewData.job_id || null;
+        updateMigrationProgress(100, 'Preview complete');
+        renderMigrationPreview(previewData);
+        setMigrationStatus('Preview complete. Review conflicts and run migration when ready.', 'success');
+    } catch (error) {
+        updateMigrationProgress(0, 'Preview failed');
+        setMigrationStatus(error.message || 'Preview failed', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Preview Package';
+    }
+}
+
+async function pollMigrationProgress(jobId) {
+    if (!jobId) return;
+    try {
+        const response = await api.get(`api/deep-migration.php?action=progress&job_id=${encodeURIComponent(jobId)}`);
+        const state = response?.data || {};
+        updateMigrationProgress(Number(state.progress || 0), state.stage || 'Processing...');
+        return state;
+    } catch (error) {
+        return null;
+    }
+}
+
+async function executeDeepMigration() {
+    const executeBtn = document.getElementById('migration-execute-btn');
+    const strategySelect = document.getElementById('migration-strategy');
+    const sourceMasterInput = document.getElementById('migration-source-master-password');
+    const targetUserSelect = document.getElementById('migration-target-user');
+    const includeMedia = document.getElementById('migration-include-media');
+
+    if (!executeBtn || !strategySelect || !sourceMasterInput || !targetUserSelect || !includeMedia) return;
+    if (!currentMigrationJobId) {
+        setMigrationStatus('Preview a package before execution.', 'error');
+        return;
+    }
+    if (!sourceMasterInput.value.trim()) {
+        setMigrationStatus('Source master key is required.', 'error');
+        return;
+    }
+
+    const warning = strategySelect.value === 'replace'
+        ? 'This will replace target workspace data. Continue?'
+        : 'This will merge imported data into the target workspace. Continue?';
+    if (!confirm(warning)) return;
+
+    executeBtn.disabled = true;
+    executeBtn.textContent = 'Migrating...';
+    setMigrationStatus('Migration in progress...', 'info');
+    updateMigrationProgress(12, 'Starting migration');
+
+    if (migrationPollTimer) {
+        clearInterval(migrationPollTimer);
+    }
+    migrationPollTimer = setInterval(() => {
+        pollMigrationProgress(currentMigrationJobId);
+    }, 900);
+
+    try {
+        const response = await api.post('api/deep-migration.php?action=execute', {
+            job_id: currentMigrationJobId,
+            strategy: strategySelect.value,
+            source_master_password: sourceMasterInput.value,
+            target_user_id: targetUserSelect.value || '',
+            include_shared_media: includeMedia.checked ? 1 : 0,
+            csrf_token: CSRF_TOKEN
+        });
+
+        if (!response.success) {
+            throw new Error(response?.error?.message || 'Migration failed');
+        }
+
+        const summary = response.data || {};
+        updateMigrationProgress(100, 'Migration completed');
+        setMigrationStatus(
+            `Completed. Created: ${summary.created_count || 0}, Updated: ${summary.updated_count || 0}, Skipped: ${summary.skipped_count || 0}, Media: ${summary.media_written || 0}`,
+            'success'
+        );
+        showToast('Deep migration completed successfully', 'success');
+    } catch (error) {
+        setMigrationStatus(error.message || 'Migration failed', 'error');
+        showToast('Deep migration failed', 'error');
+    } finally {
+        if (migrationPollTimer) {
+            clearInterval(migrationPollTimer);
+            migrationPollTimer = null;
+        }
+        await pollMigrationProgress(currentMigrationJobId);
+        executeBtn.disabled = false;
+        executeBtn.textContent = 'Execute Migration';
+    }
+}
+
+function exportDeepMigrationUser() {
+    const select = document.getElementById('migration-target-user');
+    const includeMedia = document.getElementById('migration-include-media');
+    if (!select || !includeMedia) return;
+    if (!select.value) {
+        setMigrationStatus('Select a user to export a deep migration package.', 'error');
+        return;
+    }
+
+    const includeFlag = includeMedia.checked ? '1' : '0';
+    const url = `api/deep-migration.php?action=export_user&user_id=${encodeURIComponent(select.value)}&include_shared_media=${includeFlag}&csrf_token=${encodeURIComponent(CSRF_TOKEN)}`;
+    window.location.href = url;
+    setMigrationStatus('Preparing export package...', 'info');
+}
+
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -1170,6 +1745,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('backup-list')) {
         loadBackupStats();
         loadBackupList();
+    }
+
+    if (document.getElementById('migration-target-user') && !migrationUsersLoaded) {
+        refreshMigrationUsers();
     }
 });
 
@@ -1349,9 +1928,15 @@ document.getElementById('favicon-upload-form').addEventListener('submit', async 
             messageEl.className = 'text-sm text-green-600';
             messageEl.classList.remove('hidden');
 
-            // Update preview with cache bust
+            // Update preview with cache bust - always show PNG for custom favicons
             const preview = document.getElementById('favicon-preview');
             preview.src = 'assets/favicons/favicon-32x32.png?' + Date.now();
+
+            // Update status text
+            const statusText = preview.closest('.flex').querySelector('p.text-sm');
+            if (statusText) {
+                statusText.textContent = 'Custom favicon uploaded';
+            }
 
             // Update layout favicon links with cache bust
             document.querySelectorAll('link[rel*="icon"]').forEach(link => {
@@ -1417,7 +2002,14 @@ async function resetFavicon() {
             messageEl.classList.remove('hidden');
 
             const preview = document.getElementById('favicon-preview');
-            preview.src = 'assets/favicons/favicon-32x32.png?' + Date.now();
+            // After reset, show the default SVG
+            preview.src = 'assets/favicons/favicon.svg?' + Date.now();
+
+            // Update status text back to default
+            const statusText = preview.closest('.flex').querySelector('p.text-sm');
+            if (statusText) {
+                statusText.textContent = 'Default favicon (four-square design)';
+            }
 
             // Update all favicon links
             document.querySelectorAll('link[rel*="icon"]').forEach(link => {
@@ -1442,13 +2034,13 @@ async function resetFavicon() {
     }
 }
 
-// Load favicon preview with cache bust on page load
-document.addEventListener('DOMContentLoaded', function() {
-    const preview = document.getElementById('favicon-preview');
-    if (preview) {
-        preview.src = 'assets/favicons/favicon-32x32.png?t=' + Date.now();
-    }
-});
+// Load favicon preview with cache bust on page load - disabled, PHP sets initial src
+// document.addEventListener('DOMContentLoaded', function() {
+//     const preview = document.getElementById('favicon-preview');
+//     if (preview) {
+//         preview.src = 'assets/favicons/favicon-32x32.png?t=' + Date.now();
+//     }
+// });
 
 // Notification Sound Settings
 const soundUrls = {

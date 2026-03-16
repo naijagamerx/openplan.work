@@ -67,7 +67,9 @@ if (isset($_POST['generate'])) {
                 '.env.example', '.gitignore', '.user.ini', 'cacert.pem',
                 'composer.json', 'composer.lock', 'config.php', 'index.php',
                 'manifest.php', 'migrate.php', 'mobile-logout.php',
-                'setup_models.php'
+                'setup_models.php',
+                'robots.txt',
+                'sitemap.xml'
             ];
             if ($exportType === 'hosted' && file_exists(ROOT_PATH . '/.env')) {
                 $includedRootFiles[] = '.env';
@@ -78,7 +80,18 @@ if (isset($_POST['generate'])) {
                 $includedRootFiles[] = 'start_server.php';
                 $includedRootFiles[] = 'stop_server.bat';
             }
-            $includedDocs = ['README.md'];
+            $includedDocs = ['README.md', 'docs/EXPORT_RELEASE.md', 'docs/HOSTED_SETUP.md'];
+            $requiredArtifacts = [
+                'index.php',
+                'config.php',
+                'manifest.php',
+                'api/export.php',
+                'views/release-export.php',
+                'mobile/index.php',
+                'mobile/views/release-export.php',
+                'robots.txt',
+                'sitemap.xml'
+            ];
 
             $excludePatterns = [
                 '/^\.(auto-claude|claude|kiro|qoder|serena|trae)$/',
@@ -167,9 +180,18 @@ if (isset($_POST['generate'])) {
                 'includedDirectories' => $includedDirectories,
                 'includedRootFiles' => $includedRootFiles,
                 'includedDocs' => $includedDocs,
-                'generatedDataDirectories' => ['backups', 'sessions', 'uploads', 'users']
+                'generatedDataDirectories' => ['backups', 'sessions', 'uploads', 'users'],
+                'requiredArtifacts' => $requiredArtifacts
             ];
             file_put_contents($stagingPath . '/release-manifest.json', json_encode($releaseManifest, JSON_PRETTY_PRINT));
+
+            $missingArtifacts = releaseExportValidateRequiredArtifacts($stagingPath, $requiredArtifacts);
+            if (!empty($missingArtifacts)) {
+                throw new Exception(
+                    'Critical release artifacts are missing: ' . implode(', ', $missingArtifacts) .
+                    '. Export aborted so you do not download an incomplete package.'
+                );
+            }
 
             releaseExportCreateZip($stagingPath, $zipPath);
             $fileCount = releaseExportCountFiles($stagingPath);
@@ -344,6 +366,19 @@ function releaseExportFormatSize(int $bytes): string {
         $index++;
     }
     return round($value, 2) . ' ' . $units[$index];
+}
+
+function releaseExportValidateRequiredArtifacts(string $stagingPath, array $requiredArtifacts): array {
+    $missing = [];
+    foreach ($requiredArtifacts as $relativePath) {
+        $normalized = ltrim(str_replace('\\', '/', $relativePath), '/');
+        $fullPath = $stagingPath . '/' . $normalized;
+        if (!file_exists($fullPath)) {
+            $missing[] = $normalized;
+        }
+    }
+
+    return $missing;
 }
 ?>
 

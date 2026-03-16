@@ -4,12 +4,14 @@
  */
 
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../includes/BaseAPI.php';
 
 if (!Auth::check()) {
     errorResponse('Unauthorized', 401);
 }
 
-if (requestMethod() !== 'GET') {
+// CSRF validation for non-GET requests (bypass for MCP)
+if (requestMethod() !== 'GET' && !Auth::isMcp()) {
     $body = getJsonBody();
     $token = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if (!Auth::validateCsrf($token)) {
@@ -17,78 +19,157 @@ if (requestMethod() !== 'GET') {
     }
 }
 
-$db = new Database(getMasterPassword());
+$db = new Database(getMasterPassword(), Auth::userId());
+
+// Verify database connection works
+try {
+    $db->load('finance', true);
+} catch (Exception $e) {
+    errorResponse('Database connection failed: Wrong master password', 401, ERROR_UNAUTHORIZED);
+}
+
 $id = $_GET['id'] ?? null;
+$action = $_GET['action'] ?? null;
+
+/**
+ * Finance API - uses BaseAPI for consistent CRUD operations
+ */
+class FinanceAPI extends BaseAPI {
+    protected function getAllowedFields(): array {
+        return ['transactionNumber', 'type', 'description', 'amount', 'category', 'date', 'notes', 'projectId', 'clientId'];
+    }
+
+    /**
+     * Generate next transaction number (format: YYYY-NNNN)
+     */
+    public function generateTransactionNumber(): string {
+        $transactions = $this->findAll();
+        $year = date('Y');
+        // Count transactions starting with current year (PHP 7.x compatible)
+        $count = 0;
+        foreach ($transactions as $t) {
+            if (isset($t['transactionNumber']) && strpos($t['transactionNumber'], $year) === 0) {
+                $count++;
+            }
+        }
+        $count++;
+        return $year . '-' . str_pad($count, 4, '0', STR_PAD_LEFT);
+    }
+
+    public function create(array $data): ?array {
+        $record = [];
+
+        foreach ($this->getAllowedFields() as $field) {
+            if (isset($data[$field])) {
+                $record[$field] = $data[$field];
+            }
+        }
+
+        // Generate transaction number if not provided
+        if (!isset($record['transactionNumber'])) {
+            $record['transactionNumber'] = $this->generateTransactionNumber();
+        }
+
+        // Set defaults
+        if (!isset($record['type'])) {
+            $record['type'] = 'expense';
+        }
+        if (!isset($record['date'])) {
+            $record['date'] = date('c');
+        }
+        if (!isset($record['category'])) {
+            $record['category'] = 'Other';
+        }
+
+        // Generate ID first so we can retrieve the record
+        $record['id'] = $this->db->generateId();
+
+        if ($this->db->insert($this->collection, $record)) {
+            return $this->db->findById($this->collection, $record['id']);
+        }
+
+        return null;
+    }
+
+    public function update(string $id, array $data): ?array {
+        $updates = [];
+
+        foreach ($this->getAllowedFields() as $field) {
+            if (isset($data[$field])) {
+                $updates[$field] = $data[$field];
+            }
+        }
+
+        if ($this->db->update($this->collection, $id, $updates)) {
+            return $this->db->findById($this->collection, $id);
+        }
+
+        return null;
+    }
+}
+
+$financeAPI = new FinanceAPI($db, 'finance');
 
 switch (requestMethod()) {
     case 'GET':
-        $finance = $db->load('finance');
-        successResponse($finance);
+        successResponse($financeAPI->findAll());
         break;
-        
+
     case 'POST':
         $body = getJsonBody();
-        $action = $_GET['action'] ?? 'add';
-        
-        if (empty($body['description']) || empty($body['amount'])) {
-            errorResponse('Description and amount are required');
-        }
-        
-        $finance = $db->load('finance');
-        
-        if ($action === 'update' && !empty($_GET['id'])) {
-            $updated = false;
-            foreach ($finance as &$entry) {
-                if ($entry['id'] === $_GET['id']) {
-                    $entry['type'] = $body['type'] ?? $entry['type'] ?? 'expense';
-                    $entry['description'] = $body['description'];
-                    $entry['amount'] = floatval($body['amount']);
-                    $entry['category'] = $body['category'] ?? $entry['category'] ?? 'Other';
-                    $entry['date'] = $body['date'] ?? $entry['date'] ?? date('Y-m-d');
-                    $entry['notes'] = $body['notes'] ?? '';
-                    $entry['updatedAt'] = date('c');
-                    $updated = true;
-                    $result = $entry;
-                    break;
-                }
+
+        if ($action === 'update' && $id) {
+            $entry = $financeAPI->update($id, $body);
+            if ($entry) {
+                successResponse($entry, 'Entry updated');
             }
-            if (!$updated) {
-                errorResponse('Transaction not found', 404);
-            }
-        } else {
-            $result = [
-                'id' => $db->generateId(),
-                'type' => $body['type'] ?? 'expense',
-                'description' => $body['description'],
-                'amount' => floatval($body['amount']),
-                'category' => $body['category'] ?? 'Other',
-                'date' => $body['date'] ?? date('Y-m-d'),
-                'notes' => $body['notes'] ?? '',
-                'createdAt' => date('c')
-            ];
-            $finance[] = $result;
+            errorResponse('Entry not found', 404, ERROR_NOT_FOUND);
         }
-        
-        $db->save('finance', $finance);
-        successResponse($result, 'Success');
+
+        // Create new entry
+        if (empty($body['description']) || !isset($body['amount']) || $body['amount'] === '') {
+            errorResponse('Description and amount are required', 400, ERROR_VALIDATION);
+        }
+
+        // Ensure amount is a number
+        $body['amount'] = floatval($body['amount']);
+
+        $entry = $financeAPI->create($body);
+        if ($entry) {
+            successResponse($entry, 'Entry created');
+        }
+
+        errorResponse('Failed to create entry', 500, ERROR_SERVER);
         break;
-        
+
+    case 'PUT':
+        if (!$id) {
+            errorResponse('Entry ID required', 400, ERROR_VALIDATION);
+        }
+
+        $body = getJsonBody();
+        $entry = $financeAPI->update($id, $body);
+
+        if ($entry) {
+            successResponse($entry, 'Entry updated');
+        }
+
+        errorResponse('Entry not found', 404, ERROR_NOT_FOUND);
+        break;
+
     case 'DELETE':
         if (!$id) {
-            errorResponse('Entry ID required');
+            errorResponse('Entry ID required', 400, ERROR_VALIDATION);
         }
-        
-        $finance = $db->load('finance');
-        $filtered = array_filter($finance, fn($e) => $e['id'] !== $id);
-        
-        if (count($filtered) === count($finance)) {
-            errorResponse('Entry not found', 404);
+
+        if ($financeAPI->delete($id)) {
+            successResponse(null, 'Entry deleted');
         }
-        
-        $db->save('finance', array_values($filtered));
-        successResponse(null, 'Entry deleted');
+
+        errorResponse('Entry not found', 404, ERROR_NOT_FOUND);
         break;
-        
+
     default:
         errorResponse('Method not allowed', 405);
 }
+

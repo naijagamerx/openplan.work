@@ -67,7 +67,11 @@ class Encryption {
         }
         
         $json = json_decode($decrypted, true);
-        return $json !== null ? $json : $decrypted;
+        if (json_last_error() === JSON_ERROR_NONE) {
+            return $json;
+        }
+        
+        return $decrypted;
     }
     
     /**

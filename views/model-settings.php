@@ -2,7 +2,7 @@
 /**
  * Model Settings View
  */
-$db = new Database(getMasterPassword());
+$db = new Database(getMasterPassword(), Auth::userId());
 $models = $db->load('models');
 ?>
 
@@ -139,8 +139,9 @@ function openAddModelModal(provider) {
                     <input type="text" name="displayName" required class="w-full px-3 py-2 border border-gray-300 rounded-lg">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Model ID (API Key)</label>
-                    <input type="text" name="modelId" required class="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Model ID</label>
+                    <input type="text" name="modelId" required placeholder="e.g., llama-3.3-70b-versatile" class="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono">
+                    <p class="text-xs text-gray-500 mt-1">Use the provider model identifier. API keys are managed in Settings.</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
@@ -163,16 +164,19 @@ function openAddModelModal(provider) {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
         data.enabled = !!data.enabled;
-        
-        const res = await fetch('api/models.php?action=add', {
-            method: 'POST',
-            body: JSON.stringify(data)
-        });
-        const result = await res.json();
-        if (result.success) {
-            location.reload();
-        } else {
-            alert(result.error || 'Failed to add model');
+
+        try {
+            const result = await api.post('api/models.php?action=add', data);
+            if (result.success) {
+                showToast(result.message || 'Model added successfully', 'success');
+                closeModal();
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast(result.error?.message || 'Failed to add model', 'error');
+            }
+        } catch (error) {
+            console.error('Add model error:', error);
+            showToast('Failed to add model', 'error');
         }
     });
 }
@@ -189,6 +193,7 @@ function openEditModelModal(model) {
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Model ID</label>
                     <input type="text" name="modelId" value="${model.modelId}" required class="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono">
+                    <p class="text-xs text-gray-500 mt-1">Use the provider model identifier. API keys are managed in Settings.</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
@@ -211,35 +216,53 @@ function openEditModelModal(model) {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
         data.enabled = !!data.enabled;
-        
-        const res = await fetch(`api/models.php?action=update&id=${model.id}`, {
-            method: 'POST',
-            body: JSON.stringify(data)
-        });
-        const result = await res.json();
-        if (result.success) {
-            location.reload();
-        } else {
-            alert(result.error || 'Failed to update model');
+
+        try {
+            const result = await api.post(`api/models.php?action=update&id=${model.id}`, data);
+            if (result.success) {
+                showToast(result.message || 'Model updated successfully', 'success');
+                closeModal();
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast(result.error?.message || 'Failed to update model', 'error');
+            }
+        } catch (error) {
+            console.error('Update model error:', error);
+            showToast('Failed to update model', 'error');
         }
     });
 }
 
 async function setDefaultModel(id, provider) {
     if (!confirm('Are you sure you want to set this as the default model?')) return;
-    const res = await fetch(`api/models.php?action=set-default&id=${id}&provider=${provider}`, { method: 'POST' });
-    if ((await res.json()).success) {
-        location.reload();
+    try {
+        const result = await api.post(`api/models.php?action=set-default&id=${id}&provider=${provider}`);
+        if (result.success) {
+            showToast(result.message || 'Default model updated', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast(result.error?.message || 'Failed to set default model', 'error');
+        }
+    } catch (error) {
+        console.error('Set default error:', error);
+        showToast('Failed to set default model', 'error');
     }
 }
 
 async function deleteModel(id) {
     if (!confirm('Are you sure you want to delete this model?')) return;
-    const res = await fetch(`api/models.php?action=delete&id=${id}`, { method: 'DELETE' });
-    if ((await res.json()).success) {
-        location.reload();
-    } else {
-        alert('Failed to delete model');
+    try {
+        const result = await api.delete(`api/models.php?action=delete&id=${id}`);
+        if (result.success) {
+            showToast(result.message || 'Model deleted successfully', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast(result.error?.message || 'Failed to delete model', 'error');
+        }
+    } catch (error) {
+        console.error('Delete model error:', error);
+        showToast('Failed to delete model', 'error');
     }
 }
 </script>
+

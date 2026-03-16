@@ -1,5 +1,5 @@
 <?php
-$db = new Database(getMasterPassword());
+$db = new Database(getMasterPassword(), Auth::userId());
 $id = $_GET['id'] ?? null;
 $habit = null;
 
@@ -83,6 +83,15 @@ $title = $id ? 'Edit Habit' : 'New Habit';
                            class="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:border-black outline-none transition-colors bg-gray-50">
                 </div>
 
+                <!-- Target Duration -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-500 mb-2 uppercase tracking-widest">Target Duration (minutes)</label>
+                    <input type="number" name="targetDuration" value="<?php echo e($habit['targetDuration'] ?? ''); ?>"
+                           placeholder="e.g., 30" min="1"
+                           class="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:border-black outline-none transition-colors bg-gray-50">
+                    <p class="text-xs text-gray-400 mt-1">How many minutes you want to spend on this habit</p>
+                </div>
+
                 <!-- AI Generated Flag -->
                 <div>
                     <label class="block text-sm font-bold text-gray-500 mb-2 uppercase tracking-widest">Source</label>
@@ -154,7 +163,11 @@ async function generateHabitSuggestions() {
     const provider = 'groq';
     const groqModels = models?.groq || [];
     const defaultModel = groqModels.find(m => m.isDefault) || groqModels[0];
-    const model = defaultModel?.modelId || 'llama-3.3-70b-versatile';
+    const model = defaultModel?.modelId;
+    if (!model) {
+        showToast('No AI model configured. Please set up a model in Model Settings.', 'error');
+        return;
+    }
 
     const response = await api.post('api/ai.php?action=suggest_habits', {
         goals: goals,
@@ -175,6 +188,16 @@ function renderSuggestions(habits) {
     const container = document.getElementById('suggestions-container');
     container.innerHTML = '';
 
+    // Add "Save All" button if there are suggestions
+    if (habits.length > 0) {
+        const saveAllBtn = document.createElement('button');
+        saveAllBtn.type = 'button';
+        saveAllBtn.className = 'w-full mb-3 py-2 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition flex items-center justify-center gap-2';
+        saveAllBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Save All Habits';
+        saveAllBtn.onclick = () => saveAllHabits(habits);
+        container.appendChild(saveAllBtn);
+    }
+
     habits.forEach((habit, index) => {
         const div = document.createElement('div');
         div.className = 'suggestion-item flex items-center gap-3 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition cursor-pointer';
@@ -186,8 +209,9 @@ function renderSuggestions(habits) {
                 <p class="font-bold text-gray-900 text-sm">${habit.name}</p>
                 <p class="text-xs text-gray-500 uppercase tracking-widest">${habit.category} • ${habit.reminderTime || 'No reminder'}</p>
             </div>
-            <button type="button" onclick="useSuggestion(${index})" class="px-3 py-1 bg-black text-white text-xs font-bold uppercase rounded-lg hover:bg-gray-800 transition">
-                Use This
+            <button type="button" onclick="useAndSaveSuggestion(${index})" class="px-3 py-1 bg-blue-600 text-white text-xs font-bold uppercase rounded-lg hover:bg-blue-700 transition flex items-center gap-1">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                Save
             </button>
         `;
         container.appendChild(div);
@@ -196,16 +220,55 @@ function renderSuggestions(habits) {
     window.suggestedHabits = habits;
 }
 
-function getCategoryColor(category) {
-    const colors = {
-        health: 'bg-green-500',
-        productivity: 'bg-blue-500',
-        mindfulness: 'bg-purple-500',
-        learning: 'bg-yellow-500',
-        social: 'bg-pink-500',
-        general: 'bg-gray-500'
-    };
-    return colors[category] || colors.general;
+async function useAndSaveSuggestion(index) {
+    const habit = window.suggestedHabits[index];
+
+    const response = await api.post('api/habits.php?action=add', {
+        name: habit.name,
+        category: habit.category,
+        frequency: habit.frequency || 'daily',
+        reminderTime: habit.reminderTime || '',
+        isAiGenerated: true,
+        csrf_token: CSRF_TOKEN
+    });
+
+    if (response.success) {
+        showToast('Habit saved!', 'success');
+        // Refresh the page after a short delay
+        setTimeout(() => location.href = '?page=habits', 500);
+    } else {
+        showToast(response.error || 'Failed to save habit', 'error');
+    }
+}
+
+async function saveAllHabits(habits) {
+    let saved = 0;
+    let failed = 0;
+
+    for (const habit of habits) {
+        const response = await api.post('api/habits.php?action=add', {
+            name: habit.name,
+            category: habit.category,
+            frequency: habit.frequency || 'daily',
+            reminderTime: habit.reminderTime || '',
+            isAiGenerated: true,
+            csrf_token: CSRF_TOKEN
+        });
+
+        if (response.success) {
+            saved++;
+        } else {
+            failed++;
+        }
+    }
+
+    if (saved > 0) {
+        showToast(`${saved} habit(s) saved!`, 'success');
+        setTimeout(() => location.href = '?page=habits', 500);
+    }
+    if (failed > 0) {
+        showToast(`${failed} habit(s) failed to save`, 'error');
+    }
 }
 
 function useSuggestion(index) {
@@ -227,14 +290,21 @@ document.getElementById('habit-form').addEventListener('submit', async (e) => {
     const data = Object.fromEntries(formData.entries());
     data.isAiGenerated = data.isAiGenerated === '1';
 
-    const url = data.id ? 'api/habits.php?action=update&id=' + data.id : 'api/habits.php?action=add';
-    const response = await api.post(url, data);
+    let response;
+    if (data.id) {
+        // Use PUT method for updates to avoid duplication bug
+        response = await api.put('api/habits.php?id=' + data.id, data);
+    } else {
+        // Use POST for new habits
+        response = await api.post('api/habits.php?action=add', data);
+    }
 
     if (response.success) {
-        showToast(data.id ? 'Habit updated!' : 'Habit created!', 'success');
-        setTimeout(() => location.href = '?page=habits', 1000);
+        const message = data.id ? 'Habit updated!' : 'Habit created!';
+        location.href = '?page=habits&msg=' + encodeURIComponent(message) + '&type=success';
     } else {
         showToast(response.error || 'Failed to save habit', 'error');
     }
 });
 </script>
+

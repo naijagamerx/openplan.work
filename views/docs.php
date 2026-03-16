@@ -1,21 +1,89 @@
 <?php
 $siteName = getPublicAppName();
 $pageTitle = $siteName . ' | Public Documentation';
+
+// SEO Configuration
+$pageDescription = 'Complete documentation for OpenPlan Work - setup guides, features, and API reference for the encrypted PHP workspace.';
+$pageKeywords = 'documentation, setup guide, PHP app documentation, self-hosted documentation, encrypted workspace docs';
+$canonicalUrl = APP_URL . '/?page=docs';
+$ogImage = APP_URL . '/assets/images/chrome_B3N3g51Yeo.png';
 ?>
 <!DOCTYPE html>
 <html class="scroll-smooth" lang="en">
 <head>
+<!-- Primary Meta Tags -->
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title><?php echo e($pageTitle); ?></title>
+<meta name="description" content="<?php echo e($pageDescription); ?>"/>
+<meta name="keywords" content="<?php echo e($pageKeywords); ?>"/>
+<meta name="author" content="OpenPlan Work"/>
+<meta name="robots" content="index, follow"/>
+<link rel="canonical" href="<?php echo e($canonicalUrl); ?>"/>
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="<?php echo e($canonicalUrl); ?>"/>
+<meta property="og:title" content="<?php echo e($pageTitle); ?>"/>
+<meta property="og:description" content="<?php echo e($pageDescription); ?>"/>
+<meta property="og:image" content="<?php echo e($ogImage); ?>"/>
+<meta property="og:image:alt" content="<?php echo e($pageTitle); ?>"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta property="og:site_name" content="<?php echo e($siteName); ?>"/>
+<meta property="og:locale" content="en_US"/>
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:url" content="<?php echo e($canonicalUrl); ?>"/>
+<meta name="twitter:title" content="<?php echo e($pageTitle); ?>"/>
+<meta name="twitter:description" content="<?php echo e($pageDescription); ?>"/>
+<meta name="twitter:image" content="<?php echo e($ogImage); ?>"/>
+<meta name="twitter:image:alt" content="<?php echo e($pageTitle); ?>"/>
+
+<!-- Favicons -->
 <link rel="icon" type="image/png" sizes="32x32" href="<?php echo APP_URL; ?>/assets/favicons/favicon-32x32.png"/>
 <link rel="icon" type="image/png" sizes="16x16" href="<?php echo APP_URL; ?>/assets/favicons/favicon-16x16.png"/>
 <link rel="shortcut icon" href="<?php echo APP_URL; ?>/assets/favicons/favicon.ico"/>
 <link rel="apple-touch-icon" sizes="180x180" href="<?php echo APP_URL; ?>/assets/favicons/apple-touch-icon.png"/>
+
+<!-- Styles -->
 <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+
+<!-- Schema.org Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "name": "<?php echo e($pageTitle); ?>",
+  "description": "<?php echo e($pageDescription); ?>",
+  "url": "<?php echo e($canonicalUrl); ?>",
+  "isPartOf": {
+    "@type": "WebSite",
+    "name": "OpenPlan Work",
+    "url": "<?php echo e(APP_URL); ?>"
+  },
+  "breadcrumb": {
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "<?php echo e(APP_URL); ?>/"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Documentation"
+      }
+    ]
+  }
+}
+</script>
 <script>
         tailwind.config = {
             darkMode: "class",
@@ -74,9 +142,9 @@ $pageTitle = $siteName . ' | Public Documentation';
 <div class="border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 bg-white dark:bg-zinc-950">
 <h2 class="text-sm font-bold uppercase tracking-[0.2em] mb-4">What It Is</h2>
 <ul class="space-y-3 text-sm text-zinc-600 dark:text-zinc-300">
-<li>A self-hosted PHP productivity suite for tasks, projects, notes, habits, invoices, inventory, and AI-assisted workflows.</li>
-<li>Local-first storage built on encrypted JSON files.</li>
-<li>Portable deployments for both local and hosted environments.</li>
+<li>A <strong>self-hosted PHP productivity suite</strong> for tasks, projects, notes, habits, invoices, inventory, and AI-assisted workflows.</li>
+<li><strong>Local-first storage</strong> built on encrypted JSON files for complete data ownership.</li>
+<li>Portable deployments for both local development and hosted production environments.</li>
 </ul>
 </div>
 <div class="border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 bg-white dark:bg-zinc-950">
@@ -101,10 +169,10 @@ $pageTitle = $siteName . ' | Public Documentation';
 <div class="border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 bg-white dark:bg-zinc-950">
 <h2 class="text-xl font-black mb-4">Data Model</h2>
 <p class="text-sm text-zinc-600 dark:text-zinc-300 mb-4">
-                Data is stored as encrypted JSON records per user workspace. Each module persists its own collections, keeping tasks, projects, notes, clients, and invoices isolated.
+                Data is stored as <strong>encrypted JSON records</strong> per user workspace. Each module persists its own collections, keeping tasks, projects, notes, clients, and invoices isolated with <strong>AES-256-GCM encryption</strong>.
             </p>
 <ul class="space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
-<li>Encrypted JSON collections per module</li>
+<li><strong>Encrypted JSON</strong> collections per module</li>
 <li>Per-user storage isolation</li>
 <li>Backups and exports regenerate clean data folders</li>
 </ul>
@@ -112,10 +180,10 @@ $pageTitle = $siteName . ' | Public Documentation';
 <div class="border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 bg-white dark:bg-zinc-950">
 <h2 class="text-xl font-black mb-4">Authentication Flow</h2>
 <p class="text-sm text-zinc-600 dark:text-zinc-300 mb-4">
-                Users authenticate with email + password and a master key. The master key encrypts all stored data and must be retained for future access.
+                Users authenticate with email + password and a <strong>master encryption key</strong>. The master key encrypts all stored data using <strong>industry-standard encryption</strong> and must be retained for future access.
             </p>
 <ul class="space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
-<li>Master key encryption</li>
+<li><strong>Master key encryption</strong></li>
 <li>Optional email verification</li>
 <li>Session timeout configuration</li>
 </ul>

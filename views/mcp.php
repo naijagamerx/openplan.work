@@ -1,3 +1,9 @@
+<?php
+$currentUser = Auth::user();
+$currentUserEmail = $currentUser['email'] ?? 'user@example.com';
+$apiUrl = APP_URL . '/api';
+$mcpScriptPath = str_replace('\\', '/', ROOT_PATH) . '/mcp-server/index.js';
+?>
 <div class="p-6">
     <div class="mb-8">
         <h1 class="text-2xl font-bold text-gray-900">MCP (Model Context Protocol) Guide</h1>
@@ -5,8 +11,8 @@
     </div>
 
     <div class="mb-8 bg-yellow-50 border border-yellow-200 rounded-xl p-5">
-        <h2 class="text-base font-semibold text-yellow-900 mb-2">Required Credentials (Admin)</h2>
-        <p class="text-sm text-yellow-800">MCP requires both your admin email and secret key. The MCP server sends <code class="bg-yellow-100 px-1 rounded">X-MCP-User-Email</code> and <code class="bg-yellow-100 px-1 rounded">X-Master-Password</code> on every API request.</p>
+        <h2 class="text-base font-semibold text-yellow-900 mb-2">Required Credentials</h2>
+        <p class="text-sm text-yellow-800">MCP requires your email and master password. The MCP server sends <code class="bg-yellow-100 px-1 rounded">X-MCP-User-Email</code> and <code class="bg-yellow-100 px-1 rounded">X-Master-Password</code> on every API request.</p>
     </div>
 
     <!-- How It Works Section -->
@@ -98,7 +104,7 @@
                     </div>
                     <div>
                         <h3 class="font-semibold text-gray-900 mb-1">Secure Authentication</h3>
-                        <p class="text-sm text-gray-600">The MCP server authenticates using your admin email and secret key via <code class="bg-gray-100 px-1 rounded">X-MCP-User-Email</code> and <code class="bg-gray-100 px-1 rounded">X-Master-Password</code>. No session cookies needed.</p>
+                        <p class="text-sm text-gray-600">The MCP server authenticates using your email and master password via <code class="bg-gray-100 px-1 rounded">X-MCP-User-Email</code> and <code class="bg-gray-100 px-1 rounded">X-Master-Password</code>. No session cookies needed.</p>
                     </div>
                 </div>
             </div>
@@ -150,10 +156,10 @@
   "mcpServers": {
     "lazyman-taskmanager": {
       "command": "node",
-      "args": ["C:/MAMP/htdocs/taskmanager/mcp-server/index.js"],
+      "args": ["<?php echo $mcpScriptPath; ?>"],
       "env": {
-        "API_URL": "http://localhost/taskmanager/api",
-        "USER_EMAIL": "admin@example.com",
+        "API_URL": "<?php echo $apiUrl; ?>",
+        "USER_EMAIL": "<?php echo $currentUserEmail; ?>",
         "MASTER_PASSWORD": "YOUR_SECRET_KEY"
       }
     }
@@ -195,10 +201,10 @@
   "mcpServers": {
     "lazyman-taskmanager": {
       "command": "node",
-      "args": ["C:/MAMP/htdocs/taskmanager/mcp-server/index.js"],
+      "args": ["<?php echo $mcpScriptPath; ?>"],
       "env": {
-        "API_URL": "http://localhost/taskmanager/api",
-        "USER_EMAIL": "admin@example.com",
+        "API_URL": "<?php echo $apiUrl; ?>",
+        "USER_EMAIL": "<?php echo $currentUserEmail; ?>",
         "MASTER_PASSWORD": "YOUR_SECRET_KEY"
       }
     }
@@ -210,7 +216,7 @@
             <ul class="text-sm text-yellow-700 space-y-1">
                 <li>• <strong>Windows:</strong> Use forward slashes: <code class="bg-yellow-100 px-1">C:/MAMP/htdocs/taskmanager/...</code></li>
                 <li>• <strong>Linux/Mac:</strong> Use absolute paths: <code class="bg-yellow-100 px-1">/var/www/html/taskmanager/...</code></li>
-                <li>• <strong>Admin Email:</strong> Replace <code class="bg-yellow-100 px-1">admin@example.com</code> with your admin email</li>
+                <li>• <strong>Email:</strong> Replace <code class="bg-yellow-100 px-1">user@example.com</code> with your login email</li>
                 <li>• <strong>Secret Key:</strong> Replace <code class="bg-yellow-100 px-1">YOUR_SECRET_KEY</code> with your master key</li>
                 <li>• <strong>API URL:</strong> Update if your Task Manager runs on a different port or domain</li>
             </ul>

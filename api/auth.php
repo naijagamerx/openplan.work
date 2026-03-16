@@ -3,7 +3,19 @@
  * Authentication API Endpoint
  */
 
+// Start output buffering to prevent any accidental output breaking JSON responses
+ob_start();
+
 require_once __DIR__ . '/../config.php';
+
+// Force JSON response headers for all API responses
+header('Content-Type: application/json');
+header('X-Content-Type-Options: nosniff');
+
+// Enable error logging (never display errors in API responses)
+ini_set('log_errors', 1);
+ini_set('error_log', __DIR__ . '/../data/php_error.log');
+ini_set('display_errors', 0);
 
 $action = $_GET['action'] ?? null;
 
@@ -17,9 +29,9 @@ switch ($action) {
         $email = trim($body['email'] ?? '');
         $password = $body['password'] ?? '';
         $masterPassword = $body['master_password'] ?? '';
-        $csrfToken = $body['csrf_token'] ?? '';
-        // Legacy field kept for backward compatibility. Session persistence is now
-        // controlled by the user's timeout preference in settings.
+        $csrfToken = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+        // Optional login-time remember-me preference. When true, login will switch
+        // the user preference to persistent session mode.
         $rememberMe = !empty($body['remember_me']);
 
         // CSRF validation
@@ -214,7 +226,7 @@ switch ($action) {
         $name = trim($body['name'] ?? '');
         $masterPassword = $body['master_password'] ?? '';
         $installMode = $body['install_mode'] ?? 'multi_user';
-        $csrfToken = $body['csrf_token'] ?? '';
+        $csrfToken = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
 
         // CSRF validation
         if (!Auth::validateCsrf($csrfToken)) {
@@ -229,6 +241,16 @@ switch ($action) {
         $emailResult = Validator::email($email);
         if (!$emailResult['valid']) {
             errorResponse($emailResult['error']);
+        }
+
+        // Check for disposable emails
+        if (Validator::isDisposableEmail($email)) {
+            errorResponse('Registration is not allowed from disposable email providers.');
+        }
+
+        // Check for plus addressing (anti-spam measure)
+        if (Validator::isPlusAddress($email)) {
+            errorResponse('Email addresses with tags (plus-addressing) are not allowed.');
         }
 
         // Validate password strength

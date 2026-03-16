@@ -11,6 +11,16 @@ Overall score: **84 / 100**
 Current state: **Startup-ready and sale-ready for managed rollout**, with stronger test/runtime consistency than previous audit.  
 Still not enterprise-grade yet due hardening/ops gaps.
 
+## Latest Updates (2026-03-16)
+
+### MCP Configuration Access
+- **Problem**: Non-admin users (developers) could not access the MCP configuration needed to connect their AI coding agents.
+- **Solution**: 
+  - Exposed the "MCP Config" page to all users in `views/settings.php` and `mobile/views/settings.php`.
+  - Maintained security by keeping other developer tools (Audit, Scheduler, etc.) restricted to Admins.
+  - Enhanced `views/mcp.php` to dynamically generate the configuration JSON using the logged-in user's email and correct system paths.
+- **Impact**: Developers can now easily copy-paste the MCP configuration to get started with Claude Code or other agents without Admin intervention.
+
 ## What Was Fixed
 
 1. **CLI OpenSSL test/runtime inconsistency**

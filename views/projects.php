@@ -1,15 +1,17 @@
 <?php
 // Projects View
-$db = new Database(getMasterPassword());
+$db = new Database(getMasterPassword(), Auth::userId());
 $projects = $db->load('projects');
 $clients = $db->load('clients');
 
 $statusLabels = [
     'planning' => 'Planning',
+    'active' => 'Active',
     'in_progress' => 'In Progress',
     'review' => 'Review',
     'completed' => 'Completed',
-    'on_hold' => 'On Hold'
+    'on_hold' => 'On Hold',
+    'cancelled' => 'Cancelled'
 ];
 ?>
 
@@ -42,12 +44,24 @@ $statusLabels = [
             <?php foreach ($projects as $project): 
                 $tasks = $project['tasks'] ?? [];
                 $totalTasks = count($tasks);
-                $completedTasks = count(array_filter($tasks, fn($t) => ($t['status'] ?? '') === 'done'));
+                $completedTasks = count(array_filter($tasks, fn($t) => isTaskDone($t['status'] ?? '')));
                 $progress = $totalTasks > 0 ? round(($completedTasks / $totalTasks) * 100) : 0;
             ?>
-                <div class="bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all group border-b-4" 
-                     style="border-bottom-color: <?php echo e($project['color'] ?? '#000'); ?>">
-                    <div class="flex items-start justify-between">
+                <div class="bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all group relative">
+                    <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                        <button onclick="deleteProject('<?php echo e($project['id']); ?>')" class="p-1.5 bg-gray-100 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition" title="Delete Project">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                        </button>
+                        <a href="?page=view-project&id=<?php echo e($project['id']); ?>" class="p-1.5 bg-gray-100 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition" title="View Project">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                        </a>
+                    </div>
+                    <div class="flex items-start justify-between pr-10">
                         <div class="flex items-center gap-4">
                             <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white text-xl font-black shadow-inner"
                                  style="background-color: <?php echo e($project['color'] ?? '#000'); ?>">
@@ -55,8 +69,8 @@ $statusLabels = [
                             </div>
                             <div>
                                 <h3 class="font-bold text-gray-900 group-hover:text-black transition-colors"><?php echo e($project['name']); ?></h3>
-                                <span class="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded shadow-sm <?php echo statusClass($project['status'] ?? 'planning'); ?>">
-                                    <?php echo $statusLabels[$project['status'] ?? 'planning']; ?>
+                                <span class="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded shadow-sm <?php echo statusClass($project['status'] ?? 'active'); ?>">
+                                    <?php echo $statusLabels[$project['status'] ?? 'active'] ?? 'Active'; ?>
                                 </span>
                             </div>
                         </div>
@@ -107,7 +121,15 @@ $statusLabels = [
 </div>
 
 <script>
+// Debug: dump project data to console
+<?php foreach ($projects as $project): ?>
+<?php endforeach; ?>
+
 async function deleteProject(id) {
+    if (!id) {
+        showToast('Error: Project ID is missing', 'error');
+        return;
+    }
     confirmAction('Are you sure you want to delete this project? This will also delete all tasks.', async () => {
         const response = await api.delete(`api/projects.php?id=${id}`);
         if (response.success) {
@@ -117,3 +139,4 @@ async function deleteProject(id) {
     });
 }
 </script>
+

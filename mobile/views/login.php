@@ -45,10 +45,21 @@ $success = $_GET['success'] ?? '';
     <title>Sign In - <?= htmlspecialchars(getSiteName()) ?></title>
 
     <!-- Favicons -->
-    <link rel="icon" type="image/png" sizes="32x32" href="<?= APP_URL ?>/assets/favicons/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="<?= APP_URL ?>/assets/favicons/favicon-16x16.png">
-    <link rel="shortcut icon" href="<?= APP_URL ?>/assets/favicons/favicon.ico">
-    <link rel="apple-touch-icon" sizes="180x180" href="<?= APP_URL ?>/assets/favicons/apple-touch-icon.png">
+    <?php if (file_exists(__DIR__ . '/../../assets/favicons/favicon.svg')): ?>
+    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/assets/favicons/favicon.svg?v=<?= filemtime(__DIR__ . '/../../assets/favicons/favicon.svg') ?>">
+    <?php endif; ?>
+    <?php if (file_exists(__DIR__ . '/../../assets/favicons/favicon-32x32.png')): ?>
+    <link rel="icon" type="image/png" sizes="32x32" href="<?= APP_URL ?>/assets/favicons/favicon-32x32.png?v=<?= filemtime(__DIR__ . '/../../assets/favicons/favicon-32x32.png') ?>">
+    <?php endif; ?>
+    <?php if (file_exists(__DIR__ . '/../../assets/favicons/favicon-16x16.png')): ?>
+    <link rel="icon" type="image/png" sizes="16x16" href="<?= APP_URL ?>/assets/favicons/favicon-16x16.png?v=<?= filemtime(__DIR__ . '/../../assets/favicons/favicon-16x16.png') ?>">
+    <?php endif; ?>
+    <?php if (file_exists(__DIR__ . '/../../assets/favicons/favicon.ico')): ?>
+    <link rel="shortcut icon" href="<?= APP_URL ?>/assets/favicons/favicon.ico?v=<?= filemtime(__DIR__ . '/../../assets/favicons/favicon.ico') ?>">
+    <?php endif; ?>
+    <?php if (file_exists(__DIR__ . '/../../assets/favicons/apple-touch-icon.png')): ?>
+    <link rel="apple-touch-icon" sizes="180x180" href="<?= APP_URL ?>/assets/favicons/apple-touch-icon.png?v=<?= filemtime(__DIR__ . '/../../assets/favicons/apple-touch-icon.png') ?>">
+    <?php endif; ?>
 
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
@@ -134,8 +145,26 @@ $success = $_GET['success'] ?? '';
             display: block;
         }
     </style>
+
+    <!-- Theme initialization for auth pages -->
+    <script>
+    (function initAuthPageTheme() {
+        try {
+            const savedTheme = localStorage.getItem('mobile-theme');
+            const useDark = savedTheme === 'dark';
+            document.documentElement.classList.toggle('dark', useDark);
+            document.documentElement.classList.toggle('light', !useDark);
+            if (useDark) {
+                document.body.classList.remove('bg-white');
+                document.body.classList.add('bg-zinc-950');
+            }
+        } catch (error) {
+            console.warn('Failed to initialize auth page theme:', error);
+        }
+    })();
+    </script>
 </head>
-<body class="bg-white min-h-screen font-display">
+<body class="bg-white dark:bg-zinc-950 min-h-screen font-display">
     <button
         type="button"
         data-theme-toggle
@@ -151,23 +180,19 @@ $success = $_GET['success'] ?? '';
         </svg>
     </button>
 
-    <div class="bg-[#000000] flex items-center justify-center relative overflow-hidden rounded-b-[2rem]">
+    <div class="bg-[#000000] flex items-center justify-center relative overflow-hidden rounded-b-[2rem] dark:border-b dark:border-zinc-800">
         <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:40px_40px]"></div>
 
         <div class="relative z-10 flex flex-col items-center gap-6 py-16 px-6">
-            <div class="w-16 h-16 text-white">
-                <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                    <path clip-rule="evenodd" d="M24 4H6V17.3333V30.6667H24V44H42V30.6667V17.3333H24V44H42V30.6667V17.3333H24V4Z" fill="currentColor" fill-rule="evenodd" opacity="0.1"></path>
-                    <path d="M24 4H6V17.3333H24V4Z" fill="white"></path>
-                    <path d="M42 30.6667H24V44H42V30.6667Z" fill="white"></path>
-                    <path d="M24 17.3333H42V30.6667H24V17.3333Z" fill="white" opacity="0.5"></path>
-                    <path d="M6 17.3333V30.6667H24V17.3333H6Z" fill="white" opacity="0.5"></path>
-                </svg>
+            <div class="w-16 h-16 text-white flex items-center justify-center">
+                <?php echo getSidebarLogoHtml(64); ?>
             </div>
 
             <h1 class="text-white text-4xl font-black tracking-tighter uppercase text-center leading-none">
                 <?= htmlspecialchars(getSiteName()) ?>
             </h1>
+
+
 
             <p class="text-white/40 text-[10px] tracking-[0.4em] uppercase font-light">
                 <?= htmlspecialchars(getSiteName()) ?>
@@ -175,12 +200,23 @@ $success = $_GET['success'] ?? '';
         </div>
 
         <div class="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/20 text-[8px] tracking-widest uppercase">
-            Est. 2024 &copy; Mobile
+            Est. 2026 &copy; Mobile
         </div>
     </div>
 
-    <div class="flex-1 flex flex-col bg-white px-6 py-10">
+    <div class="flex-1 flex flex-col bg-white dark:bg-zinc-950 px-6 py-10">
         <main class="flex-1 flex flex-col justify-center max-w-md mx-auto w-full">
+            <!-- App-Style Notification Banner -->
+            <div id="app-notification" class="hidden mb-6 rounded-xl p-4 flex items-center gap-3 transition-all duration-300">
+                <div id="notification-icon"></div>
+                <p id="notification-message" class="text-sm font-medium flex-1"></p>
+                <button onclick="hideNotification()" class="p-1 hover:bg-white/20 rounded transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
             <?php if ($error): ?>
                 <div class="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded">
                     <p class="text-sm text-red-700">
@@ -218,7 +254,7 @@ $success = $_GET['success'] ?? '';
                 <input type="hidden" name="action" value="login">
 
                 <div class="flex flex-col">
-                    <label for="email" class="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1">
+                    <label for="email" class="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 mb-1">
                         Email Address
                     </label>
                     <input
@@ -234,7 +270,7 @@ $success = $_GET['success'] ?? '';
                 </div>
 
                 <div class="flex flex-col">
-                    <label for="password" class="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1">
+                    <label for="password" class="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 mb-1">
                         Password
                     </label>
                     <div class="relative flex items-center">
@@ -244,7 +280,7 @@ $success = $_GET['success'] ?? '';
                             type="password"
                             required
                             autocomplete="current-password"
-                            class="underlined-input w-full bg-transparent text-[#111317] h-12 text-base font-normal placeholder:text-gray-300 pr-10"
+                            class="underlined-input w-full bg-transparent text-[#111317] dark:text-white h-12 text-base font-normal placeholder:text-gray-300 dark:placeholder:text-gray-500 pr-10"
                             placeholder="Enter password"
                         >
                         <button
@@ -269,7 +305,7 @@ $success = $_GET['success'] ?? '';
                 </div>
 
                 <div class="flex flex-col">
-                    <label for="master_password" class="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1">
+                    <label for="master_password" class="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 mb-1">
                         Master Password
                     </label>
                     <div class="relative flex items-center">
@@ -279,7 +315,7 @@ $success = $_GET['success'] ?? '';
                             type="password"
                             required
                             autocomplete="current-password"
-                            class="underlined-input w-full bg-transparent text-[#111317] h-12 text-base font-normal placeholder:text-gray-300 pr-10"
+                            class="underlined-input w-full bg-transparent text-[#111317] dark:text-white h-12 text-base font-normal placeholder:text-gray-300 dark:placeholder:text-gray-500 pr-10"
                             placeholder="Enter security key"
                         >
                         <button
@@ -302,10 +338,21 @@ $success = $_GET['success'] ?? '';
                     </div>
                 </div>
 
+                <label class="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.15em] text-gray-500 dark:text-gray-400">
+                    <span>Remember Me</span>
+                    <input
+                        id="remember_me"
+                        name="remember_me"
+                        type="checkbox"
+                        value="1"
+                        class="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                    >
+                </label>
+
                 <div class="mt-4">
                     <button
                         type="submit"
-                        class="w-full bg-black text-white h-14 rounded-full font-black text-sm uppercase tracking-[0.3em] hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                        class="w-full bg-black text-white h-14 rounded-full font-black text-sm uppercase tracking-[0.3em] hover:opacity-90 transition-all flex items-center justify-center gap-2 dark:border dark:border-white/30"
                     >
                         <span>Sign In</span>
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -317,12 +364,12 @@ $success = $_GET['success'] ?? '';
 
             <div class="mt-8 flex flex-col items-center gap-4">
                 <?php if (isRegistrationEnabled()): ?>
-                <p class="text-sm text-gray-500">Don't have an account?</p>
-                <a href="?page=register" class="text-sm font-bold uppercase tracking-widest text-black hover:underline">
+                <p class="text-sm text-gray-500 dark:text-gray-400">Don't have an account?</p>
+                <a href="?page=register" class="text-sm font-bold uppercase tracking-widest text-black dark:text-white hover:underline">
                     Create Account
                 </a>
                 <?php else: ?>
-                <p class="text-sm text-gray-500 text-center">This installation is running in single-user mode. Public registration is disabled.</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400 text-center">This installation is running in single-user mode. Public registration is disabled.</p>
                 <?php endif; ?>
             </div>
         </main>
@@ -331,15 +378,86 @@ $success = $_GET['success'] ?? '';
     <script>
         (function() {
             const path = window.location.pathname;
-            const baseMatch = path.match(/^(\/[^\/]*?)?\//);
-            window.BASE_PATH = baseMatch ? baseMatch[1] || '' : '';
+            let basePath = path.replace(/\/index\.php$/i, '');
+            basePath = basePath.replace(/\/+$/, '');
+            basePath = basePath.replace(/\/mobile$/i, '');
+            window.BASE_PATH = basePath;
         })();
         const APP_URL = window.location.origin + window.BASE_PATH;
         const CSRF_TOKEN = '<?= $_SESSION['csrf_token'] ?? '' ?>';
         const MOBILE_VERSION = true;
+
+        // Debug logging
+        console.log('=== Mobile Login Debug ===');
+        console.log('APP_URL:', APP_URL);
+        console.log('CSRF_TOKEN present:', CSRF_TOKEN && CSRF_TOKEN.length > 0);
+        console.log('CSRF_TOKEN length:', CSRF_TOKEN ? CSRF_TOKEN.length : 0);
     </script>
 
     <script>
+        // App-Style Notification Banner (for mobile login/register)
+        let notificationTimeout = null;
+
+        function showNotification(message, type = 'info') {
+            const banner = document.getElementById('app-notification');
+            const iconContainer = document.getElementById('notification-icon');
+            const messageEl = document.getElementById('notification-message');
+
+            if (!banner || !iconContainer || !messageEl) return;
+
+            // Clear existing timeout
+            if (notificationTimeout) {
+                clearTimeout(notificationTimeout);
+            }
+
+            // Set styles based on type
+            const isDark = document.documentElement.classList.contains('dark');
+            const styles = {
+                success: isDark
+                    ? 'bg-green-950 border border-green-800 text-green-200'
+                    : 'bg-green-50 border border-green-200 text-green-800',
+                error: isDark
+                    ? 'bg-red-950 border border-red-800 text-red-200'
+                    : 'bg-red-50 border border-red-200 text-red-800',
+                info: isDark
+                    ? 'bg-blue-950 border border-blue-800 text-blue-200'
+                    : 'bg-blue-50 border border-blue-200 text-blue-800'
+            };
+
+            const icons = {
+                success: `<svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`,
+                error: `<svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`,
+                info: `<svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`
+            };
+
+            // Remove old classes and add new ones
+            banner.className = `mb-6 rounded-xl p-4 flex items-center gap-3 transition-all duration-300 ${styles[type] || styles.info}`;
+            iconContainer.innerHTML = icons[type] || icons.info;
+            messageEl.textContent = message;
+
+            // Show banner
+            banner.classList.remove('hidden');
+
+            // Auto-hide after 4 seconds
+            notificationTimeout = setTimeout(() => {
+                hideNotification();
+            }, 4000);
+        }
+
+        function hideNotification() {
+            const banner = document.getElementById('app-notification');
+            if (banner) banner.classList.add('hidden');
+            if (notificationTimeout) {
+                clearTimeout(notificationTimeout);
+                notificationTimeout = null;
+            }
+        }
+
+        // Legacy toast function - now redirects to banner
+        function showToast(message, type = 'info') {
+            showNotification(message, type);
+        }
+
         function toggleLoginTheme() {
             if (window.Mobile && Mobile.theme && typeof Mobile.theme.toggle === 'function') {
                 Mobile.theme.toggle();
@@ -348,14 +466,26 @@ $success = $_GET['success'] ?? '';
 
             const root = document.documentElement;
             const useDark = !root.classList.contains('dark');
+
+            // Toggle classes on document root
             root.classList.toggle('dark', useDark);
             root.classList.toggle('light', !useDark);
 
+            // Update body background class
+            if (useDark) {
+                document.body.classList.remove('bg-white');
+                document.body.classList.add('bg-zinc-950');
+            } else {
+                document.body.classList.remove('bg-zinc-950');
+                document.body.classList.add('bg-white');
+            }
+
+            // Persist to both keys for compatibility
             try {
                 localStorage.setItem('mobile-theme', useDark ? 'dark' : 'light');
                 localStorage.setItem('theme', useDark ? 'dark' : 'light');
             } catch (error) {
-                console.warn('Unable to persist theme on login page:', error);
+                console.warn('Unable to persist theme on auth page:', error);
             }
         }
 
@@ -370,16 +500,10 @@ $success = $_GET['success'] ?? '';
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('email').focus();
 
-            const loginForm = document.getElementById('login-form');
+                const loginForm = document.getElementById('login-form');
             if (loginForm) {
                 loginForm.addEventListener('submit', async (e) => {
                     e.preventDefault();
-
-                    const formData = new FormData(loginForm);
-                    const data = Object.fromEntries(formData.entries());
-
-                    console.log('Login attempt:', { email: data.email, csrf_token: data.csrf_token ? 'present' : 'missing' });
-                    console.log('APP_URL:', APP_URL);
 
                     const submitBtn = loginForm.querySelector('button[type="submit"]');
                     const originalText = submitBtn.innerHTML;
@@ -387,6 +511,11 @@ $success = $_GET['success'] ?? '';
                     submitBtn.innerHTML = '<span class="inline-flex items-center gap-2"><svg class="h-4 w-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12a8 8 0 018-8"></path></svg><span>Signing In...</span></span>';
 
                     try {
+                        const formData = new FormData(loginForm);
+                        const data = Object.fromEntries(formData.entries());
+
+                        console.log('Login attempt:', { email: data.email, csrf_token: data.csrf_token ? 'present' : 'missing' });
+                        
                         const response = await fetch(`${APP_URL}/api/auth.php?action=login`, {
                             method: 'POST',
                             headers: {
@@ -395,32 +524,43 @@ $success = $_GET['success'] ?? '';
                             },
                             body: JSON.stringify(data)
                         });
-                        const result = await response.json();
-                        console.log('Login response:', result);
+
+                        // Check content type before parsing
+                        const contentType = response.headers.get('content-type');
+                        let result;
+                        
+                        if (contentType && contentType.includes('application/json')) {
+                            result = await response.json();
+                        } else {
+                            // If not JSON, it might be a PHP error or unexpected HTML
+                            const text = await response.text();
+                            console.error('Non-JSON response:', text);
+                            throw new Error('Server returned an unexpected response format');
+                        }
 
                         if (response.ok && result.success) {
+                            showNotification('Login successful!', 'success');
                             const destination = result.data?.destination || 'dashboard';
-                            window.location.href = `?page=${destination}`;
+                            // Add a small delay for the user to see the success message
+                            setTimeout(() => {
+                                window.location.href = `?page=${destination}`;
+                            }, 500);
                         } else {
-                            const msg = result?.error?.message || result.message || 'Login failed. Please try again.';
-                            showError(msg);
-                            submitBtn.disabled = false;
-                            submitBtn.innerHTML = originalText;
+                            const msg = result.error?.message || result.message || 'Login failed. Please try again.';
+                            throw new Error(msg);
                         }
+
                     } catch (error) {
                         console.error('Login error:', error);
-                        console.error('Error response:', error.response);
+                        
+                        // Clear any previous error messages
+                        const existingError = document.getElementById('login-error-message');
+                        if (existingError) existingError.remove();
 
-                        let errorMsg = 'An error occurred. Please try again.';
-                        if (error.response?.error?.message) {
-                            errorMsg = error.response.error.message;
-                        } else if (error.response?.error) {
-                            errorMsg = error.response.error;
-                        } else if (error.message) {
-                            errorMsg = error.message;
-                        }
-
-                        showError(errorMsg);
+                        // Show error in banner
+                        showNotification(error.message || 'An error occurred. Please try again.', 'error');
+                        
+                        // Reset button
                         submitBtn.disabled = false;
                         submitBtn.innerHTML = originalText;
                     }
@@ -428,6 +568,10 @@ $success = $_GET['success'] ?? '';
             }
 
             function showError(message) {
+                // Show in app-style banner instead of just a div
+                showNotification(message, 'error');
+
+                // Also show inline error for persistence
                 const existingError = document.getElementById('login-error-message');
                 if (existingError) {
                     existingError.remove();
@@ -440,7 +584,10 @@ $success = $_GET['success'] ?? '';
                     <p class="text-sm text-red-700">${escapeHtml(message)}</p>
                 `;
 
-                loginForm.parentNode.insertBefore(errorDiv, loginForm);
+                const loginForm = document.getElementById('login-form');
+                if (loginForm) {
+                    loginForm.parentNode.insertBefore(errorDiv, loginForm);
+                }
             }
 
             function escapeHtml(text) {

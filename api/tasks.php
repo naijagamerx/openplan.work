@@ -4,14 +4,14 @@
  */
 
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../includes/TasksAPI.php';
 
-// Check authentication
 if (!Auth::check()) {
     errorResponse('Unauthorized', 401);
 }
 
-// Validate CSRF for non-GET requests
-if (requestMethod() !== 'GET') {
+// Validate CSRF for non-GET requests (bypass for MCP)
+if (requestMethod() !== 'GET' && !Auth::isMcp()) {
     $body = getJsonBody();
     $token = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if (!Auth::validateCsrf($token)) {
@@ -19,188 +19,163 @@ if (requestMethod() !== 'GET') {
     }
 }
 
-$db = new Database(getMasterPassword());
+$db = new Database(getMasterPassword(), Auth::userId());
+
+// Verify database connection works
+try {
+    $db->load('projects', true);
+} catch (Exception $e) {
+    errorResponse('Database connection failed: Wrong master password', 401, ERROR_UNAUTHORIZED);
+}
+
 $action = $_GET['action'] ?? null;
 $id = $_GET['id'] ?? null;
-$projectId = $_GET['project_id'] ?? null;
+$projectId = $_GET['projectId'] ?? $_GET['project_id'] ?? null;
+
+$tasksAPI = new TasksAPI($db, 'projects');
 
 switch (requestMethod()) {
     case 'GET':
-        if ($id) {
-            // Get single task
-            $projects = $db->load('projects');
-            foreach ($projects as $project) {
-                foreach ($project['tasks'] ?? [] as $task) {
-                    if ($task['id'] === $id) {
-                        successResponse($task);
-                    }
-                }
+        if ($action === 'templates') {
+            successResponse($tasksAPI->getTemplates());
+        } elseif ($id) {
+            $task = $tasksAPI->find($id);
+            if ($task) {
+                successResponse($task);
             }
-            errorResponse('Task not found', 404);
+            $tasksAPI->notFound('Task');
         } else {
-            // List tasks
-            $projects = $db->load('projects');
-            $allTasks = [];
-            
-            foreach ($projects as $project) {
-                if ($projectId && $project['id'] !== $projectId) continue;
-                
-                foreach ($project['tasks'] ?? [] as $task) {
-                    $task['projectName'] = $project['name'];
-                    $task['projectId'] = $project['id'];
-                    $allTasks[] = $task;
-                }
-            }
-            
-            // Apply filters
-            $status = $_GET['status'] ?? null;
-            $priority = $_GET['priority'] ?? null;
-            
-            if ($status) {
-                $allTasks = array_filter($allTasks, fn($t) => ($t['status'] ?? '') === $status);
-            }
-            if ($priority) {
-                $allTasks = array_filter($allTasks, fn($t) => ($t['priority'] ?? '') === $priority);
-            }
-            
-            // Sort by due date
-            usort($allTasks, function($a, $b) {
-                $dateA = $a['dueDate'] ?? '9999-12-31';
-                $dateB = $b['dueDate'] ?? '9999-12-31';
-                return strcmp($dateA, $dateB);
-            });
-            
-            successResponse(array_values($allTasks));
+            $filters = [
+                'projectId' => $projectId,
+                'status' => $_GET['status'] ?? null,
+                'priority' => $_GET['priority'] ?? null
+            ];
+            successResponse($tasksAPI->findAll($filters));
         }
         break;
         
     case 'POST':
         $body = getJsonBody();
         $action = $_GET['action'] ?? 'add';
-        
-        if ($action === 'update' && $id) {
-            $projects = $db->load('projects');
-            $taskFound = false;
-            foreach ($projects as $pKey => $project) {
-                foreach ($project['tasks'] ?? [] as $tKey => $task) {
-                    if ($task['id'] === $id) {
-                        $taskFound = true;
-                        $allowedFields = ['title', 'description', 'status', 'priority', 'dueDate', 'estimatedMinutes', 'actualMinutes', 'subtasks', 'linkedHabitId'];
-                        foreach ($allowedFields as $field) {
-                            if (isset($body[$field])) {
-                                $projects[$pKey]['tasks'][$tKey][$field] = $body[$field];
-                            }
-                        }
-                        $projects[$pKey]['tasks'][$tKey]['updatedAt'] = date('c');
-                        if (($body['status'] ?? '') === 'done' && empty($task['completedAt'])) {
-                            $projects[$pKey]['tasks'][$tKey]['completedAt'] = date('c');
-                        }
-                        $db->save('projects', $projects);
-                        successResponse($projects[$pKey]['tasks'][$tKey], 'Task updated');
-                        break 2;
-                    }
-                }
+
+        if ($action === 'template') {
+            $template = $tasksAPI->saveTemplate($body);
+            if ($template) {
+                successResponse($template, 'Template saved');
             }
-            if (!$taskFound) errorResponse('Task not found', 404);
-        } else {
-            // New task
-            if (empty($body['title']) || empty($body['projectId'])) {
-                errorResponse('Title and project ID are required');
+            errorResponse('Template name is required', 400, ERROR_VALIDATION);
+        } elseif ($action === 'create_from_template') {
+            $templateId = $body['templateId'] ?? '';
+            if ($templateId === '') {
+                errorResponse('Template ID is required', 400, ERROR_VALIDATION);
+            }
+            $task = $tasksAPI->createFromTemplate($templateId, $body);
+            if ($task) {
+                successResponse($task, 'Task created from template');
+            }
+            errorResponse('Template not found or task creation failed', 404, ERROR_NOT_FOUND);
+        } elseif ($action === 'bulk') {
+            $taskIds = array_values(array_filter($body['taskIds'] ?? [], fn($taskId) => is_string($taskId) && $taskId !== ''));
+            if (empty($taskIds)) {
+                errorResponse('No tasks selected', 400, ERROR_VALIDATION);
             }
 
-            $projects = $db->load('projects');
-            $found = false;
-            foreach ($projects as $key => $project) {
-                if ($project['id'] === $body['projectId']) {
-                    $found = true;
-                    $newTask = [
-                        'id' => $db->generateId(),
-                        'title' => $body['title'],
-                        'description' => $body['description'] ?? '',
-                        'status' => $body['status'] ?? 'todo',
-                        'priority' => $body['priority'] ?? 'medium',
-                        'dueDate' => $body['dueDate'] ?? null,
-                        'estimatedMinutes' => (int)($body['estimatedMinutes'] ?? 0),
-                        'actualMinutes' => 0,
-                        'linkedHabitId' => $body['linkedHabitId'] ?? null,
-                        'subtasks' => [],
-                        'timeEntries' => [],
-                        'createdAt' => date('c'),
-                        'updatedAt' => date('c')
-                    ];
-                    $projects[$key]['tasks'][] = $newTask;
-                    $db->save('projects', $projects);
-                    successResponse($newTask, 'Task created');
-                    break;
-                }
+            $operation = $body['operation'] ?? '';
+            if ($operation === 'delete') {
+                $deletedCount = $tasksAPI->bulkDelete($taskIds);
+                successResponse(['count' => $deletedCount], "Deleted {$deletedCount} tasks");
             }
-            if (!$found) errorResponse('Project not found', 404);
+
+            if ($operation === 'status') {
+                $status = $body['status'] ?? '';
+                if ($status === '') {
+                    errorResponse('Status is required', 400, ERROR_VALIDATION);
+                }
+                $updatedCount = $tasksAPI->bulkUpdateStatus($taskIds, $status);
+                successResponse(['count' => $updatedCount], "Updated {$updatedCount} tasks");
+            }
+
+            errorResponse('Invalid bulk operation', 400, ERROR_VALIDATION);
+        } elseif ($action === 'subtask' && $id && $projectId) {
+            // Check if we're toggling an existing subtask or adding a new one
+            if (!empty($body['subtaskId'])) {
+                // Toggle existing subtask
+                $task = $tasksAPI->addSubtask($id, $body);
+                if ($task) {
+                    successResponse($task, 'Subtask updated');
+                }
+                $tasksAPI->notFound('Task');
+            } else {
+                // Add new subtask
+                $validationError = $tasksAPI->validateRequired($body, ['title']);
+                if ($validationError) {
+                    $tasksAPI->validationError($validationError);
+                }
+
+                $task = $tasksAPI->addSubtask($id, $body);
+                if ($task) {
+                    successResponse($task, 'Subtask added');
+                }
+                $tasksAPI->notFound('Task');
+            }
+        } elseif ($action === 'update' && $id) {
+            $task = $tasksAPI->update($id, $body);
+            if ($task) {
+                successResponse($task, 'Task updated');
+            }
+            $tasksAPI->notFound('Task');
+        } else {
+            // Create new task
+            $validationError = $tasksAPI->validateRequired($body, ['title']);
+            if ($validationError) {
+                $tasksAPI->validationError($validationError);
+            }
+
+            $task = $tasksAPI->create($body);
+            if ($task) {
+                successResponse($task, 'Task added');
+            }
+
+            errorResponse('Failed to create task (Project not found?)', 400, ERROR_VALIDATION);
         }
         break;
         
     case 'PUT':
         if (!$id) {
-            errorResponse('Task ID required');
+            errorResponse('Task ID required', 400, ERROR_VALIDATION);
         }
         
         $body = getJsonBody();
-        $projects = $db->load('projects');
-        $taskFound = false;
+        $task = $tasksAPI->update($id, $body);
         
-        foreach ($projects as $pKey => $project) {
-            foreach ($project['tasks'] ?? [] as $tKey => $task) {
-                if ($task['id'] === $id) {
-                    $taskFound = true;
-
-                    // Update allowed fields
-                    $allowedFields = ['title', 'description', 'status', 'priority', 'dueDate', 'estimatedMinutes', 'actualMinutes', 'subtasks', 'linkedHabitId'];
-                    foreach ($allowedFields as $field) {
-                        if (isset($body[$field])) {
-                            $projects[$pKey]['tasks'][$tKey][$field] = $body[$field];
-                        }
-                    }
-                    $projects[$pKey]['tasks'][$tKey]['updatedAt'] = date('c');
-
-                    // Handle completion
-                    if (($body['status'] ?? '') === 'done' && empty($task['completedAt'])) {
-                        $projects[$pKey]['tasks'][$tKey]['completedAt'] = date('c');
-                    }
-
-                    $db->save('projects', $projects);
-                    successResponse($projects[$pKey]['tasks'][$tKey], 'Task updated');
-                }
-            }
+        if ($task) {
+            successResponse($task, 'Task updated');
         }
         
-        if (!$taskFound) {
-            errorResponse('Task not found', 404);
-        }
+        $tasksAPI->notFound('Task');
         break;
         
     case 'DELETE':
-        if (!$id) {
-            errorResponse('Task ID required');
-        }
-        
-        $projects = $db->load('projects');
-        $taskFound = false;
-        
-        foreach ($projects as $pKey => $project) {
-            foreach ($project['tasks'] ?? [] as $tKey => $task) {
-                if ($task['id'] === $id) {
-                    $taskFound = true;
-                    array_splice($projects[$pKey]['tasks'], $tKey, 1);
-                    $db->save('projects', $projects);
-                    successResponse(null, 'Task deleted');
-                }
+        if ($action === 'template') {
+            $templateId = $_GET['templateId'] ?? '';
+            if ($templateId === '') {
+                errorResponse('Template ID required', 400, ERROR_VALIDATION);
             }
+            if ($tasksAPI->deleteTemplate($templateId)) {
+                successResponse(null, 'Template deleted');
+            }
+            errorResponse('Template not found', 404, ERROR_NOT_FOUND);
+        }
+
+        if (!$id) {
+            errorResponse('Task ID required', 400, ERROR_VALIDATION);
         }
         
-        if (!$taskFound) {
-            errorResponse('Task not found', 404);
+        if ($tasksAPI->delete($id)) {
+            successResponse(null, 'Task deleted');
         }
+        
+        $tasksAPI->notFound('Task');
         break;
-        
-    default:
-        errorResponse('Method not allowed', 405);
 }
+

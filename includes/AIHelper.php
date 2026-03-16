@@ -62,15 +62,26 @@ class AIHelper {
      * Parse JSON response safely
      */
     private function parseJSON(string $response): array {
-        // Try to find JSON in the response if it's wrapped in text
-        if (preg_match('/\{(?:[^{}]|(?R))*\}/x', $response, $matches)) {
-            $response = $matches[0];
-        } elseif (preg_match('/\[(?:[^[\]]|(?R))*\]/x', $response, $matches)) {
-            $response = $matches[0];
+        $firstBrace = strpos($response, '{');
+        $firstBracket = strpos($response, '[');
+        $jsonStr = $response;
+
+        if ($firstBrace !== false && ($firstBracket === false || $firstBrace < $firstBracket)) {
+            if (preg_match('/\{(?:[^{}]|(?R))*\}/x', $response, $matches)) {
+                $jsonStr = $matches[0];
+            }
+        } elseif ($firstBracket !== false) {
+            if (preg_match('/\[(?:[^[\]]|(?R))*\]/x', $response, $matches)) {
+                $jsonStr = $matches[0];
+            }
         }
         
-        $data = json_decode($response, true);
+        $data = json_decode($jsonStr, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
+            // If first attempt failed, try the other one if available
+            if ($jsonStr !== $response) {
+                return $this->parseJSON($response === $jsonStr ? "" : str_replace($jsonStr, "", $response)); // Very basic fallback
+            }
             throw new Exception('Failed to parse AI JSON response: ' . json_last_error_msg());
         }
         return $data;

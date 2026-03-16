@@ -2,9 +2,14 @@
 /**
  * Transaction Form View (Add/Edit)
  */
-$db = new Database(getMasterPassword());
+$db = new Database(getMasterPassword(), Auth::userId());
 $id = $_GET['id'] ?? null;
 $transaction = null;
+
+// Load config for currency
+$config = $db->load('config');
+$currency = $config['currency'] ?? 'USD';
+$currencySymbol = getCurrencySymbol($currency);
 
 if ($id) {
     $finance = $db->load('finance');
@@ -25,7 +30,12 @@ $categories = ['General', 'Sales', 'Services', 'Subscription', 'Marketing', 'Har
         <a href="?page=finance" class="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition shadow-sm">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
         </a>
-        <h2 class="text-3xl font-bold text-gray-900"><?php echo e($title); ?></h2>
+        <div class="flex-1">
+            <h2 class="text-3xl font-bold text-gray-900"><?php echo e($title); ?></h2>
+            <?php if ($transaction && isset($transaction['transactionNumber'])): ?>
+                <p class="text-gray-500 font-medium tracking-tight">Transaction: <?php echo e($transaction['transactionNumber']); ?></p>
+            <?php endif; ?>
+        </div>
     </div>
 
     <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -67,7 +77,7 @@ $categories = ['General', 'Sales', 'Services', 'Subscription', 'Marketing', 'Har
                 <div>
                     <label class="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-widest">Amount</label>
                     <div class="relative">
-                        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+                        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold"><?php echo e($currencySymbol); ?></span>
                         <input type="number" name="amount" value="<?php echo e($transaction['amount'] ?? ''); ?>" step="0.01" required
                                placeholder="0.00"
                                class="w-full pl-8 pr-4 py-3 border-2 border-gray-50 rounded-xl focus:border-black outline-none transition-colors font-medium">
@@ -130,3 +140,4 @@ document.getElementById('transaction-form').addEventListener('submit', async (e)
     }
 });
 </script>
+

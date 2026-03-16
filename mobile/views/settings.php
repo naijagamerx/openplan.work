@@ -129,7 +129,8 @@ $siteName = getSiteName() ?? 'LazyMan';
 <title>Settings - <?= htmlspecialchars($siteName) ?></title>
 
 <!-- Favicons -->
-<link rel="icon" type="image/png" sizes="32x32" href="<?= APP_URL ?>/assets/favicons/favicon-32x32.png"/>
+<link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/assets/favicons/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="<?= APP_URL ?>/assets/favicons/favicon-32x32.png"/>
 <link rel="icon" type="image/png" sizes="16x16" href="<?= APP_URL ?>/assets/favicons/favicon-16x16.png"/>
 <link rel="shortcut icon" href="<?= APP_URL ?>/assets/favicons/favicon.ico"/>
 <link rel="apple-touch-icon" sizes="180x180" href="<?= APP_URL ?>/assets/favicons/apple-touch-icon.png"/>
@@ -176,7 +177,7 @@ $siteName = getSiteName() ?? 'LazyMan';
 
 <?php
 $title = 'Settings';
-$leftAction = 'back';
+$leftAction = 'menu';
 $rightAction = 'none';
 include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 ?>
@@ -184,7 +185,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 <main class="flex-1 overflow-y-auto no-scrollbar px-4 pt-6 space-y-6 pb-32">
     <!-- Success/Error Messages -->
     <?php if ($success): ?>
-        <div class="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 p-4 rounded-xl flex items-center gap-3 animate-fade-in">
+        <div class="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 p-4 flex items-center gap-3 animate-fade-in">
             <!-- Heroicon: Check Circle -->
             <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -194,7 +195,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     <?php endif; ?>
 
     <?php if ($error): ?>
-        <div class="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 p-4 rounded-xl flex items-center gap-3 animate-fade-in">
+        <div class="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 p-4 flex items-center gap-3 animate-fade-in">
             <!-- Heroicon: X Circle -->
             <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
@@ -203,7 +204,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
         </div>
     <?php endif; ?>
 
-    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden">
         <button onclick="Mobile.settings.toggleSection('hosted-section')" class="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-zinc-800 transition-colors">
             <div class="flex items-center gap-3">
                 <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -220,22 +221,22 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
         </button>
         <div id="hosted-section" class="hidden border-t border-gray-100 dark:border-gray-800">
             <div class="p-4 space-y-3 text-sm">
-                <div class="rounded-xl bg-gray-50 dark:bg-zinc-800 p-3">
+                <div class="bg-gray-50 dark:bg-zinc-800 p-3">
                     <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Email Verification</p>
                     <p class="font-semibold"><?= isEmailVerificationEnabled() ? 'Enabled' : 'Disabled' ?></p>
                     <p class="text-xs text-gray-500 mt-1"><code>EMAIL_VERIFICATION_ENABLED</code></p>
                 </div>
-                <div class="rounded-xl bg-gray-50 dark:bg-zinc-800 p-3">
+                <div class="bg-gray-50 dark:bg-zinc-800 p-3">
                     <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Password Reset</p>
                     <p class="font-semibold"><?= isPasswordResetEnabled() ? 'Enabled' : 'Disabled' ?></p>
                     <p class="text-xs text-gray-500 mt-1"><code>PASSWORD_RESET_ENABLED</code></p>
                 </div>
-                <div class="rounded-xl bg-gray-50 dark:bg-zinc-800 p-3">
+                <div class="bg-gray-50 dark:bg-zinc-800 p-3">
                     <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Image Service</p>
                     <p class="font-semibold"><?= isImageServiceEnabled() ? 'Enabled' : 'Disabled' ?></p>
                     <p class="text-xs text-gray-500 mt-1"><code>IMAGE_SERVICE_ENABLED</code></p>
                 </div>
-                <div class="rounded-xl bg-gray-50 dark:bg-zinc-800 p-3">
+                <div class="bg-gray-50 dark:bg-zinc-800 p-3">
                     <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Mail Driver</p>
                     <p class="font-semibold"><?= htmlspecialchars(strtoupper(MAIL_DRIVER)) ?></p>
                     <p class="text-xs text-gray-500 mt-1">SMTP host: <?= htmlspecialchars(SMTP_HOST !== '' ? SMTP_HOST : 'not configured') ?></p>
@@ -244,26 +245,26 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
         </div>
     </section>
 
-    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden">
         <div class="p-4 border-b border-gray-100 dark:border-gray-800">
             <h3 class="font-semibold text-sm">Hosted Deployment Controls</h3>
             <p class="text-xs text-gray-500 mt-1">Read-only status for env-based hosted features.</p>
         </div>
         <div class="p-4 grid grid-cols-2 gap-3 text-sm">
-            <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-3">
+            <div class="border border-gray-200 dark:border-zinc-700 p-3">
                 <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Verification</p>
                 <p class="mt-2 font-medium"><?= EMAIL_VERIFICATION_ENABLED ? 'Enabled' : 'Disabled' ?></p>
             </div>
-            <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-3">
+            <div class="border border-gray-200 dark:border-zinc-700 p-3">
                 <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Reset</p>
                 <p class="mt-2 font-medium"><?= PASSWORD_RESET_ENABLED ? 'Enabled' : 'Disabled' ?></p>
             </div>
-            <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-3">
+            <div class="border border-gray-200 dark:border-zinc-700 p-3">
                 <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Image Service</p>
                 <p class="mt-2 font-medium"><?= IMAGE_SERVICE_ENABLED ? 'Enabled' : 'Disabled' ?></p>
                 <p class="text-[10px] text-gray-500 mt-1"><?= htmlspecialchars(IMAGE_SERVICE_PROVIDER !== '' ? IMAGE_SERVICE_PROVIDER : 'No provider') ?></p>
             </div>
-            <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-3">
+            <div class="border border-gray-200 dark:border-zinc-700 p-3">
                 <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Mail</p>
                 <p class="mt-2 font-medium"><?= htmlspecialchars(strtoupper(MAIL_DRIVER)) ?></p>
                 <p class="text-[10px] text-gray-500 mt-1"><?= htmlspecialchars(SMTP_HOST !== '' ? SMTP_HOST : 'SMTP not set') ?></p>
@@ -275,7 +276,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     </section>
 
     <!-- Site Settings Section -->
-    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden">
         <button onclick="Mobile.settings.toggleSection('site-section')" class="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-zinc-800 transition-colors">
             <div class="flex items-center gap-3">
                 <!-- Heroicon: Globe -->
@@ -301,10 +302,10 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                     <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Site Name</label>
                     <input type="text" name="siteName" value="<?= htmlspecialchars($config['siteName'] ?? '') ?>"
                            placeholder="Your Site Name"
-                           class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black focus:border-transparent outline-none">
+                           class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black focus:border-transparent outline-none">
                 </div>
 
-                <button type="submit" class="w-full bg-black dark:bg-white text-white dark:text-black py-3 rounded-xl font-bold text-sm uppercase tracking-wider active:scale-95 transition-transform">
+                <button type="submit" class="w-full bg-black dark:bg-white text-white dark:text-black py-3 font-bold text-sm uppercase tracking-wider active:scale-95 transition-transform">
                     Save Site Settings
                 </button>
             </form>
@@ -312,7 +313,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     </section>
 
     <!-- Business Settings Section -->
-    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden">
         <button onclick="Mobile.settings.toggleSection('business-section')" class="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-zinc-800 transition-colors">
             <div class="flex items-center gap-3">
                 <!-- Heroicon: Building Office -->
@@ -337,31 +338,31 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                 <div>
                     <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Business Name</label>
                     <input type="text" name="businessName" value="<?= htmlspecialchars($config['businessName'] ?? '') ?>"
-                           class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
+                           class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
                 </div>
 
                 <div>
                     <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Email</label>
                     <input type="email" name="businessEmail" value="<?= htmlspecialchars($config['businessEmail'] ?? '') ?>"
-                           class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
+                           class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
                 </div>
 
                 <div>
                     <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Phone</label>
                     <input type="text" name="businessPhone" value="<?= htmlspecialchars($config['businessPhone'] ?? '') ?>"
-                           class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
+                           class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
                 </div>
 
                 <div>
                     <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Address</label>
                     <textarea name="businessAddress" rows="2"
-                              class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none resize-none"><?= htmlspecialchars($config['businessAddress'] ?? '') ?></textarea>
+                              class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none resize-none"><?= htmlspecialchars($config['businessAddress'] ?? '') ?></textarea>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Currency</label>
-                        <select name="currency" class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none appearance-none">
+                        <select name="currency" class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none appearance-none">
                             <option value="USD" <?= ($config['currency'] ?? '') === 'USD' ? 'selected' : '' ?>>USD ($)</option>
                             <option value="EUR" <?= ($config['currency'] ?? '') === 'EUR' ? 'selected' : '' ?>>EUR (€)</option>
                             <option value="GBP" <?= ($config['currency'] ?? '') === 'GBP' ? 'selected' : '' ?>>GBP (£)</option>
@@ -371,11 +372,11 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                     <div>
                         <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Tax Rate %</label>
                         <input type="number" name="taxRate" value="<?= htmlspecialchars($config['taxRate'] ?? 0) ?>" step="0.01" min="0" max="100"
-                               class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
+                               class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
                     </div>
                 </div>
 
-                <button type="submit" class="w-full bg-black dark:bg-white text-white dark:text-black py-3 rounded-xl font-bold text-sm uppercase tracking-wider active:scale-95 transition-transform">
+                <button type="submit" class="w-full bg-black dark:bg-white text-white dark:text-black py-3 font-bold text-sm uppercase tracking-wider active:scale-95 transition-transform">
                     Save Business Settings
                 </button>
             </form>
@@ -383,7 +384,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     </section>
 
     <!-- API Keys Section -->
-    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden">
         <button onclick="Mobile.settings.toggleSection('api-section')" class="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-zinc-800 transition-colors">
             <div class="flex items-center gap-3">
                 <!-- Heroicon: Key -->
@@ -412,7 +413,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                     </label>
                     <input type="password" name="groqApiKey" value="<?= htmlspecialchars($config['groqApiKey'] ?? '') ?>"
                            placeholder="gsk_..."
-                           class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none font-mono">
+                           class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none font-mono">
                 </div>
 
                 <div>
@@ -422,10 +423,10 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                     </label>
                     <input type="password" name="openrouterApiKey" value="<?= htmlspecialchars($config['openrouterApiKey'] ?? '') ?>"
                            placeholder="sk-or-..."
-                           class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none font-mono">
+                           class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none font-mono">
                 </div>
 
-                <button type="submit" class="w-full bg-black dark:bg-white text-white dark:text-black py-3 rounded-xl font-bold text-sm uppercase tracking-wider active:scale-95 transition-transform">
+                <button type="submit" class="w-full bg-black dark:bg-white text-white dark:text-black py-3 font-bold text-sm uppercase tracking-wider active:scale-95 transition-transform">
                     Save API Keys
                 </button>
             </form>
@@ -433,7 +434,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     </section>
 
     <!-- Water Settings Section -->
-    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden">
         <button onclick="Mobile.settings.toggleSection('water-section')" class="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-zinc-800 transition-colors">
             <div class="flex items-center gap-3">
                 <!-- Heroicon: Beaker/Water -->
@@ -458,12 +459,12 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                 <div>
                     <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Daily Goal (glasses)</label>
                     <input type="number" name="waterGoal" value="<?= htmlspecialchars($config['waterGoal'] ?? 8) ?>" min="1" max="20"
-                           class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
+                           class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
                 </div>
 
                 <div>
                     <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Reminder Interval</label>
-                    <select name="waterReminderInterval" class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none appearance-none">
+                    <select name="waterReminderInterval" class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none appearance-none">
                         <option value="30" <?= ($config['waterReminderInterval'] ?? 60) == 30 ? 'selected' : '' ?>>30 minutes</option>
                         <option value="60" <?= ($config['waterReminderInterval'] ?? 60) == 60 ? 'selected' : '' ?>>1 hour</option>
                         <option value="120" <?= ($config['waterReminderInterval'] ?? 60) == 120 ? 'selected' : '' ?>>2 hours</option>
@@ -471,12 +472,12 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                     </select>
                 </div>
 
-                <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-zinc-800 rounded-xl">
+                <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-zinc-800">
                     <input type="checkbox" name="waterNotificationsEnabled" id="water-notifications-enabled" class="w-5 h-5 rounded border-gray-300" <?= ($config['waterNotificationsEnabled'] ?? true) ? 'checked' : '' ?>>
                     <label for="water-notifications-enabled" class="text-sm font-medium">Enable notifications</label>
                 </div>
 
-                <button type="submit" class="w-full bg-black dark:bg-white text-white dark:text-black py-3 rounded-xl font-bold text-sm uppercase tracking-wider active:scale-95 transition-transform">
+                <button type="submit" class="w-full bg-black dark:bg-white text-white dark:text-black py-3 font-bold text-sm uppercase tracking-wider active:scale-95 transition-transform">
                     Save Water Settings
                 </button>
             </form>
@@ -484,7 +485,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     </section>
 
     <!-- Notification Settings Section -->
-    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden">
         <button onclick="Mobile.settings.toggleSection('notifications-section')" class="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-zinc-800 transition-colors">
             <div class="flex items-center gap-3">
                 <!-- Heroicon: Bell -->
@@ -506,7 +507,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                 <input type="hidden" name="section" value="notifications">
                 <input type="hidden" name="csrf_token" value="<?= Auth::csrfToken() ?>">
 
-                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800 rounded-xl">
+                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800">
                     <div>
                         <label for="notification-sound-enabled" class="text-sm font-medium">Enable Sounds</label>
                         <p class="text-xs text-gray-500">Play sounds for notifications</p>
@@ -514,7 +515,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                     <input type="checkbox" name="notificationSoundEnabled" id="notification-sound-enabled" class="w-5 h-5 rounded border-gray-300" <?= ($config['notificationSoundEnabled'] ?? true) ? 'checked' : '' ?>>
                 </div>
 
-                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800 rounded-xl">
+                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800">
                     <div>
                         <label for="overdue-alert-enabled" class="text-sm font-medium">Overdue Tasks</label>
                         <p class="text-xs text-gray-500">Alert when tasks are overdue</p>
@@ -522,7 +523,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                     <input type="checkbox" name="overdueAlertEnabled" id="overdue-alert-enabled" class="w-5 h-5 rounded border-gray-300" <?= ($config['overdueAlertEnabled'] ?? true) ? 'checked' : '' ?>>
                 </div>
 
-                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800 rounded-xl">
+                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800">
                     <div>
                         <label for="due-soon-alert-enabled" class="text-sm font-medium">Due Soon</label>
                         <p class="text-xs text-gray-500">Alert for upcoming deadlines</p>
@@ -530,7 +531,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                     <input type="checkbox" name="dueSoonAlertEnabled" id="due-soon-alert-enabled" class="w-5 h-5 rounded border-gray-300" <?= ($config['dueSoonAlertEnabled'] ?? true) ? 'checked' : '' ?>>
                 </div>
 
-                <button type="submit" class="w-full bg-black dark:bg-white text-white dark:text-black py-3 rounded-xl font-bold text-sm uppercase tracking-wider active:scale-95 transition-transform">
+                <button type="submit" class="w-full bg-black dark:bg-white text-white dark:text-black py-3 font-bold text-sm uppercase tracking-wider active:scale-95 transition-transform">
                     Save Notification Settings
                 </button>
             </form>
@@ -538,7 +539,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     </section>
 
     <!-- Session Timeout Section -->
-    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden">
         <button onclick="Mobile.settings.toggleSection('session-section')" class="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-zinc-800 transition-colors">
             <div class="flex items-center gap-3">
                 <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -560,7 +561,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 
                 <div>
                     <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Timeout Preference</label>
-                    <select name="sessionTimeoutPreference" class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none appearance-none">
+                    <select name="sessionTimeoutPreference" class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none appearance-none">
                         <option value="20m" <?= $sessionTimeoutPreference === '20m' ? 'selected' : '' ?>>20 minutes</option>
                         <option value="1h" <?= $sessionTimeoutPreference === '1h' ? 'selected' : '' ?>>1 hour</option>
                         <option value="indefinite" <?= $sessionTimeoutPreference === 'indefinite' ? 'selected' : '' ?>>Indefinite (no auto-logout)</option>
@@ -571,15 +572,16 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                     Timed options log you out after inactivity. Indefinite keeps you signed in across browser restarts until manual sign out.
                 </p>
 
-                <button type="submit" class="w-full bg-black dark:bg-white text-white dark:text-black py-3 rounded-xl font-bold text-sm uppercase tracking-wider active:scale-95 transition-transform">
+                <button type="submit" class="w-full bg-black dark:bg-white text-white dark:text-black py-3 font-bold text-sm uppercase tracking-wider active:scale-95 transition-transform">
                     Save Session Timeout
                 </button>
             </form>
         </div>
     </section>
 
+    <?php if (Auth::isAdmin()): ?>
     <!-- Favicon Settings Section -->
-    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden">
         <button onclick="Mobile.settings.toggleSection('favicon-section')" class="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-zinc-800 transition-colors">
             <div class="flex items-center gap-3">
                 <!-- Heroicon: Photo/Image -->
@@ -596,11 +598,11 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
             </svg>
         </button>
-        <div id="favicon-section" class="hidden border-t border-gray-100 dark:border-gray-800">
+        <div id="favicon-section" class="hidden border-t border-gray-100 dark:border-zinc-800">
             <div class="p-4 space-y-4">
                 <!-- Current Favicon -->
                 <div class="flex items-center gap-4">
-                    <div class="w-16 h-16 bg-black rounded-xl flex items-center justify-center">
+                    <div class="w-16 h-16 bg-black flex items-center justify-center">
                         <img id="favicon-preview" src="assets/favicons/favicon-32x32.png" alt="Current favicon" class="w-10 h-10" onerror="this.style.display='none'">
                         <span id="favicon-fallback" class="text-white text-xs font-bold">LM</span>
                     </div>
@@ -617,7 +619,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                     <div>
                         <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Upload New Favicon</label>
                         <input type="file" name="favicon" id="favicon-input" accept="image/png,image/jpeg,image/svg+xml"
-                               class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
+                               class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
                         <p class="text-xs text-gray-500 mt-1">Recommended: 512x512 PNG or SVG</p>
                     </div>
 
@@ -625,9 +627,9 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                         <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Theme Color</label>
                         <div class="flex items-center gap-3">
                             <input type="color" name="theme_color" id="theme-color-picker" value="#000000"
-                                   class="w-12 h-12 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer">
+                                   class="w-12 h-12 border border-gray-200 dark:border-zinc-700 cursor-pointer">
                             <input type="text" name="theme_color_hex" id="theme-color-hex" value="#000000"
-                                   class="flex-1 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none font-mono">
+                                   class="flex-1 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none font-mono">
                         </div>
                         <p class="text-xs text-gray-500 mt-1">Browser tab color</p>
                     </div>
@@ -635,10 +637,10 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                     <div id="favicon-message" class="text-sm hidden"></div>
 
                     <div class="flex gap-3">
-                        <button type="submit" class="flex-1 bg-black dark:bg-white text-white dark:text-black py-3 rounded-xl font-bold text-sm uppercase tracking-wider active:scale-95 transition-transform">
+                        <button type="submit" class="flex-1 bg-black dark:bg-white text-white dark:text-black py-3 font-bold text-sm uppercase tracking-wider active:scale-95 transition-transform">
                             Upload
                         </button>
-                        <button type="button" onclick="Mobile.settings.resetFavicon()" class="flex-1 border border-gray-300 dark:border-gray-600 py-3 rounded-xl font-bold text-sm active:scale-95 transition-transform">
+                        <button type="button" onclick="Mobile.settings.resetFavicon()" class="flex-1 border border-gray-300 dark:border-zinc-600 py-3 font-bold text-sm active:scale-95 transition-transform">
                             Reset
                         </button>
                     </div>
@@ -646,9 +648,10 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
             </div>
         </div>
     </section>
+    <?php endif; ?>
 
     <!-- Backup Management Section -->
-    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden">
         <button onclick="Mobile.settings.toggleSection('backup-section')" class="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-zinc-800 transition-colors">
             <div class="flex items-center gap-3">
                 <!-- Heroicon: Cloud Arrow Down -->
@@ -669,15 +672,15 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
             <div class="p-4 space-y-4">
                 <!-- Quick Stats -->
                 <div class="grid grid-cols-3 gap-2">
-                    <div class="bg-gray-50 dark:bg-zinc-800 rounded-xl p-3 text-center">
+                    <div class="bg-gray-50 dark:bg-zinc-800 p-3 text-center">
                         <p id="backup-count" class="text-xl font-bold">-</p>
                         <p class="text-[10px] text-gray-500 uppercase">Backups</p>
                     </div>
-                    <div class="bg-gray-50 dark:bg-zinc-800 rounded-xl p-3 text-center">
+                    <div class="bg-gray-50 dark:bg-zinc-800 p-3 text-center">
                         <p id="backup-size" class="text-xl font-bold">-</p>
                         <p class="text-[10px] text-gray-500 uppercase">Size</p>
                     </div>
-                    <div class="bg-gray-50 dark:bg-zinc-800 rounded-xl p-3 text-center">
+                    <div class="bg-gray-50 dark:bg-zinc-800 p-3 text-center">
                         <p id="backup-latest" class="text-xs font-medium">-</p>
                         <p class="text-[10px] text-gray-500 uppercase">Latest</p>
                     </div>
@@ -685,14 +688,14 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 
                 <!-- Actions -->
                 <div class="grid grid-cols-2 gap-3">
-                    <button onclick="Mobile.settings.createBackup()" id="create-backup-btn" class="flex items-center justify-center gap-2 bg-black dark:bg-white text-white dark:text-black py-3 rounded-xl font-bold text-sm active:scale-95 transition-transform">
+                    <button onclick="Mobile.settings.createBackup()" id="create-backup-btn" class="flex items-center justify-center gap-2 bg-black dark:bg-white text-white dark:text-black py-3 font-bold text-sm active:scale-95 transition-transform">
                         <!-- Heroicon: Document Arrow Down -->
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m0 0L12 16.5m-4-4.5h9M12 3v13.5"/>
                         </svg>
                         Create Backup
                     </button>
-                    <button onclick="Mobile.settings.cleanupBackups()" class="flex items-center justify-center gap-2 border border-gray-300 dark:border-gray-600 py-3 rounded-xl font-bold text-sm active:scale-95 transition-transform">
+                    <button onclick="Mobile.settings.cleanupBackups()" class="flex items-center justify-center gap-2 border border-gray-300 dark:border-zinc-600 py-3 font-bold text-sm active:scale-95 transition-transform">
                         <!-- Heroicon: Trash -->
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
@@ -702,7 +705,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                 </div>
 
                 <!-- Backup List -->
-                <div class="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+                <div class="border border-gray-200 dark:border-zinc-700 overflow-hidden">
                     <div class="bg-gray-50 dark:bg-zinc-800 px-4 py-3">
                         <h4 class="font-medium text-sm">Recent Backups</h4>
                     </div>
@@ -715,7 +718,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     </section>
 
     <!-- Security Section -->
-    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden">
         <button onclick="Mobile.settings.toggleSection('security-section')" class="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-zinc-800 transition-colors">
             <div class="flex items-center gap-3">
                 <!-- Heroicon: Shield -->
@@ -741,17 +744,17 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                         <input type="hidden" name="csrf_token" value="<?= Auth::csrfToken() ?>">
                         <div>
                             <input type="password" id="current-password" placeholder="Current password" required
-                                   class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
+                                   class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
                         </div>
                         <div>
                             <input type="password" id="new-password" placeholder="New password (min 8 chars)" required minlength="8"
-                                   class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
+                                   class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
                         </div>
                         <div>
                             <input type="password" id="confirm-new-password" placeholder="Confirm new password" required minlength="8"
-                                   class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-gray-700 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
+                                   class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
                         </div>
-                        <button type="submit" class="w-full bg-gray-900 text-white py-3 rounded-xl font-bold text-sm active:scale-95 transition-transform">
+                        <button type="submit" class="w-full bg-gray-900 text-white py-3 font-bold text-sm active:scale-95 transition-transform">
                             Update Password
                         </button>
                     </form>
@@ -765,17 +768,17 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                         <input type="hidden" name="csrf_token" value="<?= Auth::csrfToken() ?>">
                         <div>
                             <input type="password" id="current-master-password" placeholder="Current master password" required
-                                   class="w-full bg-white dark:bg-zinc-800 border border-red-200 dark:border-red-800 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-red-500 outline-none">
+                                   class="w-full bg-white dark:bg-zinc-800 border border-red-200 dark:border-red-800 py-3 px-4 text-sm focus:ring-2 focus:ring-red-500 outline-none">
                         </div>
                         <div>
                             <input type="password" id="new-master-password" placeholder="New master password (min 4 chars)" required minlength="4"
-                                   class="w-full bg-white dark:bg-zinc-800 border border-red-200 dark:border-red-800 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-red-500 outline-none">
+                                   class="w-full bg-white dark:bg-zinc-800 border border-red-200 dark:border-red-800 py-3 px-4 text-sm focus:ring-2 focus:ring-red-500 outline-none">
                         </div>
                         <div>
                             <input type="password" id="confirm-new-master-password" placeholder="Confirm new master password" required minlength="4"
-                                   class="w-full bg-white dark:bg-zinc-800 border border-red-200 dark:border-red-800 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-red-500 outline-none">
+                                   class="w-full bg-white dark:bg-zinc-800 border border-red-200 dark:border-red-800 py-3 px-4 text-sm focus:ring-2 focus:ring-red-500 outline-none">
                         </div>
-                        <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-bold text-sm active:scale-95 transition-transform">
+                        <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white py-3 font-bold text-sm active:scale-95 transition-transform">
                             Change Master Password
                         </button>
                     </form>
@@ -785,7 +788,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     </section>
 
     <!-- Developer Tools Section -->
-    <section class="bg-gradient-to-br from-gray-900 to-black dark:from-black dark:to-zinc-900 border border-gray-800 dark:border-zinc-800 rounded-2xl overflow-hidden">
+    <section class="bg-gradient-to-br from-gray-900 to-black dark:from-black dark:to-zinc-900 border border-gray-800 dark:border-zinc-800 overflow-hidden">
         <button onclick="Mobile.settings.toggleSection('dev-section')" class="w-full flex items-center justify-between p-4 active:bg-gray-800 dark:active:bg-zinc-800 transition-colors">
             <div class="flex items-center gap-3">
                 <!-- Heroicon: Code Bracket -->
@@ -804,8 +807,9 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
         </button>
         <div id="dev-section" class="hidden border-t border-white/10">
             <div class="p-2 space-y-1">
+                <?php if (Auth::isAdmin()): ?>
                 <!-- Audit Logs -->
-                <a href="?page=audit-logs&device=desktop" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors">
+                <a href="?page=audit-logs" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 transition-colors">
                     <div class="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -821,7 +825,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                 </a>
 
                 <!-- Scheduler Status -->
-                <a href="?page=scheduler-status&device=desktop" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors">
+                <a href="?page=scheduler-status" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 transition-colors">
                     <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -835,9 +839,10 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
                     </svg>
                 </a>
+                <?php endif; ?>
 
                 <!-- MCP Config -->
-                <a href="?page=mcp&device=desktop" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors">
+                <a href="?page=mcp" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 transition-colors">
                     <div class="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"/>
@@ -852,8 +857,9 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                     </svg>
                 </a>
 
+                <?php if (Auth::isAdmin()): ?>
                 <!-- Speckitty -->
-                <a href="?page=speckitty&device=desktop" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors">
+                <a href="?page=speckitty" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 transition-colors">
                     <div class="w-10 h-10 bg-pink-500/20 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
@@ -869,7 +875,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                 </a>
 
                 <!-- Custom Instructions -->
-                <a href="?page=custom-instruction&device=desktop" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors">
+                <a href="?page=custom-instruction" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 transition-colors">
                     <div class="w-10 h-10 bg-cyan-500/20 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
@@ -883,9 +889,10 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
                     </svg>
                 </a>
+                <?php endif; ?>
 
                 <!-- Model Settings -->
-                <a href="?page=model-settings&device=desktop" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors">
+                <a href="?page=model-settings" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 transition-colors">
                     <div class="w-10 h-10 bg-violet-500/20 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L8.25 21l-1.5-4M15.75 17l-1.5 4-1.5-4M12 3v14m6.75-10.5H5.25"/>
@@ -900,8 +907,24 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                     </svg>
                 </a>
 
+                <!-- Data Management -->
+                <a href="?page=data-management" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 transition-colors">
+                    <div class="w-10 h-10 bg-teal-500/20 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/>
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <span class="font-bold text-sm text-white">Data Management</span>
+                        <p class="text-xs text-gray-400">Import, export and backups</p>
+                    </div>
+                    <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
+                    </svg>
+                </a>
+
                 <!-- Import / Export Data -->
-                <a href="?page=import-data&device=desktop" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors">
+                <a href="?page=import-data" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 transition-colors">
                     <div class="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 12l-3-3m3 3l3-3M5.25 19.5h13.5"/>
@@ -917,7 +940,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                 </a>
 
                 <!-- Data Recovery -->
-                <a href="?page=data-recovery&device=desktop" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors">
+                <a href="?page=data-recovery" class="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 transition-colors">
                     <div class="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -936,7 +959,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     </section>
 
     <!-- Account Actions -->
-    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+    <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden">
         <div class="p-4 border-b border-gray-100 dark:border-gray-800">
             <h3 class="font-semibold text-sm text-gray-500 uppercase tracking-wider">Account</h3>
         </div>
@@ -1001,9 +1024,10 @@ include MOBILE_VIEW_PATH . '/partials/bottom-nav.php';
     // Dynamic base path detection for mobile views
     (function() {
         const path = window.location.pathname;
-        // Extract base path (e.g., /taskmanager or /)
-        const baseMatch = path.match(/^(\/[^\/]*?)?\//);
-        window.BASE_PATH = baseMatch ? baseMatch[1] || '' : '';
+        let basePath = path.replace(/\/index\.php$/i, '');
+        basePath = basePath.replace(/\/+$/, '');
+        basePath = basePath.replace(/\/mobile$/i, '');
+        window.BASE_PATH = basePath;
     })();
     const APP_URL = window.location.origin + window.BASE_PATH;
     const CSRF_TOKEN = '<?= $_SESSION['csrf_token'] ?? '' ?>';

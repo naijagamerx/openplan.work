@@ -9,12 +9,20 @@ if (!Auth::check()) {
     errorResponse('Unauthorized', 401);
 }
 
-$db = new Database(getMasterPassword());
+$db = new Database(getMasterPassword(), Auth::userId());
+
+// Verify database connection works
+try {
+    $db->load('config', true);
+} catch (Exception $e) {
+    errorResponse('Database connection failed: Wrong master password', 401, ERROR_UNAUTHORIZED);
+}
+
 $action = $_GET['action'] ?? 'get';
 
 switch ($action) {
     case 'get':
-        $config = $db->load('config');
+        $config = $db->load('config', true);
         // Mask API keys for security
         if (!empty($config['groqApiKey'])) {
             $config['groqApiKey'] = substr($config['groqApiKey'], 0, 4) . '...' . substr($config['groqApiKey'], -4);
@@ -31,8 +39,15 @@ switch ($action) {
         }
 
         $body = getJsonBody();
+        $csrfToken = $body['csrf_token'] ?? '';
+
+        // CSRF validation
+        if (!Auth::validateCsrf($csrfToken)) {
+            errorResponse('Invalid CSRF token', 403);
+        }
+
         $section = $body['section'] ?? '';
-        $config = $db->load('config');
+        $config = $db->load('config', true);
 
         if ($section === 'business') {
             $config['businessName'] = trim($body['businessName'] ?? $config['businessName'] ?? '');
@@ -49,6 +64,10 @@ switch ($action) {
             if (isset($body['openrouterApiKey']) && !str_contains($body['openrouterApiKey'], '...')) {
                 $config['openrouterApiKey'] = trim($body['openrouterApiKey']);
             }
+        } elseif ($section === 'notifications') {
+            $config['notificationsEnabled'] = filter_var($body['notificationsEnabled'] ?? $config['notificationsEnabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            $config['waterReminderInterval'] = intval($body['waterReminderInterval'] ?? $config['waterReminderInterval'] ?? 60);
+            $config['waterReminderGoal'] = intval($body['waterReminderGoal'] ?? $config['waterReminderGoal'] ?? 8);
         } else {
             errorResponse('Invalid section');
         }
@@ -60,6 +79,42 @@ switch ($action) {
         }
         break;
 
+    case 'get_notification_settings':
+        $config = $db->load('config', true);
+        $notificationSettings = [
+            'notificationsEnabled' => $config['notificationsEnabled'] ?? false,
+            'waterReminderInterval' => $config['waterReminderInterval'] ?? 60,
+            'waterReminderGoal' => $config['waterReminderGoal'] ?? 8
+        ];
+        successResponse($notificationSettings);
+        break;
+
+    case 'save_notification_settings':
+        if (requestMethod() !== 'POST') {
+            errorResponse('Method not allowed', 405);
+        }
+
+        $body = getJsonBody();
+        $csrfToken = $body['csrf_token'] ?? '';
+
+        // CSRF validation
+        if (!Auth::validateCsrf($csrfToken)) {
+            errorResponse('Invalid CSRF token', 403);
+        }
+
+        $config = $db->load('config', true);
+        $config['notificationsEnabled'] = filter_var($body['notificationsEnabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $config['waterReminderInterval'] = intval($body['waterReminderInterval'] ?? 60);
+        $config['waterReminderGoal'] = intval($body['waterReminderGoal'] ?? 8);
+
+        if ($db->save('config', $config)) {
+            successResponse(null, 'Notification settings saved successfully');
+        } else {
+            errorResponse('Failed to save notification settings');
+        }
+        break;
+
     default:
         errorResponse('Invalid action', 400);
 }
+

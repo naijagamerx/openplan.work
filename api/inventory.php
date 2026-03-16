@@ -4,12 +4,17 @@
  */
 
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../includes/BaseAPI.php';
+
+ini_set('display_errors', 0);
+error_reporting(0);
 
 if (!Auth::check()) {
     errorResponse('Unauthorized', 401);
 }
 
-if (requestMethod() !== 'GET') {
+// CSRF validation for non-GET requests
+if (requestMethod() !== 'GET' && !Auth::isMcp()) {
     $body = getJsonBody();
     $token = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if (!Auth::validateCsrf($token)) {
@@ -17,103 +22,190 @@ if (requestMethod() !== 'GET') {
     }
 }
 
-$db = new Database(getMasterPassword());
+$db = new Database(getMasterPassword(), Auth::userId());
+
+// Verify database connection works
+try {
+    $db->load('inventory', true);
+} catch (Exception $e) {
+    errorResponse('Database connection failed: Wrong master password', 401, ERROR_UNAUTHORIZED);
+}
+
 $action = $_GET['action'] ?? null;
 $id = $_GET['id'] ?? null;
 
-switch (requestMethod()) {
-    case 'GET':
-        $inventory = $db->load('inventory');
-        successResponse($inventory);
-        break;
-        
-    case 'POST':
-        $body = getJsonBody();
-        
-        // Stock adjustment
-        if ($action === 'adjust') {
-            $inventory = $db->load('inventory');
-            $productId = $body['id'] ?? '';
-            $adjustment = intval($body['adjustment'] ?? 0);
-            
-            foreach ($inventory as $key => $product) {
-                if ($product['id'] === $productId) {
-                    $inventory[$key]['quantity'] = max(0, ($product['quantity'] ?? 0) + $adjustment);
-                    $db->save('inventory', $inventory);
-                    successResponse($inventory[$key], 'Stock updated');
-                    break;
-                }
-            }
-            errorResponse('Product not found', 404);
+function loadInventoryTransactions(Database $db): array
+{
+    $transactions = $db->load('inventory_transactions', true);
+    return is_array($transactions) ? $transactions : [];
+}
+
+function computeInventorySummary(Database $db): array
+{
+    $transactions = loadInventoryTransactions($db);
+    $totalIn = 0;
+    $totalOut = 0;
+    $totalExpense = 0;
+
+    foreach ($transactions as $entry) {
+        $qty = (int)($entry['quantity'] ?? 0);
+        if (($entry['type'] ?? '') === 'in') {
+            $totalIn += $qty;
+            $totalExpense += (float)($entry['totalCost'] ?? 0);
+        } elseif (($entry['type'] ?? '') === 'out') {
+            $totalOut += $qty;
+        }
+    }
+
+    return [
+        'total_in' => $totalIn,
+        'total_out' => $totalOut,
+        'total_expense' => $totalExpense
+    ];
+}
+
+/**
+ * Inventory API - uses BaseAPI for consistent CRUD operations
+ */
+class InventoryAPI extends BaseAPI {
+    protected function getAllowedFields(): array {
+        return ['sku', 'name', 'description', 'category', 'quantity', 'unitPrice', 'costPrice', 'reorderPoint', 'supplier', 'notes', 'linkedTaskId'];
+    }
+
+    /**
+     * Adjust stock quantity
+     */
+    public function adjustStock(string $id, int $adjustment): ?array {
+        $product = $this->find($id);
+        if (!$product) {
+            return null;
         }
 
-        // Add or Update product
-        if (empty($body['name'])) {
-            errorResponse('Product name is required');
+        $newQuantity = max(0, ($product['quantity'] ?? 0) + $adjustment);
+        if ($this->db->update($this->collection, $id, ['quantity' => $newQuantity])) {
+            return $this->find($id);
         }
-        
-        $inventory = $db->load('inventory');
-        
-        if ($action === 'update' && $id) {
-            $found = false;
-            foreach ($inventory as $key => $product) {
-                if ($product['id'] === $id) {
-                    $inventory[$key]['sku'] = $body['sku'] ?? $product['sku'];
-                    $inventory[$key]['name'] = $body['name'] ?? $product['name'];
-                    $inventory[$key]['description'] = $body['description'] ?? $product['description'];
-                    $inventory[$key]['category'] = $body['category'] ?? $product['category'];
-                    $inventory[$key]['quantity'] = intval($body['quantity'] ?? ($product['quantity'] ?? 0));
-                    $inventory[$key]['unitPrice'] = floatval($body['unitPrice'] ?? ($product['unitPrice'] ?? 0));
-                    $inventory[$key]['costPrice'] = floatval($body['costPrice'] ?? ($product['costPrice'] ?? 0));
-                    $inventory[$key]['reorderPoint'] = intval($body['reorderPoint'] ?? ($product['reorderPoint'] ?? 5));
-                    $inventory[$key]['updatedAt'] = date('c');
-                    
-                    $db->save('inventory', $inventory);
-                    $found = true;
-                    successResponse($inventory[$key], 'Product updated');
-                    break;
-                }
+
+        return null;
+    }
+}
+
+$inventoryAPI = new InventoryAPI($db, 'inventory');
+
+switch (requestMethod()) {
+    case 'GET':
+        if ($action === 'transactions') {
+            $transactions = loadInventoryTransactions($db);
+            $productId = $_GET['productId'] ?? null;
+            if ($productId) {
+                $transactions = array_filter($transactions, fn($entry) => ($entry['productId'] ?? '') === $productId);
             }
-            if (!$found) errorResponse('Product not found', 404);
-        } else {
-            // New product
-            $newProduct = [
-                'id' => $db->generateId(),
-                'sku' => $body['sku'] ?? '',
-                'name' => $body['name'],
-                'description' => $body['description'] ?? '',
-                'category' => $body['category'] ?? '',
-                'quantity' => intval($body['quantity'] ?? 0),
-                'unitPrice' => floatval($body['unitPrice'] ?? 0),
-                'costPrice' => floatval($body['costPrice'] ?? 0),
-                'reorderPoint' => intval($body['reorderPoint'] ?? 5),
-                'createdAt' => date('c'),
-                'updatedAt' => date('c')
-            ];
-            
-            $inventory[] = $newProduct;
-            $db->save('inventory', $inventory);
-            
-            successResponse($newProduct, 'Product added');
+            $transactions = array_reverse(array_values($transactions));
+            $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 0;
+            if ($limit > 0) {
+                $transactions = array_slice($transactions, 0, $limit);
+            }
+            successResponse($transactions);
         }
+        if ($action === 'summary') {
+            $summary = computeInventorySummary($db);
+            $transactions = array_slice(array_reverse(loadInventoryTransactions($db)), 0, 10);
+            $summary['recent'] = $transactions;
+            successResponse($summary);
+        }
+        successResponse($inventoryAPI->findAll());
         break;
-        
+
+    case 'POST':
+        $body = getJsonBody();
+
+        // Stock adjustment
+        if ($action === 'adjust') {
+            $productId = $body['id'] ?? '';
+            $adjustment = intval($body['adjustment'] ?? 0);
+            $note = $body['note'] ?? '';
+            $unitCostOverride = $body['unitCost'] ?? null;
+            $unitCostOverride = is_numeric($unitCostOverride) ? (float)$unitCostOverride : null;
+
+            $product = $inventoryAPI->adjustStock($productId, $adjustment);
+            if ($product) {
+                $type = $adjustment >= 0 ? 'in' : 'out';
+                $quantity = abs($adjustment);
+                $unitCost = $unitCostOverride;
+                if ($unitCost === null) {
+                    $unitCost = (float)($product['costPrice'] ?? 0);
+                }
+
+                $transaction = [
+                    'id' => uniqid('inv_tx_'),
+                    'productId' => $product['id'],
+                    'productName' => $product['name'] ?? 'Unknown',
+                    'type' => $type,
+                    'quantity' => $quantity,
+                    'unitCost' => $unitCost,
+                    'totalCost' => $unitCost * $quantity,
+                    'note' => $note,
+                    'createdAt' => date('c')
+                ];
+                $transactions = $db->load('inventory_transactions', true) ?? [];
+                $transactions[] = $transaction;
+                $db->save('inventory_transactions', $transactions);
+
+                successResponse($product, 'Stock updated');
+            }
+            errorResponse('Product not found', 404, ERROR_NOT_FOUND);
+        }
+
+        // Update product
+        if ($action === 'update' && $id) {
+            $product = $inventoryAPI->update($id, $body);
+            if ($product) {
+                successResponse($product, 'Product updated');
+            }
+            $inventoryAPI->notFound('Product');
+        }
+
+        // Create new product
+        if (empty($body['name'])) {
+            $inventoryAPI->validationError('Product name is required');
+        }
+
+        $product = $inventoryAPI->create($body);
+        if ($product) {
+            successResponse($product, 'Product added');
+        }
+
+        errorResponse('Failed to create product', 500, ERROR_SERVER);
+        break;
+
+    case 'PUT':
+        if (!$id) {
+            errorResponse('Product ID required', 400, ERROR_VALIDATION);
+        }
+
+        $body = getJsonBody();
+        $product = $inventoryAPI->update($id, $body);
+
+        if ($product) {
+            successResponse($product, 'Product updated');
+        }
+
+        $inventoryAPI->notFound('Product');
+        break;
+
     case 'DELETE':
         if (!$id) {
-            errorResponse('Product ID required');
+            errorResponse('Product ID required', 400, ERROR_VALIDATION);
         }
-        
-        $inventory = $db->load('inventory');
-        $filtered = array_filter($inventory, fn($p) => $p['id'] !== $id);
-        
-        if (count($filtered) === count($inventory)) {
-            errorResponse('Product not found', 404);
+
+        if ($inventoryAPI->delete($id)) {
+            successResponse(null, 'Product deleted');
         }
-        
-        $db->save('inventory', array_values($filtered));
-        successResponse(null, 'Product deleted');
+
+        $inventoryAPI->notFound('Product');
         break;
-        
+
     default:
         errorResponse('Method not allowed', 405);
 }
+

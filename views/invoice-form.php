@@ -2,7 +2,7 @@
 /**
  * Invoice Form View (Add/Edit)
  */
-$db = new Database(getMasterPassword());
+$db = new Database(getMasterPassword(), Auth::userId());
 $id = $_GET['id'] ?? null;
 $invoice = null;
 
@@ -311,3 +311,4 @@ document.getElementById('invoice-form').addEventListener('submit', async (e) => 
 // Initial render
 renderItems();
 </script>
+

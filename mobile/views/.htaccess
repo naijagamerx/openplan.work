@@ -1,0 +1,9 @@
+# Block all direct HTTP access to mobile view files.
+# Mobile views should be rendered through mobile/index.php.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>

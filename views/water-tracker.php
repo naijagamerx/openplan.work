@@ -4,7 +4,7 @@ require_once __DIR__ . '/../includes/auth.php';
 
 Auth::check();
 
-$db = new Database(getMasterPassword());
+$db = new Database(getMasterPassword(), Auth::userId());
 $waterTracker = $db->load('water_tracker');
 
 $today = date('Y-m-d');
@@ -234,6 +234,8 @@ async function addWaterGlass(count) {
     try {
         const response = await api.post('api/habits.php?action=add_water_glass', {
             count: count,
+            goal: <?php echo $todayEntry['goal']; ?>,
+            reminderInterval: <?php echo $todayEntry['reminderInterval'] ?? 60; ?>,
             csrf_token: CSRF_TOKEN
         });
 
@@ -292,8 +294,8 @@ async function saveWaterSettings() {
                 goal
             }));
 
-            if (notificationsEnabled && 'Notification' in window && Notification.permission === 'default') {
-                await Notification.requestPermission();
+            if (notificationsEnabled && 'Notification' in window) {
+                await requestNotificationPermission();
             }
 
             location.reload();
@@ -304,15 +306,57 @@ async function saveWaterSettings() {
     }
 }
 
+async function enableNotifications() {
+    const permission = await requestNotificationPermission();
+
+    if (permission === 'granted') {
+        localStorage.setItem('waterTracker', JSON.stringify({
+            ...JSON.parse(localStorage.getItem('waterTracker') || '{}'),
+            notificationsEnabled: true
+        }));
+        startWaterReminder();
+    }
+}
+
+function startWaterReminder() {
+    if (waterReminderInterval) {
+        clearInterval(waterReminderInterval);
+    }
+
+    const saved = localStorage.getItem('waterTracker');
+    if (!saved) return;
+
+    const settings = JSON.parse(saved);
+    if (!settings.notificationsEnabled) return;
+
+    if (!('Notification' in window) || Notification.permission !== 'granted') {
+        return;
+    }
+
+    const intervalMs = (settings.reminderInterval || 60) * 60 * 1000;
+
+    waterReminderInterval = setInterval(() => {
+        if ('Notification' in window && Notification.permission === 'granted') {
+            sendNotification('💧 Drink Water!', {
+                body: 'Stay hydrated! Time for a glass of water.',
+                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%233B82F6"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 9.2 8 9.2s8-4.22 8-9.2c0-3.32-2.67-7.25-8-11.8zm0 18c-3.35 0-6-2.57-6-6.2 0-2.62 1.8-5.2 4.8-7.2 1.5 1.3 3.3 2.4 5.2 3.1V20z"/></svg>'
+            });
+        }
+    }, intervalMs);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const saved = localStorage.getItem('waterTracker');
     if (saved) {
         const data = JSON.parse(saved);
         if (data.notificationsEnabled && 'Notification' in window) {
-            Notification.requestPermission();
+            if (Notification.permission === 'granted') {
+                startWaterReminder();
+            }
         }
     }
 });
 </script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
+

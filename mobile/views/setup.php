@@ -37,6 +37,7 @@ $error = $_GET['error'] ?? '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Setup - <?= htmlspecialchars(getSiteName()) ?></title>
 
+    <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/assets/favicons/favicon.svg">
     <link rel="icon" type="image/png" sizes="32x32" href="<?= APP_URL ?>/assets/favicons/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="<?= APP_URL ?>/assets/favicons/favicon-16x16.png">
     <link rel="shortcut icon" href="<?= APP_URL ?>/assets/favicons/favicon.ico">
@@ -147,7 +148,7 @@ $error = $_GET['error'] ?? '';
         </div>
 
         <div class="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/20 text-[8px] tracking-widest uppercase">
-            Est. 2024 &copy; <?= htmlspecialchars(getSiteName()) ?>
+            Est. 2026 &copy; <?= htmlspecialchars(getSiteName()) ?>
         </div>
     </div>
 

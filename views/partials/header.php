@@ -13,23 +13,36 @@ $pageLabels = [
     'settings' => 'Settings'
 ];
 $pageLabel = $pageLabels[$page] ?? ucfirst($page);
+if ($page === 'advanced-invoices') {
+    $pageLabel = 'Invoice';
+}
 ?>
 
-<header class="bg-white border-b border-gray-200 px-6 py-4">
+<header class="bg-white border-b border-gray-200 px-4 sm:px-6 py-4">
     <div class="flex items-center justify-between">
-        <!-- Page Title -->
-        <div>
-            <h1 class="text-xl font-semibold text-gray-900"><?php echo e($pageLabel); ?></h1>
+        <!-- Mobile Menu Button + Page Title -->
+        <div class="flex items-center gap-3">
+            <!-- Hamburger Menu (Mobile) -->
+            <button onclick="toggleMobileSidebar()" id="mobile-menu-btn" class="lg:hidden p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                </svg>
+            </button>
+
+            <!-- Page Title -->
+            <div>
+                <h1 class="text-lg sm:text-xl font-semibold text-gray-900"><?php echo e($pageLabel); ?></h1>
+            </div>
         </div>
-        
+
         <!-- Right Actions -->
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 sm:gap-4">
             <!-- Quick Add Button -->
-            <button onclick="openQuickAdd()" class="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition">
+            <button onclick="openQuickAdd()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                 </svg>
-                <span>Quick Add</span>
+                <span class="hidden sm:inline">Quick Add</span>
             </button>
             
             <!-- Notifications -->
@@ -56,7 +69,7 @@ $pageLabel = $pageLabels[$page] ?? ucfirst($page);
                     <a href="?page=settings" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Settings</a>
                     <a href="api/export.php?format=json" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export Data</a>
                     <hr class="my-1 border-gray-200">
-                    <a href="api/auth.php?action=logout" class="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100">Sign Out</a>
+                    <a href="<?php echo APP_URL; ?>/api/auth.php?action=logout" class="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100">Sign Out</a>
                 </div>
             </div>
         </div>
@@ -118,6 +131,34 @@ document.addEventListener('click', function(e) {
     const button = e.target.closest('button');
     if (!button || !button.onclick?.toString().includes('toggleUserMenu')) {
         menu?.classList.add('hidden');
+    }
+});
+
+// Mobile sidebar toggle
+function toggleMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    sidebar?.classList.toggle('mobile-open');
+    overlay?.classList.toggle('hidden');
+}
+
+// Close mobile sidebar when clicking overlay
+document.addEventListener('click', function(e) {
+    const overlay = document.getElementById('sidebar-overlay');
+    if (e.target === overlay) {
+        const sidebar = document.getElementById('sidebar');
+        sidebar?.classList.remove('mobile-open');
+        overlay?.classList.add('hidden');
+    }
+});
+
+// Close mobile sidebar on escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+        sidebar?.classList.remove('mobile-open');
+        overlay?.classList.add('hidden');
     }
 });
 </script>

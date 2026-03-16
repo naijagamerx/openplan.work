@@ -18,21 +18,119 @@ if (is_dir($releaseArtifactsDir)) {
 $repoUrl = 'https://github.com/naijagamerx/openplan.work';
 $publicDocsUrl = APP_URL . '?page=docs';
 $isAuthenticated = Auth::check();
+
+// SEO Configuration
+$pageDescription = 'Self-hosted PHP productivity suite for tasks, projects, notes, habits, invoices, and secure team workflows. AES-256 encrypted workspace that you own.';
+$pageKeywords = 'self-hosted task manager, encrypted project management, PHP workspace, productivity app, open source task manager, secure project planner';
+$canonicalUrl = APP_URL . '/';
+$ogImage = APP_URL . '/assets/images/chrome_B3N3g51Yeo.png';
 ?>
 <!DOCTYPE html>
 <html class="scroll-smooth" lang="en">
 <head>
+<!-- Primary Meta Tags -->
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title><?php echo e($pageTitle); ?></title>
+<meta name="description" content="<?php echo e($pageDescription); ?>"/>
+<meta name="keywords" content="<?php echo e($pageKeywords); ?>"/>
+<meta name="author" content="OpenPlan Work"/>
+<meta name="robots" content="index, follow"/>
+<link rel="canonical" href="<?php echo e($canonicalUrl); ?>"/>
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="<?php echo e($canonicalUrl); ?>"/>
+<meta property="og:title" content="<?php echo e($pageTitle); ?>"/>
+<meta property="og:description" content="<?php echo e($pageDescription); ?>"/>
+<meta property="og:image" content="<?php echo e($ogImage); ?>"/>
+<meta property="og:image:alt" content="<?php echo e($pageTitle); ?>"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta property="og:site_name" content="<?php echo e($siteName); ?>"/>
+<meta property="og:locale" content="en_US"/>
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:url" content="<?php echo e($canonicalUrl); ?>"/>
+<meta name="twitter:title" content="<?php echo e($pageTitle); ?>"/>
+<meta name="twitter:description" content="<?php echo e($pageDescription); ?>"/>
+<meta name="twitter:image" content="<?php echo e($ogImage); ?>"/>
+<meta name="twitter:image:alt" content="<?php echo e($pageTitle); ?>"/>
+
+<!-- Favicons -->
 <link rel="icon" type="image/png" sizes="32x32" href="<?php echo APP_URL; ?>/assets/favicons/favicon-32x32.png"/>
 <link rel="icon" type="image/png" sizes="16x16" href="<?php echo APP_URL; ?>/assets/favicons/favicon-16x16.png"/>
 <link rel="shortcut icon" href="<?php echo APP_URL; ?>/assets/favicons/favicon.ico"/>
 <link rel="apple-touch-icon" sizes="180x180" href="<?php echo APP_URL; ?>/assets/favicons/apple-touch-icon.png"/>
+
+<!-- Styles -->
 <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+
+<!-- Schema.org Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "name": "OpenPlan Work",
+      "alternateName": "Lazy Man Tools",
+      "url": "<?php echo e(APP_URL); ?>",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "<?php echo e(APP_URL); ?>/assets/favicons/apple-touch-icon.png",
+        "width": 180,
+        "height": 180
+      },
+      "description": "<?php echo e($pageDescription); ?>",
+      "sameAs": [
+        "https://github.com/naijagamerx/openplan.work"
+      ]
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "OpenPlan Work",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Any",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "availability": "https://schema.org/InStock"
+      },
+      "featureList": [
+        "Task Management",
+        "Project Tracking",
+        "Notes & Knowledge Base",
+        "Habit Tracking",
+        "Invoicing & Quotes",
+        "Inventory Management",
+        "AI Assistance",
+        "Encrypted Data Storage",
+        "Pomodoro Timer",
+        "Water Tracker"
+      ],
+      "softwareRequirements": "PHP 8.0+, json, mbstring, openssl extensions",
+      "url": "<?php echo e(APP_URL); ?>"
+    },
+    {
+      "@type": "WebPage",
+      "name": "<?php echo e($pageTitle); ?>",
+      "description": "<?php echo e($pageDescription); ?>",
+      "url": "<?php echo e($canonicalUrl); ?>",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "OpenPlan Work",
+        "url": "<?php echo e(APP_URL); ?>"
+      }
+    }
+  ]
+}
+</script>
 <script>
         tailwind.config = {
             darkMode: "class",
@@ -141,7 +239,7 @@ $isAuthenticated = Auth::check();
     </style>
 </head>
 <body class="bg-background-light dark:bg-background-dark text-zinc-900 dark:text-zinc-100 antialiased transition-colors duration-300">
-<nav class="nav-shell absolute top-0 w-full z-50 border-b border-white/10 dark:border-white/10 backdrop-blur">
+<nav class="nav-shell absolute top-0 w-full z-50 border-b border-white/10 dark:border-white/10 backdrop-blur" role="navigation" aria-label="Main navigation">
 <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
 <div class="flex items-center gap-2 group cursor-pointer text-white">
 <div class="nav-logo w-8 h-8 bg-white text-black rounded flex items-center justify-center">
@@ -215,7 +313,7 @@ Register
                 The Encrypted PHP Workspace
             </p>
 <p class="text-lg text-zinc-400 max-w-xl mb-10 leading-relaxed">
-                A self-hosted PHP productivity app for tasks, projects, notes, habits, invoices, inventory, and lightweight team workflows. This release is the clean open-source edition.
+                A <strong>self-hosted PHP productivity app</strong> for tasks, projects, notes, habits, invoices, inventory, and lightweight team workflows. This release is the clean open-source edition.
             </p>
 <div class="p-4 border border-zinc-800 rounded-2xl bg-black/50 backdrop-blur-sm max-w-xl">
 <div class="flex flex-col sm:flex-row items-center gap-3">
@@ -396,13 +494,13 @@ Register
 <svg class="w-8 h-8 text-black dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l7 4v5c0 5-3 8-7 9-4-1-7-4-7-9V7l7-4z"></path>
 </svg>
-<p class="font-bold text-sm leading-tight">JSON-encrypted local data storage</p>
+<p class="font-bold text-sm leading-tight"><strong>JSON-encrypted</strong> local data storage</p>
 </div>
 <div class="p-8 border border-zinc-200 dark:border-zinc-800 rounded-2xl bg-white dark:bg-zinc-950 flex flex-col gap-4 shadow-sm">
 <svg class="w-8 h-8 text-black dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11V7a4 4 0 00-8 0v4m-2 0h12a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2v-7a2 2 0 012-2z"></path>
 </svg>
-<p class="font-bold text-sm leading-tight">User authentication with master-key encryption</p>
+<p class="font-bold text-sm leading-tight">User authentication with <strong>master-key encryption</strong></p>
 </div>
 <div class="p-8 border border-zinc-200 dark:border-zinc-800 rounded-2xl bg-white dark:bg-zinc-950 flex flex-col gap-4 shadow-sm">
 <svg class="w-8 h-8 text-black dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -415,7 +513,7 @@ Register
 <div>
 <h2 class="text-4xl font-black mb-10 tracking-tight">Intentionally Excluded</h2>
 <div class="bg-black text-white p-10 rounded-[2rem] flex flex-col justify-center h-full shadow-2xl">
-<p class="text-zinc-400 text-base mb-8 leading-relaxed">For technical transparency, the following elements are excluded from the repository to ensure a completely clean and private build environment:</p>
+<p class="text-zinc-400 text-base mb-8 leading-relaxed">For technical transparency, the following elements are excluded from the repository to ensure a completely clean and private <strong>open source task manager</strong> build environment:</p>
 <ul class="space-y-6">
 <li class="flex items-center gap-4">
 <svg class="w-5 h-5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -467,7 +565,7 @@ Register
 <div>
 <h3 class="font-bold text-lg mb-2">Encrypted by Design</h3>
 <p class="text-zinc-500 dark:text-zinc-400 text-sm leading-relaxed">
-                        AES-256-GCM JSON storage keeps every record locked to your master key.
+                        <strong>AES-256-GCM encryption</strong> for stored JSON data keeps every record locked to your master key. Your <strong>encrypted project management</strong> data stays private.
                     </p>
 </div>
 </div>
@@ -480,7 +578,7 @@ Register
 <div>
 <h3 class="font-bold text-lg mb-2">AI Assist, Local First</h3>
 <p class="text-zinc-500 dark:text-zinc-400 text-sm leading-relaxed">
-                        Keep workflows fast with optional AI tools that never take control of your data.
+                        Keep workflows fast with optional AI tools that never take control of your data. This <strong>PHP task management system</strong> gives you full ownership.
                     </p>
 </div>
 </div>
@@ -493,7 +591,7 @@ Register
 <div>
 <h3 class="font-bold text-lg mb-2">Knowledge Base Ready</h3>
 <p class="text-zinc-500 dark:text-zinc-400 text-sm leading-relaxed">
-                        Organize notes, documents, and references in a searchable workspace.
+                        Organize notes, documents, and references in a searchable <strong>self-hosted task manager</strong> workspace.
                     </p>
 </div>
 </div>
@@ -533,7 +631,7 @@ Register
 <div>
 <h3 class="font-bold text-lg mb-2">Finance + Operations</h3>
 <p class="text-zinc-500 dark:text-zinc-400 text-sm leading-relaxed">
-                        Track invoices, quotes, and inventory alongside projects, tasks, and notes.
+                        Track invoices, quotes, and inventory alongside <strong>project tracking</strong>, tasks, and notes.
                     </p>
 </div>
 </div>
@@ -546,7 +644,7 @@ Register
 <div>
 <h3 class="font-bold text-lg mb-2">Projects + Tasks</h3>
 <p class="text-zinc-500 dark:text-zinc-400 text-sm leading-relaxed">
-                        Prioritize work, track progress, and deliver with shared task boards.
+                        Prioritize work, track progress, and deliver with shared <strong>task boards</strong>. Complete <strong>project management</strong> solution.
                     </p>
 </div>
 </div>
@@ -572,7 +670,7 @@ Register
 <div>
 <h3 class="font-bold text-lg mb-2">Clients + Billing</h3>
 <p class="text-zinc-500 dark:text-zinc-400 text-sm leading-relaxed">
-                        Manage clients, invoices, and quotes with a clean CRM flow.
+                        Manage clients, invoices, and quotes with a clean CRM flow. Built-in <strong>secure client management</strong>.
                     </p>
 </div>
 </div>

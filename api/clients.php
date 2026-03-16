@@ -4,12 +4,14 @@
  */
 
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../includes/BaseAPI.php';
 
 if (!Auth::check()) {
     errorResponse('Unauthorized', 401);
 }
 
-if (requestMethod() !== 'GET') {
+// CSRF validation for non-GET requests (bypass for MCP)
+if (requestMethod() !== 'GET' && !Auth::isMcp()) {
     $body = getJsonBody();
     $token = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if (!Auth::validateCsrf($token)) {
@@ -17,115 +19,94 @@ if (requestMethod() !== 'GET') {
     }
 }
 
-$db = new Database(getMasterPassword());
+$db = new Database(getMasterPassword(), Auth::userId());
+
+// Verify database connection works
+try {
+    $db->load('clients', true);
+} catch (Exception $e) {
+    errorResponse('Database connection failed: Wrong master password', 401, ERROR_UNAUTHORIZED);
+}
+
 $id = $_GET['id'] ?? null;
+$action = $_GET['action'] ?? null;
+
+/**
+ * Clients API - uses BaseAPI for consistent CRUD operations
+ */
+class ClientsAPI extends BaseAPI {
+    protected function getAllowedFields(): array {
+        return ['name', 'email', 'phone', 'company', 'address', 'website', 'notes'];
+    }
+}
+
+$clientsAPI = new ClientsAPI($db, 'clients');
 
 switch (requestMethod()) {
     case 'GET':
-        $clients = $db->load('clients');
-        
         if ($id) {
-            foreach ($clients as $client) {
-                if ($client['id'] === $id) {
-                    successResponse($client);
-                }
+            $client = $clientsAPI->find($id);
+            if ($client) {
+                successResponse($client);
             }
-            errorResponse('Client not found', 404);
+            $clientsAPI->notFound('Client');
         }
-        
-        successResponse($clients);
+        successResponse($clientsAPI->findAll());
         break;
-        
+
     case 'POST':
         $body = getJsonBody();
-        $action = $_GET['action'] ?? 'add';
-        
+
         if ($action === 'update' && $id) {
-            $clients = $db->load('clients');
-            $found = false;
-            foreach ($clients as $key => $client) {
-                if ($client['id'] === $id) {
-                    $allowedFields = ['name', 'email', 'phone', 'company', 'address', 'notes'];
-                    foreach ($allowedFields as $field) {
-                        if (isset($body[$field])) {
-                            $clients[$key][$field] = $body[$field];
-                        }
-                    }
-                    $clients[$key]['updatedAt'] = date('c');
-                    $db->save('clients', $clients);
-                    $found = true;
-                    successResponse($clients[$key], 'Client updated');
-                    break;
-                }
+            $client = $clientsAPI->update($id, $body);
+            if ($client) {
+                successResponse($client, 'Client updated');
             }
-            if (!$found) errorResponse('Client not found', 404);
-        } else {
-            // New client
-            if (empty($body['name']) || empty($body['email'])) {
-                errorResponse('Name and email are required');
-            }
-            
-            $clients = $db->load('clients');
-            $newClient = [
-                'id' => $db->generateId(),
-                'name' => $body['name'],
-                'email' => $body['email'],
-                'phone' => $body['phone'] ?? '',
-                'company' => $body['company'] ?? '',
-                'address' => $body['address'] ?? '',
-                'notes' => $body['notes'] ?? '',
-                'createdAt' => date('c'),
-                'updatedAt' => date('c')
-            ];
-            
-            $clients[] = $newClient;
-            $db->save('clients', $clients);
-            successResponse($newClient, 'Client added');
+            $clientsAPI->notFound('Client');
         }
+
+        // Create new client
+        $validationError = $clientsAPI->validateRequired($body, ['name', 'email']);
+        if ($validationError) {
+            $clientsAPI->validationError($validationError);
+        }
+
+        $client = $clientsAPI->create($body);
+        if ($client) {
+            successResponse($client, 'Client added');
+        }
+
+        errorResponse('Failed to create client', 500, ERROR_SERVER);
         break;
-        
+
     case 'PUT':
         if (!$id) {
-            errorResponse('Client ID required');
+            errorResponse('Client ID required', 400, ERROR_VALIDATION);
         }
-        
+
         $body = getJsonBody();
-        $clients = $db->load('clients');
-        
-        foreach ($clients as $key => $client) {
-            if ($client['id'] === $id) {
-                $allowedFields = ['name', 'email', 'phone', 'company', 'address', 'notes'];
-                foreach ($allowedFields as $field) {
-                    if (isset($body[$field])) {
-                        $clients[$key][$field] = $body[$field];
-                    }
-                }
-                $clients[$key]['updatedAt'] = date('c');
-                
-                $db->save('clients', $clients);
-                successResponse($clients[$key], 'Client updated');
-            }
+        $client = $clientsAPI->update($id, $body);
+
+        if ($client) {
+            successResponse($client, 'Client updated');
         }
-        
-        errorResponse('Client not found', 404);
+
+        $clientsAPI->notFound('Client');
         break;
-        
+
     case 'DELETE':
         if (!$id) {
-            errorResponse('Client ID required');
+            errorResponse('Client ID required', 400, ERROR_VALIDATION);
         }
-        
-        $clients = $db->load('clients');
-        $filtered = array_filter($clients, fn($c) => $c['id'] !== $id);
-        
-        if (count($filtered) === count($clients)) {
-            errorResponse('Client not found', 404);
+
+        if ($clientsAPI->delete($id)) {
+            successResponse(null, 'Client deleted');
         }
-        
-        $db->save('clients', array_values($filtered));
-        successResponse(null, 'Client deleted');
+
+        $clientsAPI->notFound('Client');
         break;
-        
+
     default:
         errorResponse('Method not allowed', 405);
 }
+
