@@ -65,3 +65,13 @@ server.pid
 
 # Release artifacts (backups are large and shouldn't be in git)
 release-artifacts/
+
+# Node dependencies
+node_modules/
+
+# Android build artifacts
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/web-source/

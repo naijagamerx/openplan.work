@@ -169,7 +169,7 @@ switch ($action) {
             errorResponse('Filename is required', 400);
         }
 
-        $filepath = DATA_PATH . '/backups/' . basename($filename);
+        $filepath = $backup->getBackupPath() . '/' . basename($filename);
 
         if (!file_exists($filepath)) {
             errorResponse('Backup file not found', 404);

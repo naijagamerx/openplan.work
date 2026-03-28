@@ -897,24 +897,89 @@ class Auth {
 
     /**
      * Check if request is from MCP (Master Control Panel) via Header
+     *
+     * Supports three authentication modes:
+     * 1. Static MCP secret (MCP_MASTER_PASSWORD env var)
+     * 2. MCP API Token (X-MCP-Api-Token header) - recommended for multi-user
+     * 3. Legacy: Email + Master Password (X-MCP-User-Email + X-Master-Password)
      */
     public static function isMcp(): bool {
-        $header = $_SERVER['HTTP_X_MASTER_PASSWORD'] ?? '';
-        if ($header === '') {
-            return false;
-        }
-
         // MCP access is restricted to local requests by default.
         if (!self::isLoopbackRequest()) {
             return false;
         }
 
-        $expected = self::getExpectedMcpSecret();
-        if ($expected === '') {
+        $mcpApiToken = trim((string)($_SERVER['HTTP_X_MCP_API_TOKEN'] ?? ''));
+
+        // Mode 1: MCP API Token (recommended for multi-user setups)
+        if ($mcpApiToken !== '') {
+            try {
+                // Get master password from HTTP header (sent by MCP server) or environment
+                $masterPassword = $_SERVER['HTTP_X_MASTER_PASSWORD'] ?? getenv('LAZYMAN_MASTER_PASSWORD') ?: '';
+                $db = new Database($masterPassword);
+                $users = $db->load('users', true);
+                foreach ($users as $user) {
+                    if (($user['mcpApiToken'] ?? '') === $mcpApiToken) {
+                        if (!empty($user['banned'])) {
+                            return false;
+                        }
+                        // Store user ID for later use in check()
+                        self::$mcpUserId = $user['id'];
+                        // Store the master password for this session
+                        if (session_status() === PHP_SESSION_NONE) {
+                            session_start();
+                        }
+                        if (!isset($_SESSION[SESSION_MASTER_KEY])) {
+                            $_SESSION[SESSION_MASTER_KEY] = $masterPassword;
+                        }
+                        return true;
+                    }
+                }
+            } catch (Exception $e) {
+                return false;
+            }
             return false;
         }
 
-        return hash_equals($expected, $header);
+        // Mode 2: Static MCP secret (environment variable)
+        $header = $_SERVER['HTTP_X_MASTER_PASSWORD'] ?? '';
+        if ($header !== '') {
+            $expected = self::getExpectedMcpSecret();
+            if ($expected !== '') {
+                return hash_equals($expected, $header);
+            }
+        }
+
+        // Mode 3: Legacy email + master password fallback
+        $mcpUserEmail = trim((string)($_SERVER['HTTP_X_MCP_USER_EMAIL'] ?? ''));
+        if ($mcpUserEmail === '' || $header === '') {
+            return false;
+        }
+
+        try {
+            $db = new Database($header);
+            $users = $db->load('users', true);
+            foreach ($users as $user) {
+                if (($user['email'] ?? '') !== $mcpUserEmail) {
+                    continue;
+                }
+                if (!empty($user['banned'])) {
+                    return false;
+                }
+                $userId = (string)($user['id'] ?? '');
+                if ($userId === '') {
+                    return false;
+                }
+
+                $userDb = new Database($header, $userId);
+                $userDb->load(self::USER_KEY_CHECK_COLLECTION, true);
+                return true;
+            }
+        } catch (Exception $e) {
+            return false;
+        }
+
+        return false;
     }
 
     /**
@@ -923,32 +988,36 @@ class Auth {
     public static function check(): bool {
         // Allow MCP access
         if (self::isMcp()) {
-            if (session_status() === PHP_SESSION_NONE) {
-                session_start();
-            }
-            if (!isset($_SESSION[SESSION_MASTER_KEY])) {
-                $_SESSION[SESSION_MASTER_KEY] = self::getExpectedMcpSecret();
-            }
+            // For MCP API Token mode, the userId is already set in isMcp()
+            // For legacy modes, we need to resolve from email
+            if (self::$mcpUserId === null) {
+                if (session_status() === PHP_SESSION_NONE) {
+                    session_start();
+                }
+                if (!isset($_SESSION[SESSION_MASTER_KEY])) {
+                    $_SESSION[SESSION_MASTER_KEY] = $_SERVER['HTTP_X_MASTER_PASSWORD'] ?? self::getExpectedMcpSecret();
+                }
 
-            // Resolve MCP user context from header
-            $mcpUserEmail = $_SERVER['HTTP_X_MCP_USER_EMAIL'] ?? '';
-            if ($mcpUserEmail !== '') {
-                try {
-                    // We need to load users to find the ID. 
-                    // Use the secret directly since we are in MCP context.
-                    $db = new Database($_SESSION[SESSION_MASTER_KEY]);
-                    $users = $db->load('users', true);
-                    foreach ($users as $user) {
-                        if (($user['email'] ?? '') === $mcpUserEmail) {
-                            if (!empty($user['banned'])) {
-                                return false; // Reject banned MCP user
+                // Resolve MCP user context from header (legacy mode)
+                $mcpUserEmail = $_SERVER['HTTP_X_MCP_USER_EMAIL'] ?? '';
+                if ($mcpUserEmail !== '') {
+                    try {
+                        // We need to load users to find the ID.
+                        // Use the secret directly since we are in MCP context.
+                        $db = new Database($_SESSION[SESSION_MASTER_KEY]);
+                        $users = $db->load('users', true);
+                        foreach ($users as $user) {
+                            if (($user['email'] ?? '') === $mcpUserEmail) {
+                                if (!empty($user['banned'])) {
+                                    return false; // Reject banned MCP user
+                                }
+                                self::$mcpUserId = $user['id'];
+                                break;
                             }
-                            self::$mcpUserId = $user['id'];
-                            break;
                         }
+                    } catch (Exception $e) {
+                        // Ignore error, fallback to global scope
                     }
-                } catch (Exception $e) {
-                    // Ignore error, fallback to global scope
                 }
             }
 
@@ -1435,5 +1504,103 @@ class Auth {
         }
 
         return null;
+    }
+
+    /**
+     * Generate or regenerate an MCP API token for a user
+     *
+     * @param string $userId The user ID
+     * @return array ['success' => bool, 'token' => string|null, 'error' => string|null]
+     */
+    public function generateMcpApiToken(string $userId): array {
+        try {
+            $users = $this->db->load('users', true);
+            $userFound = false;
+
+            foreach ($users as &$user) {
+                if (($user['id'] ?? '') === $userId) {
+                    if (!empty($user['banned'])) {
+                        return ['success' => false, 'error' => 'Cannot generate token for banned user'];
+                    }
+
+                    $userFound = true;
+                    // Generate a secure random token
+                    $token = bin2hex(random_bytes(32)); // 64 hex characters = 32 bytes
+                    $user['mcpApiToken'] = $token;
+                    $user['mcpApiTokenGeneratedAt'] = date('c');
+                    $user['updatedAt'] = date('c');
+                    break;
+                }
+            }
+
+            if (!$userFound) {
+                return ['success' => false, 'error' => 'User not found'];
+            }
+
+            if ($this->db->save('users', $users)) {
+                return ['success' => true, 'token' => $token];
+            }
+
+            return ['success' => false, 'error' => 'Failed to save token'];
+        } catch (Exception $e) {
+            return ['success' => false, 'error' => 'Database error: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Get a user's MCP API token (returns null if not set)
+     *
+     * @param string $userId The user ID
+     * @return string|null The token or null if not set
+     */
+    public function getMcpApiToken(string $userId): ?string {
+        try {
+            $users = $this->db->load('users', true);
+
+            foreach ($users as $user) {
+                if (($user['id'] ?? '') === $userId) {
+                    return $user['mcpApiToken'] ?? null;
+                }
+            }
+
+            return null;
+        } catch (Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Revoke a user's MCP API token
+     *
+     * @param string $userId The user ID
+     * @return array ['success' => bool, 'error' => string|null]
+     */
+    public function revokeMcpApiToken(string $userId): array {
+        try {
+            $users = $this->db->load('users', true);
+            $userFound = false;
+
+            foreach ($users as &$user) {
+                if (($user['id'] ?? '') === $userId) {
+                    $userFound = true;
+                    unset($user['mcpApiToken']);
+                    unset($user['mcpApiTokenGeneratedAt']);
+                    $user['updatedAt'] = date('c');
+                    break;
+                }
+            }
+
+            if (!$userFound) {
+                return ['success' => false, 'error' => 'User not found'];
+            }
+
+            if ($this->db->save('users', $users)) {
+                return ['success' => true];
+            }
+
+            return ['success' => false, 'error' => 'Failed to revoke token'];
+        } catch (Exception $e) {
+            return ['success' => false, 'error' => 'Database error: ' . $e->getMessage()];
+        }
     }
 }

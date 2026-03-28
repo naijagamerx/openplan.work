@@ -35,6 +35,13 @@ class Backup {
     }
 
     /**
+     * Get the backup storage path
+     */
+    public function getBackupPath(): string {
+        return $this->backupPath;
+    }
+
+    /**
      * Create a new backup
      */
     public function createBackup(string $type = self::TYPE_FULL, string $description = ''): array {

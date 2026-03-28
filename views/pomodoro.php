@@ -212,7 +212,7 @@ $minutes = floor(($totalFocusTime % 3600) / 60);
 
                 <div class="mt-6 pt-6 border-t border-slate-100 space-y-4">
                     <label class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-500">
-                        <input id="music-autoplay" type="checkbox" class="rounded">
+                        <input id="music-autoplay" type="checkbox" class="rounded" checked>
                         Play while running
                     </label>
                     <label class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-500 ml-6">
@@ -885,7 +885,7 @@ function setupMusicPlayer() {
         deleteBtn.disabled = !canDelete;
     }
 
-    autoplayToggle.checked = localStorage.getItem(MUSIC_AUTOPLAY_KEY) === '1';
+    autoplayToggle.checked = localStorage.getItem(MUSIC_AUTOPLAY_KEY) !== '0';
     loopToggle.checked = localStorage.getItem(MUSIC_LOOP_KEY) === '1';
     volumeSlider.value = localStorage.getItem(MUSIC_VOLUME_KEY) || '0.6';
     audio.volume = parseFloat(volumeSlider.value || '0.6');

@@ -27,9 +27,9 @@ if ($leftAction === 'back') {
     $leftIcon = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/>';
     $leftClick = 'onclick="history.back()"';
 } else {
-    // Menu button - toggle off-canvas menu
-    $leftIcon = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>';
-    $leftClick = 'onclick="Mobile.ui.toggleMenu()"';
+    // Home button - navigate to dashboard
+    $leftIcon = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/>';
+    $leftClick = 'onclick="window.location.href=\'?page=dashboard\'"';
 }
 
 // Determine right icon
@@ -75,7 +75,7 @@ if ($rightAction === 'add') {
 }
 ?>
 <!-- Universal Mobile Header -->
-<header class="sticky top-0 z-50 mb-2 bg-white/95 dark:bg-zinc-950/95 text-black dark:text-white backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between">
+<header class="sticky top-0 z-50 mb-2 bg-white/95 dark:bg-zinc-950/95 text-black dark:text-white backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 px-4 py-3 pb-3 flex items-center justify-between" style="padding-top: max(0.75rem, env(safe-area-inset-top)); min-height: calc(3.5rem + env(safe-area-inset-top))">
     <button <?= $leftClick ?> class="p-2 -ml-2 touch-target">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <?= $leftIcon ?>

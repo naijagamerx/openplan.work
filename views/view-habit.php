@@ -413,7 +413,7 @@ async function toggleTodayCompletion() {
 
     const response = await api.post('api/habits.php?action=complete', {
         habitId: habitId,
-        date: new Date().toISOString().split('T')[0],
+        date: new Date().toLocaleDateString('en-CA'),
         status: completed ? 'complete' : 'missed',
         duration: duration,
         csrf_token: CSRF_TOKEN

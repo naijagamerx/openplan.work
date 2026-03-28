@@ -64,7 +64,10 @@ $GLOBALS['SITE_NAME'] = null;
 
 // Auto-detect base URL
 // Auto-detect from server headers (works for both MAMP and CLI server)
-$protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http");
+$isHttps = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ||
+           (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ||
+           (isset($_SERVER['REQUEST_SCHEME']) && $_SERVER['REQUEST_SCHEME'] === 'https');
+$protocol = $isHttps ? "https" : "http";
 $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
 $script = $_SERVER['SCRIPT_NAME'] ?? '';
 
@@ -182,6 +185,7 @@ define('API_WINDOW_SECONDS', 3600);        // 1 hour window for API limits
 // Cron / Scheduler Settings
 define('CRON_ENABLED', true);                      // Enable/disable scheduled jobs
 define('CRON_MODE', $_ENV['CRON_MODE'] ?? 'both'); // local|web|both - supports Windows scheduler (local), external cron services (web), or both
+define('CRON_KEY', $_ENV['CRON_KEY'] ?? 'change_this_to_a_secure_random_key'); // Secret key for external cron requests (set in .env or change this value)
 define('INVOICE_REMINDER_DAYS', 3);                 // Remind X days before invoice due
 define('TASK_REMINDER_DAYS', 1);                    // Remind X days before task due
 define('AUDIT_RETENTION_DAYS', 90);                 // Keep audit logs for X days

@@ -33,6 +33,14 @@ class AIFunctions {
             self::getProjectTasks(),
             self::createHabit(),
             self::listHabits(),
+            self::deleteHabit(),
+            self::toggleHabitActive(),
+            self::deleteNote(),
+            self::deleteProject(),
+            self::deleteClient(),
+            self::completeHabit(),
+            self::startHabitTimer(),
+            self::stopHabitTimer(),
             self::createInventoryItem(),
             self::listInventory(),
             self::setPomodoroTimer(),
@@ -734,6 +742,207 @@ class AIFunctions {
                 'parameters' => [
                     'type' => 'object',
                     'properties' => (object)[]
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Function: Delete Habit
+     */
+    private static function deleteHabit(): array {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'delete_habit',
+                'description' => 'Delete a habit by its ID or name.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'habitId' => [
+                            'type' => 'string',
+                            'description' => 'The ID of the habit to delete'
+                        ],
+                        'name' => [
+                            'type' => 'string',
+                            'description' => 'Exact habit name to delete when ID is unknown'
+                        ]
+                    ],
+                    'required' => []
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Function: Toggle Habit Active
+     */
+    private static function toggleHabitActive(): array {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'toggle_habit_active',
+                'description' => 'Archive (deactivate) or reactivate a habit.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'habitId' => [
+                            'type' => 'string',
+                            'description' => 'The ID of the habit to archive or reactivate'
+                        ]
+                    ],
+                    'required' => ['habitId']
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Function: Delete Note
+     */
+    private static function deleteNote(): array {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'delete_note',
+                'description' => 'Delete a note by its ID.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'noteId' => [
+                            'type' => 'string',
+                            'description' => 'The ID of the note to delete'
+                        ]
+                    ],
+                    'required' => ['noteId']
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Function: Delete Project
+     */
+    private static function deleteProject(): array {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'delete_project',
+                'description' => 'Delete a project by its ID.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'projectId' => [
+                            'type' => 'string',
+                            'description' => 'The ID of the project to delete'
+                        ]
+                    ],
+                    'required' => ['projectId']
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Function: Delete Client
+     */
+    private static function deleteClient(): array {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'delete_client',
+                'description' => 'Delete a client by its ID.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'clientId' => [
+                            'type' => 'string',
+                            'description' => 'The ID of the client to delete'
+                        ]
+                    ],
+                    'required' => ['clientId']
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Function: Complete Habit
+     */
+    private static function completeHabit(): array {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'complete_habit',
+                'description' => 'Mark a habit as complete, incomplete, or missed for a specific date.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'habitId' => [
+                            'type' => 'string',
+                            'description' => 'The ID of the habit'
+                        ],
+                        'status' => [
+                            'type' => 'string',
+                            'enum' => ['complete', 'incomplete', 'missed'],
+                            'description' => 'Status for the day (complete, incomplete, or missed)'
+                        ],
+                        'date' => [
+                            'type' => 'string',
+                            'description' => 'Date in YYYY-MM-DD format. Defaults to today.'
+                        ],
+                        'duration' => [
+                            'type' => 'integer',
+                            'description' => 'Optional duration spent in seconds'
+                        ]
+                    ],
+                    'required' => ['habitId', 'status']
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Function: Start Habit Timer
+     */
+    private static function startHabitTimer(): array {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'start_habit_timer',
+                'description' => 'Start a timer for a specific habit.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'habitId' => [
+                            'type' => 'string',
+                            'description' => 'The ID of the habit'
+                        ]
+                    ],
+                    'required' => ['habitId']
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Function: Stop Habit Timer
+     */
+    private static function stopHabitTimer(): array {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'stop_habit_timer',
+                'description' => 'Stop an active timer for a habit.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'habitId' => [
+                            'type' => 'string',
+                            'description' => 'The ID of the habit'
+                        ]
+                    ],
+                    'required' => ['habitId']
                 ]
             ]
         ];

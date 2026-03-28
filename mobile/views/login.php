@@ -169,7 +169,8 @@ $success = $_GET['success'] ?? '';
         type="button"
         data-theme-toggle
         onclick="toggleLoginTheme()"
-        class="fixed top-4 right-4 z-50 bg-white/90 dark:bg-zinc-900/90 border border-gray-200 dark:border-zinc-700 text-black dark:text-white p-2 rounded-full shadow-sm touch-target"
+        class="fixed right-4 z-50 bg-white/90 dark:bg-zinc-900/90 border border-gray-200 dark:border-zinc-700 text-black dark:text-white p-2 rounded-full shadow-sm touch-target"
+        style="top: calc(1rem + env(safe-area-inset-top))"
         aria-label="Switch theme"
     >
         <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -180,7 +181,7 @@ $success = $_GET['success'] ?? '';
         </svg>
     </button>
 
-    <div class="bg-[#000000] flex items-center justify-center relative overflow-hidden rounded-b-[2rem] dark:border-b dark:border-zinc-800">
+    <div class="bg-[#000000] flex items-center justify-center relative overflow-hidden rounded-b-[2rem] dark:border-b dark:border-zinc-800" style="padding-top: env(safe-area-inset-top)">
         <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:40px_40px]"></div>
 
         <div class="relative z-10 flex flex-col items-center gap-6 py-16 px-6">
@@ -204,7 +205,7 @@ $success = $_GET['success'] ?? '';
         </div>
     </div>
 
-    <div class="flex-1 flex flex-col bg-white dark:bg-zinc-950 px-6 py-10">
+    <div class="flex-1 flex flex-col bg-white dark:bg-zinc-950 px-6 py-10" style="padding-bottom: max(2.5rem, calc(2.5rem + env(safe-area-inset-bottom)))">
         <main class="flex-1 flex flex-col justify-center max-w-md mx-auto w-full">
             <!-- App-Style Notification Banner -->
             <div id="app-notification" class="hidden mb-6 rounded-xl p-4 flex items-center gap-3 transition-all duration-300">

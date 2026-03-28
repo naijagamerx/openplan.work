@@ -14,6 +14,9 @@ header('Content-Type: application/json');
 // Allow long execution time for AI loops
 set_time_limit(300);
 
+// Ensure UTC timezone
+date_default_timezone_set('UTC');
+
 // Check authentication
 if (!Auth::check()) {
     http_response_code(401);
@@ -70,13 +73,37 @@ try {
                     $body['autoConfirm'] ?? false,
                     $body['provider'] ?? null,
                     $body['model'] ?? null,
-                    $body['kbFolderId'] ?? null
+                    $body['kbFolderId'] ?? null,
+                    $body['contextLevel'] ?? 'medium',
+                    $body['outputLength'] ?? 'normal'
                 );
                 successResponse($result);
             } catch (Exception $e) {
                 error_log('AI Agent: Chat method threw exception: ' . $e->getMessage());
                 throw $e;
             }
+            break;
+
+        case 'start_conversation':
+            $body = getJsonBody();
+            if (!Auth::validateCsrf($body['csrf_token'] ?? '')) {
+                errorResponse('Invalid CSRF token', 403);
+            }
+            $seed = trim((string)($body['titleSeed'] ?? 'New Conversation'));
+            $conversationId = $agent->startConversation($seed !== '' ? $seed : 'New Conversation');
+            successResponse(['conversationId' => $conversationId]);
+            break;
+
+        case 'get_conversation_events':
+            $conversationId = $_GET['id'] ?? '';
+            if ($conversationId === '') {
+                errorResponse('Conversation ID is required', 400);
+            }
+            $cursor = (int)($_GET['cursor'] ?? 0);
+            $limit = (int)($_GET['limit'] ?? 100);
+            $memory = new ConversationMemory($db, $conversationId);
+            $payload = $memory->getEventsSince($conversationId, $cursor, $limit);
+            successResponse($payload);
             break;
 
         case 'confirm_action':
@@ -248,6 +275,18 @@ try {
                 'cancelled' => $updated,
                 'message' => $updated ? 'Cancellation requested' : 'Conversation not found'
             ]);
+            break;
+
+        case 'suggest_actions':
+            // Get proactive suggestions based on system state
+            // No CSRF required for read-only suggestions (or use GET if preferred, but keeping consistency)
+            // But usually we want to protect all API calls. 
+            // Since this is a "GET" like operation, we can relax CSRF if needed, 
+            // but let's require it if the client sends it, or skip if it's just a UI fetch on load.
+            // For security, let's keep it simple: just return suggestions.
+            
+            $suggestions = $agent->getProactiveSuggestions();
+            successResponse(['suggestions' => $suggestions]);
             break;
 
         default:

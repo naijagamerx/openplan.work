@@ -214,7 +214,7 @@ if ($masterPassword === '') {
                 <p class="text-xs text-amber-700 mt-2"><?php echo e($backupReminder['storage']); ?></p>
             </div>
             <div class="flex items-center gap-3">
-                <a href="?page=import-data" class="px-4 py-2 bg-black text-white rounded-xl font-medium hover:bg-gray-800 transition">Open Data Management</a>
+                <a href="?page=import-data" class="px-4 py-2 bg-black text-white rounded-xl font-medium hover:bg-gray-800 transition">Data Management</a>
                 <button type="button" onclick="dismissBackupReminder()" class="px-4 py-2 border border-amber-300 text-amber-900 rounded-xl font-medium hover:bg-amber-100 transition">Dismiss</button>
             </div>
         </div>

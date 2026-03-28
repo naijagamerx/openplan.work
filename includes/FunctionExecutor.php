@@ -214,8 +214,53 @@ class FunctionExecutor {
                 }
                 break;
 
+            case 'delete_habit':
+                if (empty($parameters['habitId']) && empty($parameters['id']) && empty($parameters['name'])) {
+                    $errors[] = "Habit ID or name is required";
+                }
+                break;
+
+            case 'delete_note':
+                if (empty($parameters['noteId']) && empty($parameters['id'])) {
+                    $errors[] = "Note ID is required";
+                }
+                break;
+
+            case 'delete_project':
+                if (empty($parameters['projectId']) && empty($parameters['id'])) {
+                    $errors[] = "Project ID is required";
+                }
+                break;
+
+            case 'delete_client':
+                if (empty($parameters['clientId']) && empty($parameters['id'])) {
+                    $errors[] = "Client ID is required";
+                }
+                break;
+
+            case 'complete_habit':
+                if (empty($parameters['habitId'])) {
+                    $errors[] = "Habit ID is required";
+                }
+                if (!empty($parameters['status']) && !in_array(strtolower($parameters['status']), ['complete', 'incomplete', 'missed'], true)) {
+                    $errors[] = "Status must be 'complete', 'incomplete', or 'missed'";
+                }
+                break;
+
+            case 'start_habit_timer':
+            case 'stop_habit_timer':
+                if (empty($parameters['habitId'])) {
+                    $errors[] = "Habit ID is required";
+                }
+                break;
+
             case 'list_habits':
                 // No parameters required
+                break;
+            case 'toggle_habit_active':
+                if (empty($parameters['habitId'])) {
+                    $errors[] = "Habit ID is required";
+                }
                 break;
 
             case 'create_inventory_item':
@@ -314,8 +359,24 @@ class FunctionExecutor {
                 return $this->getProjectTasks($parameters);
             case 'create_habit':
                 return $this->createHabit($parameters);
+            case 'delete_habit':
+                return $this->deleteHabit($parameters);
+            case 'delete_note':
+                return $this->deleteNote($parameters);
+            case 'delete_project':
+                return $this->deleteProject($parameters);
+            case 'delete_client':
+                return $this->deleteClient($parameters);
+            case 'complete_habit':
+                return $this->completeHabit($parameters);
+            case 'start_habit_timer':
+                return $this->startHabitTimer($parameters);
+            case 'stop_habit_timer':
+                return $this->stopHabitTimer($parameters);
             case 'list_habits':
                 return $this->listHabits($parameters);
+            case 'toggle_habit_active':
+                return $this->toggleHabitActive($parameters);
             case 'create_inventory_item':
                 return $this->createInventoryItem($parameters);
             case 'list_inventory':
@@ -1219,8 +1280,7 @@ class FunctionExecutor {
             'goal' => $params['goal'] ?? 1,
             'category' => $params['category'] ?? 'General',
             'createdAt' => gmdate('c'),
-            'updatedAt' => gmdate('c'),
-            'completions' => []
+            'updatedAt' => gmdate('c')
         ];
 
         $habits[] = $habit;
@@ -1238,20 +1298,463 @@ class FunctionExecutor {
      */
     private function listHabits(array $params): array {
         $habits = $this->db->load('habits') ?? [];
+        $completions = $this->db->load('habit_completions') ?? [];
+        $timerSessions = $this->db->load('habit_timer_sessions') ?? [];
+        $today = date('Y-m-d');
+
+        $calculateHabitStreak = function(string $habitId, array $allCompletions, string $todayDate): int {
+            $habitCompletions = array_filter(
+                $allCompletions,
+                fn($c) => ($c['habitId'] ?? '') === $habitId && ($c['status'] ?? '') === 'complete'
+            );
+            $completedDates = array_unique(array_column($habitCompletions, 'date'));
+            sort($completedDates);
+
+            $streak = 0;
+            $checkDate = new DateTime($todayDate);
+            for ($i = 0; $i < 365; $i++) {
+                $checkDateStr = $checkDate->format('Y-m-d');
+                $hasCompletion = in_array($checkDateStr, $completedDates, true);
+                if ($hasCompletion) {
+                    $streak++;
+                    $checkDate->modify('-1 day');
+                } else {
+                    if ($checkDateStr === $todayDate) {
+                        $checkDate->modify('-1 day');
+                        continue;
+                    }
+                    break;
+                }
+            }
+            return $streak;
+        };
+
+        $calculateLongestStreak = function(string $habitId, array $allCompletions): int {
+            $habitCompletions = array_filter(
+                $allCompletions,
+                fn($c) => ($c['habitId'] ?? '') === $habitId && ($c['status'] ?? '') === 'complete'
+            );
+            $completedDates = array_unique(array_column($habitCompletions, 'date'));
+            sort($completedDates);
+
+            if (empty($completedDates)) {
+                return 0;
+            }
+
+            $longestStreak = 1;
+            $currentStreak = 1;
+            for ($i = 1; $i < count($completedDates); $i++) {
+                $prevDate = new DateTime($completedDates[$i - 1]);
+                $currDate = new DateTime($completedDates[$i]);
+                $diff = $currDate->diff($prevDate)->days;
+
+                if ($diff === 1) {
+                    $currentStreak++;
+                } else {
+                    $longestStreak = max($longestStreak, $currentStreak);
+                    $currentStreak = 1;
+                }
+            }
+
+            return max($longestStreak, $currentStreak);
+        };
 
         return [
             'success' => true,
-            'habits' => array_map(function($h) {
-                return [
-                    'id' => $h['id'],
-                    'name' => $h['name'],
-                    'frequency' => $h['frequency'],
-                    'category' => $h['category'],
-                    'goal' => $h['goal'],
-                    'completions' => count($h['completions'] ?? [])
-                ];
+            'habits' => array_map(function($habit) use ($completions, $timerSessions, $today, $calculateHabitStreak, $calculateLongestStreak) {
+                $habitCompletions = array_filter(
+                    $completions,
+                    fn($c) => ($c['habitId'] ?? '') === ($habit['id'] ?? '')
+                );
+                $habitTimerSessions = array_filter(
+                    $timerSessions,
+                    fn($s) => ($s['habitId'] ?? '') === ($habit['id'] ?? '')
+                );
+
+                $todayCompleted = false;
+                foreach ($habitCompletions as $comp) {
+                    if (($comp['date'] ?? '') === $today && ($comp['status'] ?? '') === 'complete') {
+                        $todayCompleted = true;
+                        break;
+                    }
+                }
+
+                $completedDates = array_filter(array_column($habitCompletions, 'date'), fn($d) => isset($d));
+                $totalDuration = array_sum(array_map(fn($s) => $s['duration'] ?? 0, $habitTimerSessions));
+                $activeTimer = array_filter($habitTimerSessions, fn($s) => ($s['status'] ?? '') === 'running');
+
+                $weeklyProgress = [];
+                for ($i = 6; $i >= 0; $i--) {
+                    $date = date('Y-m-d', strtotime("-$i days"));
+                    $dayCompletions = array_filter(
+                        $habitCompletions,
+                        fn($c) => ($c['date'] ?? '') === $date && ($c['status'] ?? '') === 'complete'
+                    );
+                    $weeklyProgress[] = count($dayCompletions) > 0 ? 100 : 0;
+                }
+
+                $habit['completionCount'] = count($habitCompletions);
+                $habit['todayCompleted'] = $todayCompleted;
+                $habit['completedDates'] = array_values($completedDates);
+                $habit['totalMinutes'] = round($totalDuration / 60, 2);
+                $habit['sessionCount'] = count($habitTimerSessions);
+                $habit['activeTimer'] = !empty($activeTimer) ? array_values($activeTimer)[0] : null;
+                $habit['currentStreak'] = $calculateHabitStreak((string)($habit['id'] ?? ''), $completions, $today);
+                $habit['longestStreak'] = $calculateLongestStreak((string)($habit['id'] ?? ''), $completions);
+                $habit['weeklyProgress'] = $weeklyProgress;
+
+                return $habit;
             }, $habits),
             'count' => count($habits)
+        ];
+    }
+
+    /**
+     * Delete a habit
+     */
+    private function deleteHabit(array $params): array {
+        $habits = $this->db->load('habits') ?? [];
+        $habitId = $params['habitId'] ?? $params['id'] ?? '';
+        $habitNameParam = trim((string)($params['name'] ?? ''));
+        $habitFound = false;
+        $deletedName = 'Habit';
+
+        if ($habitId === '' && $habitNameParam !== '') {
+            $matches = [];
+            foreach ($habits as $h) {
+                if (strcasecmp((string)($h['name'] ?? ''), $habitNameParam) === 0) {
+                    $matches[] = $h;
+                }
+            }
+            if (count($matches) === 1) {
+                $habitId = (string)($matches[0]['id'] ?? '');
+            } elseif (count($matches) > 1) {
+                throw new ValidationException("Multiple habits match name '{$habitNameParam}'. Please specify an ID.");
+            }
+        }
+
+        foreach ($habits as $key => $h) {
+            if ($h['id'] === $habitId) {
+                $habitFound = true;
+                $deletedName = $h['name'];
+                unset($habits[$key]);
+                break;
+            }
+        }
+
+        if (!$habitFound) {
+            throw new ValidationException("Habit not found with ID: {$habitId}");
+        }
+
+        $this->db->save('habits', array_values($habits));
+
+        // Clean up completions
+        $completions = $this->db->load('habit_completions') ?? [];
+        $originalCount = count($completions);
+        $completions = array_filter($completions, fn($c) => ($c['habitId'] ?? '') !== $habitId);
+        
+        if (count($completions) !== $originalCount) {
+            $this->db->save('habit_completions', array_values($completions));
+        }
+
+        return [
+            'success' => true,
+            'deletedId' => $habitId,
+            'message' => "Deleted habit: {$deletedName}"
+        ];
+    }
+
+    /**
+     * Toggle habit active status (archive/reactivate)
+     */
+    private function toggleHabitActive(array $params): array {
+        $habitId = $params['habitId'] ?? '';
+        $habits = $this->db->load('habits') ?? [];
+        $habitFound = false;
+        $habitName = 'Habit';
+        $newStatus = false;
+
+        foreach ($habits as $key => $h) {
+            if (($h['id'] ?? '') === $habitId) {
+                $habitFound = true;
+                $habitName = $h['name'] ?? $habitName;
+                $currentStatus = isset($h['isActive']) ? (bool)$h['isActive'] : true;
+                $habits[$key]['isActive'] = !$currentStatus;
+                $habits[$key]['updatedAt'] = date('c');
+                $newStatus = $habits[$key]['isActive'];
+                break;
+            }
+        }
+
+        if (!$habitFound) {
+            throw new ValidationException("Habit not found with ID: {$habitId}");
+        }
+
+        $this->db->save('habits', $habits);
+
+        return [
+            'success' => true,
+            'habitId' => $habitId,
+            'isActive' => $newStatus,
+            'message' => $newStatus ? "Reactivated habit '{$habitName}'" : "Archived habit '{$habitName}'"
+        ];
+    }
+
+    /**
+     * Delete a note
+     */
+    private function deleteNote(array $params): array {
+        $notes = $this->db->load('notes') ?? [];
+        $noteId = $params['noteId'] ?? $params['id'] ?? '';
+        $noteFound = false;
+        $deletedTitle = 'Note';
+
+        foreach ($notes as $key => $n) {
+            if ($n['id'] === $noteId) {
+                $noteFound = true;
+                $deletedTitle = $n['title'] ?? 'Untitled Note';
+                unset($notes[$key]);
+                break;
+            }
+        }
+
+        if (!$noteFound) {
+            throw new ValidationException("Note not found with ID: {$noteId}");
+        }
+
+        $this->db->save('notes', array_values($notes));
+
+        return [
+            'success' => true,
+            'deletedId' => $noteId,
+            'message' => "Deleted note: {$deletedTitle}"
+        ];
+    }
+
+    /**
+     * Delete a project
+     */
+    private function deleteProject(array $params): array {
+        $projects = $this->db->load('projects') ?? [];
+        $projectId = $params['projectId'] ?? $params['id'] ?? '';
+        $projectFound = false;
+        $deletedName = 'Project';
+
+        foreach ($projects as $key => $p) {
+            if ($p['id'] === $projectId) {
+                $projectFound = true;
+                $deletedName = $p['name'];
+                unset($projects[$key]);
+                break;
+            }
+        }
+
+        if (!$projectFound) {
+            throw new ValidationException("Project not found with ID: {$projectId}");
+        }
+
+        $this->db->save('projects', array_values($projects));
+        // Note: Tasks inside the project are deleted automatically as they are embedded.
+
+        return [
+            'success' => true,
+            'deletedId' => $projectId,
+            'message' => "Deleted project: {$deletedName}"
+        ];
+    }
+
+    /**
+     * Delete a client
+     */
+    private function deleteClient(array $params): array {
+        $clients = $this->db->load('clients') ?? [];
+        $clientId = $params['clientId'] ?? $params['id'] ?? '';
+        $clientFound = false;
+        $deletedName = 'Client';
+
+        foreach ($clients as $key => $c) {
+            if ($c['id'] === $clientId) {
+                $clientFound = true;
+                $deletedName = $c['name'];
+                unset($clients[$key]);
+                break;
+            }
+        }
+
+        if (!$clientFound) {
+            throw new ValidationException("Client not found with ID: {$clientId}");
+        }
+
+        $this->db->save('clients', array_values($clients));
+
+        return [
+            'success' => true,
+            'deletedId' => $clientId,
+            'message' => "Deleted client: {$deletedName}"
+        ];
+    }
+
+    /**
+     * Complete a habit
+     */
+    private function completeHabit(array $params): array {
+        $habitId = $params['habitId'];
+        $date = substr((string)($params['date'] ?? date('Y-m-d')), 0, 10);
+        $status = strtolower((string)($params['status'] ?? 'complete'));
+        if ($status === 'missed') {
+            $status = 'incomplete';
+        }
+        if (!in_array($status, ['complete', 'incomplete'], true)) {
+            $status = 'complete';
+        }
+        $duration = isset($params['duration']) ? (int)$params['duration'] : null;
+
+        $completions = $this->db->load('habit_completions') ?? [];
+        $habitFound = false;
+
+        // Verify habit exists
+        $habits = $this->db->load('habits') ?? [];
+        $habitName = 'Habit';
+        foreach ($habits as $h) {
+            if ($h['id'] === $habitId) {
+                $habitFound = true;
+                $habitName = $h['name'];
+                break;
+            }
+        }
+
+        if (!$habitFound) {
+            throw new ValidationException("Habit not found with ID: {$habitId}");
+        }
+
+        // Check for existing completion on this date
+        $existingIndex = -1;
+        foreach ($completions as $i => $c) {
+            if ($c['habitId'] === $habitId && $c['date'] === $date) {
+                $existingIndex = $i;
+                break;
+            }
+        }
+
+        $now = date('c');
+        $completionRecord = [
+            'id' => $existingIndex >= 0 ? ($completions[$existingIndex]['id'] ?? $this->db->generateId()) : $this->db->generateId(),
+            'habitId' => $habitId,
+            'date' => $date,
+            'status' => $status,
+            'completedAt' => $status === 'complete' ? $now : null,
+            'updatedAt' => $now
+        ];
+
+        if ($duration !== null) {
+            $completionRecord['duration'] = $duration;
+        }
+
+        if ($existingIndex >= 0) {
+            $existing = $completions[$existingIndex];
+            if (empty($completionRecord['createdAt'])) {
+                $completionRecord['createdAt'] = $existing['createdAt'] ?? $now;
+            }
+            $completions[$existingIndex] = array_merge($existing, $completionRecord);
+        } else {
+            $completionRecord['createdAt'] = $now;
+            $completions[] = $completionRecord;
+        }
+
+        $this->db->save('habit_completions', $completions);
+
+        return [
+            'success' => true,
+            'habitId' => $habitId,
+            'status' => $status,
+            'date' => $date,
+            'message' => "Marked '{$habitName}' as {$status} for {$date}"
+        ];
+    }
+
+    /**
+     * Start a habit timer
+     */
+    private function startHabitTimer(array $params): array {
+        $habitId = $params['habitId'];
+        $sessions = $this->db->load('habit_timer_sessions') ?? [];
+
+        // Verify habit exists
+        $habits = $this->db->load('habits') ?? [];
+        $habitFound = false;
+        $habitName = 'Habit';
+        foreach ($habits as $h) {
+            if ($h['id'] === $habitId) {
+                $habitFound = true;
+                $habitName = $h['name'];
+                break;
+            }
+        }
+
+        if (!$habitFound) {
+            throw new ValidationException("Habit not found with ID: {$habitId}");
+        }
+
+        // Check if already running
+        foreach ($sessions as $s) {
+            if ($s['habitId'] === $habitId && empty($s['endTime'])) {
+                return [
+                    'success' => true,
+                    'message' => "Timer is already running for '{$habitName}'"
+                ];
+            }
+        }
+
+        $sessions[] = [
+            'id' => $this->db->generateId(),
+            'habitId' => $habitId,
+            'startTime' => gmdate('c'),
+            'endTime' => null,
+            'duration' => 0
+        ];
+
+        $this->db->save('habit_timer_sessions', $sessions);
+
+        return [
+            'success' => true,
+            'message' => "Started timer for '{$habitName}'"
+        ];
+    }
+
+    /**
+     * Stop a habit timer
+     */
+    private function stopHabitTimer(array $params): array {
+        $habitId = $params['habitId'];
+        $sessions = $this->db->load('habit_timer_sessions') ?? [];
+        $stopped = false;
+        $duration = 0;
+
+        foreach ($sessions as &$s) {
+            if ($s['habitId'] === $habitId && empty($s['endTime'])) {
+                $s['endTime'] = gmdate('c');
+                $start = strtotime($s['startTime']);
+                $end = strtotime($s['endTime']);
+                $duration = max(0, $end - $start);
+                $s['duration'] = $duration;
+                $stopped = true;
+                break;
+            }
+        }
+
+        if ($stopped) {
+            $this->db->save('habit_timer_sessions', $sessions);
+            $minutes = round($duration / 60);
+            return [
+                'success' => true,
+                'duration' => $duration,
+                'message' => "Stopped timer. Tracked {$minutes} minutes."
+            ];
+        }
+
+        return [
+            'success' => false,
+            'message' => "No active timer found for this habit"
         ];
     }
 

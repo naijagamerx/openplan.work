@@ -669,7 +669,52 @@ document.addEventListener('DOMContentLoaded', function() {
     initNoteListToggle();
     loadNotes();
     loadTags();
+    setupPasteHandlers();
 });
+
+/**
+ * Setup paste handlers to strip rich text formatting
+ * Converts pasted content to plain text only
+ */
+function setupPasteHandlers() {
+    // Setup for both desktop and mobile editors
+    setupPasteHandler('editor-content');
+    setupPasteHandler('mobile-editor-content');
+}
+
+/**
+ * Add paste event listener to strip formatting from pasted content
+ * @param {string} elementId - The editor element ID
+ */
+function setupPasteHandler(elementId) {
+    const editor = document.getElementById(elementId);
+    if (!editor) return;
+
+    editor.addEventListener('paste', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Get plain text from clipboard
+        const text = e.clipboardData.getData('text/plain') || '';
+
+        // Insert plain text at cursor position using Selection API
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            range.deleteContents();
+            range.insertNode(document.createTextNode(text));
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+        } else {
+            // Fallback: append to end
+            editor.appendChild(document.createTextNode(text));
+        }
+
+        // Trigger auto-save
+        triggerAutoSave();
+    });
+}
 
 function initNoteListToggle() {
     try {

@@ -32,6 +32,12 @@ $projectId = trim((string)($_GET['id'] ?? ''));
 $projects = $db->load('projects') ?? [];
 $clients = $db->load('clients') ?? [];
 
+// Check if AI is available for the generate button
+$config = $db->load('config');
+$hasGroqKey = !empty($config['groqApiKey']);
+$hasOpenRouterKey = !empty($config['openrouterApiKey']);
+$hasAnyKey = $hasGroqKey || $hasOpenRouterKey;
+
 $project = null;
 if ($projectId !== '') {
     foreach ($projects as $candidate) {
@@ -136,7 +142,7 @@ $rightAction = 'none';
 include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 ?>
 
-<main class="flex-1 overflow-y-auto no-scrollbar px-6 pb-36 text-zinc-900 dark:text-zinc-100">
+<main class="flex-1 overflow-y-auto no-scrollbar px-6 pb-28 text-zinc-900 dark:text-zinc-100">
     <form id="project-form" class="space-y-6">
         <input type="hidden" name="id" value="<?= htmlspecialchars($projectId) ?>">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'] ?? '') ?>">
@@ -207,32 +213,28 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
             <input id="project-budget" name="budget" placeholder="0.00" type="number" step="0.01" value="<?= htmlspecialchars($field('budget')) ?>"/>
         </div>
 
-        <div class="relative">
-            <div class="flex justify-between items-end mb-2">
+        <div>
+            <div class="flex justify-between items-center mb-2">
                 <label class="mb-0" for="project-description">Description</label>
-                <button id="ai-project-description-btn" type="button" onclick="generateProjectDescription()" class="bg-black dark:bg-white text-white dark:text-black px-3 py-1 flex items-center gap-1 hover:opacity-90 transition-opacity touch-target">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button id="ai-project-description-btn" type="button" onclick="generateProjectDescription()" class="p-2 border border-black dark:border-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors touch-target" title="AI Generate" <?= !$hasAnyKey ? 'disabled' : '' ?>>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
                     </svg>
-                    <span class="text-[9px] font-bold uppercase tracking-widest">AI Help</span>
                 </button>
             </div>
             <textarea id="project-description" name="description" placeholder="Brief project overview..." rows="5"><?= htmlspecialchars($field('description')) ?></textarea>
         </div>
+
+        <div class="pt-6 flex flex-col gap-3">
+            <button id="save-project-btn" type="button" onclick="saveProject()" class="w-full py-4 bg-black dark:bg-white text-white dark:text-black text-[11px] font-black uppercase tracking-[0.3em] hover:opacity-90 transition-opacity touch-target">
+                <?= $isEdit ? 'Save Project' : 'Create Project' ?>
+            </button>
+            <a href="?page=projects" class="w-full py-3 text-center text-zinc-400 dark:text-zinc-500 text-[10px] font-bold uppercase tracking-[0.2em] hover:text-black dark:hover:text-white transition-colors touch-target">
+                Cancel
+            </a>
+        </div>
     </form>
 </main>
-
-<footer class="absolute bottom-0 left-0 right-0 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-800 p-6 z-30">
-    <div class="flex flex-col gap-3">
-        <button id="save-project-btn" type="button" onclick="saveProject()" class="w-full py-4 bg-black dark:bg-white text-white dark:text-black text-[11px] font-black uppercase tracking-[0.3em] hover:opacity-90 transition-opacity touch-target">
-            <?= $isEdit ? 'Save Project' : 'Create Project' ?>
-        </button>
-        <a href="?page=projects" class="w-full py-3 text-center text-zinc-400 dark:text-zinc-500 text-[10px] font-bold uppercase tracking-[0.2em] hover:text-black dark:hover:text-white transition-colors touch-target">
-            Cancel
-        </a>
-    </div>
-    <div class="mt-4 mx-auto w-32 h-1 bg-zinc-100 dark:bg-zinc-800 rounded-full"></div>
-</footer>
 
 </div>
 
@@ -246,7 +248,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     const CSRF_TOKEN = '<?= $_SESSION['csrf_token'] ?? '' ?>';
     const EDIT_PROJECT_ID = <?= json_encode($projectId) ?>;
     const IS_EDIT = <?= $isEdit ? 'true' : 'false' ?>;
-</script>
+    const HAS_ANY_AI_KEY = <?= $hasAnyKey ? 'true' : 'false' ?>;</script>
 <script src="<?= MOBILE_JS_URL ?>/mobile.js"></script>
 <script>
 function getErrorMessage(error, fallback) {
@@ -276,8 +278,8 @@ async function generateProjectDescription() {
     }
 
     aiButton.disabled = true;
-    const originalText = aiButton.innerHTML;
-    aiButton.innerHTML = '<span class="text-[9px] font-bold uppercase tracking-widest">Generating...</span>';
+    const originalHTML = aiButton.innerHTML;
+    aiButton.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
 
     try {
         const response = await App.api.post('api/ai-generate.php?action=project', {
@@ -294,7 +296,7 @@ async function generateProjectDescription() {
         Mobile.ui.showToast(getErrorMessage(error, 'AI generation failed.'), 'error');
     } finally {
         aiButton.disabled = false;
-        aiButton.innerHTML = originalText;
+        aiButton.innerHTML = originalHTML;
     }
 }
 

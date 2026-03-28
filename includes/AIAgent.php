@@ -27,7 +27,7 @@ You can perform these actions by calling functions:
 - **Notes**: Create notes with tags and organization
 - **Knowledge Base**: Search and retrieve information
 - **Finance**: Record expenses and revenue transactions
-- **Habits**: Create and track daily/weekly habits (e.g., exercise, reading, meditation)
+- **Habits**: Create, delete, list, mark complete/incomplete/missed, archive/reactivate, and run timers for daily/weekly habits (e.g., exercise, reading, meditation)
 - **Inventory**: Add and manage inventory items with stock levels
 - **Timer**: Start Pomodoro timers for focused work sessions
 
@@ -66,6 +66,7 @@ DO NOT STOP BETWEEN STEPS. Execute ALL functions in one response.
 - If a title is empty, say "(untitled task)" instead of inventing a replacement.
 - If results are partial (due to filters/limits), state that clearly and suggest fetching more.
 - For task-list responses, mirror task page structure: task title, project, status, priority, estimate, then subtasks.
+- For habits, if a delete is requested and no habitId is provided, call list_habits first to get the ID, then call delete_habit.
 
 ## Response Format (CLEAN OUTPUT ONLY)
 After executing all actions, respond with a simple summary like:
@@ -108,7 +109,16 @@ PROMPT;
      * @param string|null $kbFolderId Optional Knowledge Base Folder ID to attach as context
      * @return array Response with status, message, and optional confirmation data
      */
-    public function chat(string $message, ?string $conversationId = null, bool $autoConfirm = false, ?string $forceProvider = null, ?string $forceModel = null, ?string $kbFolderId = null): array {
+    public function chat(
+        string $message,
+        ?string $conversationId = null,
+        bool $autoConfirm = false,
+        ?string $forceProvider = null,
+        ?string $forceModel = null,
+        ?string $kbFolderId = null,
+        string $contextLevel = 'medium',
+        string $outputLength = 'normal'
+    ): array {
         // Rate limit check
         $userId = Auth::userId() ?? '';
         $limitResult = $this->rateLimiter->checkApiLimit($userId, 'ai-agent');
@@ -140,8 +150,22 @@ PROMPT;
         // Save user message
         $this->memory->saveMessage('user', $message);
 
+        // Resolve generation profile for context and output budget.
+        $profile = $this->getGenerationProfile($contextLevel, $outputLength);
+        $maxRecentMessages = (int)$profile['maxRecentMessages'];
+        $maxAutoContextSize = (int)$profile['maxKbChars'];
+        $currentMaxTokens = (int)$profile['maxTokens'];
+
         // Build messages array with context
-        $messages = $this->buildMessagesArray();
+        $messages = $this->buildMessagesArray($maxRecentMessages);
+
+        // Bias one-off reminder intents toward tasks (not habits).
+        if ($this->isOneTimeReminderIntent($message)) {
+            array_splice($messages, 1, 0, [[
+                'role' => 'system',
+                'content' => 'The user request is a ONE-TIME reminder. Use create_task with dueDate and do not create or delete habits unless explicitly requested.'
+            ]]);
+        }
 
         // Inject Knowledge Base Context if provided
         if ($kbFolderId) {
@@ -161,7 +185,6 @@ PROMPT;
 
             // Find files in folder and calculate total size
             $totalSize = 0;
-            $maxAutoContextSize = 20000; // ~5k tokens
             $fileContents = [];
 
             if (!empty($kbData['files'])) {
@@ -211,39 +234,100 @@ PROMPT;
         // Get available functions
         $functions = AIFunctions::getAllFunctions();
 
-        // Get model - use forced model if provided, otherwise get from database
-        $model = $forceModel ?? $this->getModelForProvider($provider);
+        // Determine model(s) to use
+        $targetModel = $forceModel ?? $this->getModelForProvider($provider);
+        $modelList = [$targetModel];
+
+        // Auto-failover mode: load all enabled models for this provider
+        if ($forceModel === 'auto') {
+            $modelList = $this->getEnabledModels($provider);
+            if (empty($modelList)) {
+                // Fallback to default if no list found (shouldn't happen if getModelForProvider works, but safety check)
+                try {
+                    $modelList = [$this->getModelForProvider($provider)];
+                } catch (Exception $e) {
+                    throw new APIException("No enabled models found for auto-failover.", 'NO_MODELS', 400);
+                }
+            }
+        }
 
         // Loop variables
         $maxLoops = 5;
         $loopCount = 0;
         $allCompletedActions = [];
         $finalAssistantMessage = '';
+        $toolEvents = [];
 
         do {
             $loopCount++;
+            $this->emitEvent('thinking_started', [
+                'loop' => $loopCount,
+                'models' => $modelList
+            ]);
 
             if ($this->memory->isCancelled($conversationId)) {
                 $cancelMessage = 'Run stopped. I paused the remaining actions.';
                 $this->memory->saveMessage('assistant', $cancelMessage);
+                $this->emitEvent('run_cancelled', ['message' => $cancelMessage]);
                 return [
                     'conversationId' => $conversationId,
                     'status' => 'cancelled',
                     'message' => $cancelMessage,
-                    'functionCalls' => $allCompletedActions
+                    'functionCalls' => $allCompletedActions,
+                    'toolEvents' => $toolEvents
                 ];
             }
 
             // Make request with functions
-            try {
-                $response = $ai->chatWithFunctions(
-                    $messages,
-                    $functions,
-                    $model
-                );
-            } catch (Exception $e) {
+            $response = null;
+            $lastError = null;
+            $success = false;
+
+            foreach ($modelList as $currentModel) {
+                $maxProviderAttempts = 2;
+                for ($providerAttempt = 1; $providerAttempt <= $maxProviderAttempts; $providerAttempt++) {
+                    try {
+                        $response = $ai->chatWithFunctions(
+                            $messages,
+                            $functions,
+                            $currentModel,
+                            ['maxTokens' => $currentMaxTokens]
+                        );
+                        $success = true;
+                        break 2; // Success on this model/provider.
+                    } catch (Exception $e) {
+                        $lastError = $e;
+                        if ($this->isTokenLimitError($e) && $providerAttempt < $maxProviderAttempts) {
+                            $messages = $this->trimMessagesForRetry($messages);
+                            $currentMaxTokens = max(256, (int)floor($currentMaxTokens * 0.6));
+                            $this->emitEvent('token_retry', [
+                                'model' => $currentModel,
+                                'attempt' => $providerAttempt + 1,
+                                'maxTokens' => $currentMaxTokens
+                            ]);
+                            continue;
+                        }
+                    }
+                }
+
+                // Only continue if we have more models to try
+                if (!$success && count($modelList) > 1) {
+                    error_log("AI Agent: Model {$currentModel} failed, trying next...");
+                    continue;
+                }
+            }
+
+            if (!$success) {
+                $e = $lastError;
                 $errorMsg = "I encountered an error: " . $e->getMessage();
+                
+                // Add troubleshooting hint for provider errors
+                if ($e instanceof APIException && strpos($e->getMessage(), 'Provider returned error') !== false) {
+                    $errorMsg .= "\n\n(Tip: This usually means the AI model is temporarily unavailable. Try selecting 'Auto' mode or a different model.)";
+                }
+                
                 $this->memory->saveMessage('assistant', $errorMsg);
+                $this->emitEvent('run_error', ['error' => $this->shortenToolError($e->getMessage(), 260)]);
                 throw $e;
             }
 
@@ -276,7 +360,7 @@ PROMPT;
             // IF NO TOOL CALLS -> WE ARE DONE
             if (empty($functionCalls)) {
                 if (!empty($allCompletedActions)) {
-                    $assistantMessage = $this->finalizeAssistantMessage($assistantMessage, $allCompletedActions, $message);
+                    $assistantMessage = $this->finalizeAssistantMessage($assistantMessage, $allCompletedActions, $message, $toolEvents);
                 }
 
                 // If this was a subsequent loop, we save the final summary
@@ -284,12 +368,14 @@ PROMPT;
                 if ($assistantMessage) {
                     $this->memory->saveMessage('assistant', $assistantMessage);
                 }
+                $this->emitEvent('summary_ready', ['message' => $assistantMessage]);
                 
                 return [
                     'conversationId' => $conversationId,
                     'status' => 'complete',
                     'message' => $assistantMessage,
-                    'functionCalls' => $allCompletedActions // Return all actions done in this session
+                    'functionCalls' => $allCompletedActions, // Return all actions done in this session
+                    'toolEvents' => $toolEvents
                 ];
             }
 
@@ -304,18 +390,75 @@ PROMPT;
                 $arguments = json_decode($call['arguments'], true);
                 if (!is_array($arguments)) $arguments = [];
 
-                try {
-                    $result = $this->executor->execute($name, $arguments);
+                // VISIBILITY: Notify user what tool is executing
+                $this->memory->saveMessage('assistant', "Executing tool: {$name}...");
+                $this->emitEvent('tool_started', [
+                    'loop' => $loopCount,
+                    'step' => count($allCompletedActions) + count($currentTurnActions) + 1,
+                    'name' => $name
+                ]);
+
+                $eventIndex = count($toolEvents);
+                $toolEvents[] = [
+                    'name' => $name,
+                    'status' => 'started',
+                    'startedAt' => date('c'),
+                    'attempts' => 0
+                ];
+
+                $startTime = microtime(true);
+                $attempts = 0;
+                $maxAttempts = $this->isRetryableAction($name) ? 2 : 1;
+                $result = null;
+                $error = null;
+
+                while ($attempts < $maxAttempts) {
+                    $attempts++;
+                    try {
+                        $result = $this->executor->execute($name, $arguments);
+                        $error = null;
+                        break;
+                    } catch (Exception $e) {
+                        $error = $e;
+                        if ($attempts < $maxAttempts) {
+                            usleep(200000);
+                        }
+                    }
+                }
+
+                $durationMs = (int)round((microtime(true) - $startTime) * 1000);
+                $toolEvents[$eventIndex]['attempts'] = $attempts;
+                $toolEvents[$eventIndex]['endedAt'] = date('c');
+                $toolEvents[$eventIndex]['durationMs'] = $durationMs;
+
+                if ($error === null) {
+                    $toolEvents[$eventIndex]['status'] = 'success';
+                    $summary = $this->formatResultSummary($name, $result);
                     $currentTurnActions[] = [
                         'name' => $name,
                         'result' => $result,
-                        'summary' => $this->formatResultSummary($name, $result)
+                        'summary' => $summary
                     ];
-                } catch (Exception $e) {
+                    $this->emitEvent('tool_succeeded', [
+                        'name' => $name,
+                        'summary' => $summary,
+                        'durationMs' => $durationMs,
+                        'attempts' => $attempts
+                    ]);
+                } else {
+                    $toolEvents[$eventIndex]['status'] = 'failed';
+                    $toolEvents[$eventIndex]['error'] = $this->shortenToolError($error->getMessage());
+                    $shortError = $this->shortenToolError($error->getMessage());
                     $currentTurnActions[] = [
                         'name' => $name,
-                        'error' => $e->getMessage()
+                        'error' => $error->getMessage()
                     ];
+                    $this->emitEvent('tool_failed', [
+                        'name' => $name,
+                        'error' => $shortError,
+                        'durationMs' => $durationMs,
+                        'attempts' => $attempts
+                    ]);
                 }
             }
 
@@ -361,15 +504,27 @@ PROMPT;
 
         // If we hit max loops, return what we have
         if (!empty($allCompletedActions)) {
-            $finalAssistantMessage = $this->finalizeAssistantMessage($finalAssistantMessage, $allCompletedActions, $message);
+                $finalAssistantMessage = $this->finalizeAssistantMessage($finalAssistantMessage, $allCompletedActions, $message, $toolEvents);
+            }
+            $this->emitEvent('summary_ready', ['message' => $finalAssistantMessage ?: "Completed multiple actions."]);
+
+            return [
+                'conversationId' => $conversationId,
+                'status' => 'complete',
+                'message' => $finalAssistantMessage ?: "Completed multiple actions.",
+                'functionCalls' => $allCompletedActions,
+                'toolEvents' => $toolEvents
+            ];
         }
 
-        return [
-            'conversationId' => $conversationId,
-            'status' => 'complete',
-            'message' => $finalAssistantMessage ?: "Completed multiple actions.",
-            'functionCalls' => $allCompletedActions
-        ];
+    /**
+     * Create an empty conversation and return its id for immediate UI polling.
+     */
+    public function startConversation(string $titleSeed = 'New Conversation'): string {
+        $memory = new ConversationMemory($this->db);
+        $conversationId = $memory->createConversation($titleSeed);
+        $memory->saveEvent('run_ready', ['message' => 'Conversation started']);
+        return $conversationId;
     }
 
     /**
@@ -476,24 +631,30 @@ PROMPT;
     /**
      * Ensure post-action replies include a useful summary and follow-up guidance.
      */
-    private function finalizeAssistantMessage(string $assistantMessage, array $completedActions, string $userMessage): string {
+    private function finalizeAssistantMessage(string $assistantMessage, array $completedActions, string $userMessage, array $toolEvents = []): string {
         $taskPageMessage = $this->buildTaskPageAlignedResponse($completedActions, $userMessage);
         if ($taskPageMessage !== null) {
-            return $taskPageMessage;
+            $toolSummary = $this->buildToolStatusSummary($toolEvents);
+            return $toolSummary !== '' ? $taskPageMessage . "\n\n" . $toolSummary : $taskPageMessage;
         }
 
         $trimmed = trim($assistantMessage);
         $needsFallback = $trimmed === '' || preg_match('/^Completed\\s+\\d+\\s+actions?\\s+successfully\\.?$/i', $trimmed) || preg_match('/^Completed\\s+multiple\\s+actions\\.?$/i', $trimmed);
 
         if ($needsFallback) {
-            return $this->buildActionFollowUp($completedActions, $userMessage);
+            $fallback = $this->buildActionFollowUp($completedActions, $userMessage);
+            $toolSummary = $this->buildToolStatusSummary($toolEvents);
+            return $toolSummary !== '' ? $fallback . "\n\n" . $toolSummary : $fallback;
         }
 
         if (!$this->hasClearFollowUp($trimmed)) {
-            return rtrim($trimmed) . "\n\n" . $this->buildSuggestedNextSteps($completedActions, $userMessage);
+            $message = rtrim($trimmed) . "\n\n" . $this->buildSuggestedNextSteps($completedActions, $userMessage);
+            $toolSummary = $this->buildToolStatusSummary($toolEvents);
+            return $toolSummary !== '' ? $message . "\n\n" . $toolSummary : $message;
         }
 
-        return $trimmed;
+        $toolSummary = $this->buildToolStatusSummary($toolEvents);
+        return $toolSummary !== '' ? rtrim($trimmed) . "\n\n" . $toolSummary : $trimmed;
     }
 
     /**
@@ -711,8 +872,8 @@ PROMPT;
      *
      * @return array
      */
-    private function buildMessagesArray(): array {
-        $messages = $this->memory->getRecentMessages(20);
+    private function buildMessagesArray(int $limit = 20): array {
+        $messages = $this->memory->getRecentMessages($limit);
 
         // Build system prompt with user context
         $systemPrompt = $this->buildSystemPrompt();
@@ -727,6 +888,92 @@ PROMPT;
     }
 
     /**
+     * Emit a structured event for live UI timelines.
+     */
+    private function emitEvent(string $type, array $data = []): void {
+        if ($this->memory === null) {
+            return;
+        }
+        $this->memory->saveEvent($type, $data);
+    }
+
+    /**
+     * Basic output/context profile used for token and history budgeting.
+     */
+    private function getGenerationProfile(string $contextLevel, string $outputLength): array {
+        $contextLevel = strtolower(trim($contextLevel));
+        $outputLength = strtolower(trim($outputLength));
+
+        $maxRecentMessages = 20;
+        $maxKbChars = 20000;
+        $maxTokens = 2048;
+
+        if ($contextLevel === 'low') {
+            $maxRecentMessages = 10;
+            $maxKbChars = 8000;
+        } elseif ($contextLevel === 'high') {
+            $maxRecentMessages = 35;
+            $maxKbChars = 40000;
+        }
+
+        if ($outputLength === 'short') {
+            $maxTokens = 768;
+        } elseif ($outputLength === 'long') {
+            $maxTokens = 4096;
+        }
+
+        return [
+            'maxRecentMessages' => $maxRecentMessages,
+            'maxKbChars' => $maxKbChars,
+            'maxTokens' => $maxTokens
+        ];
+    }
+
+    /**
+     * Detect token/context overflow errors from providers.
+     */
+    private function isTokenLimitError(Exception $e): bool {
+        $msg = strtolower($e->getMessage());
+        return str_contains($msg, 'token')
+            || str_contains($msg, 'context length')
+            || str_contains($msg, 'maximum context')
+            || str_contains($msg, 'too many tokens');
+    }
+
+    /**
+     * Aggressively trim oldest non-system context for a same-provider retry.
+     */
+    private function trimMessagesForRetry(array $messages): array {
+        if (count($messages) <= 8) {
+            return $messages;
+        }
+
+        $system = [];
+        $rest = [];
+        foreach ($messages as $msg) {
+            if (($msg['role'] ?? '') === 'system') {
+                $system[] = $msg;
+            } else {
+                $rest[] = $msg;
+            }
+        }
+
+        $rest = array_slice($rest, -6);
+        return array_merge($system, $rest);
+    }
+
+    /**
+     * Heuristic: one-off reminder language should route to create_task.
+     */
+    private function isOneTimeReminderIntent(string $message): bool {
+        $lower = strtolower($message);
+        $hasReminderTiming = preg_match('/\b(in|after)\s+\d+\s*(minute|minutes|hour|hours)\b/', $lower) === 1
+            || preg_match('/\b(today|tomorrow|at\s+\d{1,2}(:\d{2})?\s*(am|pm)?)\b/', $lower) === 1;
+        $hasRecurring = preg_match('/\b(daily|weekly|every day|every week|recurring|habit)\b/', $lower) === 1;
+        return $hasReminderTiming && !$hasRecurring;
+    }
+
+    /**
      * Build system prompt with user's context
      *
      * @return string
@@ -737,6 +984,10 @@ PROMPT;
         $prompt .= "Today is: " . date('l, F j, Y H:i') . "\n\n"; // Temporal Awareness
         $prompt .= "Your goal is to help users manage projects, tasks, clients, and finance.\n";
         $prompt .= "Data integrity rule: use only exact values from tool responses. Never fabricate task or subtask details.\n";
+        
+        $prompt .= "\n## Habits vs Tasks Rules\n";
+        $prompt .= "- Use Habits for RECURRING actions only (daily, weekly).\n";
+        $prompt .= "- For one-time reminders (e.g., \"remind me to call John in 2 hours\"), use `create_task` with a due date/time. DO NOT create a habit for a one-off event.\n";
 
         // Inject user's context
         $projects = $this->db->load('projects') ?? [];
@@ -807,6 +1058,24 @@ PROMPT;
     }
 
     /**
+     * Get all enabled model IDs for a provider to support auto-failover.
+     */
+    private function getEnabledModels(string $provider): array {
+        $models = $this->db->load('models') ?? [];
+        $enabled = [];
+        
+        // Models are stored as: ['groq' => [...], 'openrouter' => [...]]
+        $providerModels = $models[$provider] ?? [];
+        
+        foreach ($providerModels as $m) {
+            if ($m['enabled'] ?? true) {
+                $enabled[] = $m['modelId'];
+            }
+        }
+        return $enabled;
+    }
+
+    /**
      * Get model ID for provider
      *
      * CRITICAL: NO FALLBACK TO HARDCODED MODELS
@@ -821,19 +1090,22 @@ PROMPT;
         // Check if user has configured a preferred model
         $models = $this->db->load('models');
         if ($models && is_array($models)) {
+            // Models are stored as: ['groq' => [...], 'openrouter' => [...]]
+            $providerModels = $models[$provider] ?? [];
+            
             // First, look for a model marked as default
-            foreach ($models as $model) {
-                if (isset($model['provider']) && isset($model['isDefault']) && isset($model['modelId'])) {
-                    if ($model['provider'] === $provider && $model['isDefault']) {
+            foreach ($providerModels as $model) {
+                if (isset($model['isDefault']) && isset($model['modelId'])) {
+                    if ($model['isDefault']) {
                         return $model['modelId'];
                     }
                 }
             }
 
             // If no default found, use the first enabled model for this provider
-            foreach ($models as $model) {
-                if (isset($model['provider']) && isset($model['modelId'])) {
-                    if ($model['provider'] === $provider && ($model['enabled'] ?? true)) {
+            foreach ($providerModels as $model) {
+                if (isset($model['modelId'])) {
+                    if ($model['enabled'] ?? true) {
                         return $model['modelId'];
                     }
                 }
@@ -1001,12 +1273,68 @@ PROMPT;
                 
                 return "Found {$count} results: {$list}";
 
+            case 'create_habit':
+            case 'complete_habit':
+            case 'start_habit_timer':
+            case 'stop_habit_timer':
+            case 'delete_habit':
+            case 'list_habits':
+                if (isset($result['message'])) {
+                    return (string)$result['message'];
+                }
+                return "Action {$actionName} completed successfully.";
+
             default:
                 if (isset($result['message'])) {
                     return (string)$result['message'];
                 }
                 return "Completed: {$actionName}";
         }
+    }
+
+    private function isRetryableAction(string $actionName): bool {
+        return in_array($actionName, [
+            'list_tasks',
+            'list_projects',
+            'get_project_tasks',
+            'list_clients',
+            'search_knowledge_base',
+            'list_habits',
+            'list_inventory'
+        ], true);
+    }
+
+    private function shortenToolError(string $message, int $maxLen = 160): string {
+        $trimmed = trim($message);
+        if (strlen($trimmed) <= $maxLen) {
+            return $trimmed;
+        }
+        return substr($trimmed, 0, $maxLen - 3) . '...';
+    }
+
+    private function buildToolStatusSummary(array $toolEvents): string {
+        if (empty($toolEvents)) {
+            return '';
+        }
+
+        $lines = ["Tool status:"];
+        foreach ($toolEvents as $event) {
+            $name = (string)($event['name'] ?? 'tool');
+            $status = (string)($event['status'] ?? 'unknown');
+            $duration = isset($event['durationMs']) ? $event['durationMs'] . "ms" : "n/a";
+            $attempts = (int)($event['attempts'] ?? 1);
+            $attemptLabel = $attempts > 1 ? " ({$attempts} attempts)" : "";
+
+            if ($status === 'failed') {
+                $error = (string)($event['error'] ?? 'Unknown error');
+                $lines[] = "- {$name}: FAILED in {$duration}{$attemptLabel}. {$error}";
+            } else {
+                $statusLabel = strtoupper($status);
+                $lines[] = "- {$name}: {$statusLabel} in {$duration}{$attemptLabel}.";
+            }
+        }
+
+        return implode("\n", $lines);
     }
 
     /**
@@ -1080,6 +1408,20 @@ PROMPT;
                             'taskCount' => (int)($project['taskCount'] ?? 0)
                         ];
                     }, array_slice($projects, 0, 20))
+                ];
+            case 'list_habits':
+                $habits = is_array($result['habits'] ?? null) ? $result['habits'] : [];
+                return [
+                    'count' => (int)($result['count'] ?? count($habits)),
+                    'habits' => array_map(function($habit) {
+                        return [
+                            'id' => (string)($habit['id'] ?? ''),
+                            'name' => trim((string)($habit['name'] ?? '')) ?: '(unnamed habit)',
+                            'frequency' => (string)($habit['frequency'] ?? ''),
+                            'category' => (string)($habit['category'] ?? ''),
+                            'isActive' => (bool)($habit['isActive'] ?? true)
+                        ];
+                    }, array_slice($habits, 0, 30))
                 ];
 
             default:
@@ -1162,5 +1504,94 @@ PROMPT;
         }
 
         return implode('; ', $parts);
+    }
+
+    /**
+     * Generate proactive "Smart Start" suggestions based on current system state.
+     * This runs entirely in PHP to avoid LLM latency/costs.
+     */
+    public function getProactiveSuggestions(): array {
+        $suggestions = [];
+        $projects = $this->db->load('projects') ?? [];
+        
+        // Metrics
+        $overdueTasks = [];
+        $todayTasks = [];
+        $quickWins = [];
+        $today = date('Y-m-d');
+        
+        foreach ($projects as $project) {
+            foreach ($project['tasks'] ?? [] as $task) {
+                $status = normalizeTaskStatus($task['status'] ?? 'todo');
+                if (isTaskDone($status)) {
+                    continue;
+                }
+                
+                $dueDate = $task['dueDate'] ?? '';
+                $est = (int)($task['estimatedMinutes'] ?? 0);
+                
+                // Overdue
+                if ($dueDate && $dueDate < $today) {
+                    $overdueTasks[] = $task;
+                }
+                
+                // Today
+                if ($dueDate === $today) {
+                    $todayTasks[] = $task;
+                }
+                
+                // Quick Wins (under 15 mins)
+                if ($est > 0 && $est <= 15) {
+                    $quickWins[] = $task;
+                }
+            }
+        }
+        
+        // 1. Overdue Logic
+        $overdueCount = count($overdueTasks);
+        if ($overdueCount > 0) {
+            $suggestions[] = [
+                'label' => "Reschedule {$overdueCount} overdue tasks",
+                'prompt' => "I have {$overdueCount} overdue tasks. Please help me reschedule them to today or tomorrow."
+            ];
+        }
+        
+        // 2. Daily Planning Logic
+        $todayCount = count($todayTasks);
+        if ($todayCount > 0) {
+            $suggestions[] = [
+                'label' => "Plan my day ({$todayCount} tasks)",
+                'prompt' => "Review my {$todayCount} tasks for today and help me prioritize them into a schedule."
+            ];
+        } else {
+            // No tasks for today?
+            $suggestions[] = [
+                'label' => "Plan my day",
+                'prompt' => "I have no tasks scheduled for today. Please check my backlog and suggest 3 high-priority tasks to work on."
+            ];
+        }
+        
+        // 3. Quick Wins
+        $quickCount = count($quickWins);
+        if ($quickCount > 0) {
+            $suggestions[] = [
+                'label' => "Knock out quick wins ({$quickCount})",
+                'prompt' => "List the {$quickCount} quick tasks (under 15 mins) so I can clear them out rapidly."
+            ];
+        }
+        
+        // 4. Project Review (Find most recently active project)
+        usort($projects, fn($a, $b) => strcmp($b['updatedAt'] ?? '', $a['updatedAt'] ?? ''));
+        $activeProject = $projects[0] ?? null;
+        if ($activeProject) {
+            $name = $activeProject['name'];
+            $suggestions[] = [
+                'label' => "Review '{$name}'",
+                'prompt' => "Summarize the status of project '{$name}' and tell me what is left to do."
+            ];
+        }
+        
+        // Limit to 4 suggestions
+        return array_slice($suggestions, 0, 4);
     }
 }

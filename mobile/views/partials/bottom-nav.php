@@ -16,10 +16,11 @@
 // Define navigation items
 $navItems = [
     [
-        'icon' => 'grid_view',
-        'heroicon' => 'M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z',
-        'label' => 'Dashboard',
-        'page' => 'dashboard',
+        'icon' => 'menu',
+        'heroicon' => 'M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5',
+        'label' => 'Menu',
+        'page' => '__menu__',
+        'isMenu' => true,
     ],
     [
         'icon' => 'list_alt',
@@ -44,16 +45,27 @@ $navItems = [
 // Get current page for highlighting
 $currentPage = $activePage ?? $_GET['page'] ?? 'dashboard';
 ?>
-<nav class="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-zinc-950 border-t border-gray-100 dark:border-zinc-800 px-8 py-4 flex items-center justify-between">
-    <?php $first = true; ?>
+<nav class="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-zinc-950 border-t border-gray-100 dark:border-zinc-800 px-8 py-4 flex items-center justify-between" style="padding-bottom: max(1rem, env(safe-area-inset-bottom)); min-height: calc(4.5rem + env(safe-area-inset-bottom))">
     <?php foreach ($navItems as $item): ?>
         <?php
-        $isActive = ($currentPage === $item['page']);
+        $isMenu = !empty($item['isMenu']);
+        $isActive = (!$isMenu) && ($currentPage === $item['page']);
         $textClass = $isActive ? 'text-black dark:text-white' : 'text-gray-400 dark:text-zinc-500';
+        $elClass = "flex flex-col items-center gap-1 {$textClass} transition-colors touch-target";
         ?>
+        <?php if ($isMenu): ?>
+        <button type="button" onclick="Mobile.ui.toggleMenu()"
+           class="<?= $elClass ?>">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="<?= $item['heroicon'] ?>"/>
+            </svg>
+            <span class="text-[10px] font-bold uppercase tracking-tighter">
+                <?= htmlspecialchars($item['label']) ?>
+            </span>
+        </button>
+        <?php else: ?>
         <a href="?page=<?= $item['page'] ?>"
-           class="flex flex-col items-center gap-1 <?= $textClass ?> transition-colors touch-target">
-            <!-- Heroicon (replacing Material Symbol) -->
+           class="<?= $elClass ?>">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="<?= $item['heroicon'] ?>"/>
             </svg>
@@ -61,6 +73,7 @@ $currentPage = $activePage ?? $_GET['page'] ?? 'dashboard';
                 <?= htmlspecialchars($item['label']) ?>
             </span>
         </a>
+        <?php endif; ?>
     <?php endforeach; ?>
 </nav>
 <div id="mobile-pomodoro-overlay" class="fixed bottom-24 right-3 z-40 hidden w-[220px] bg-white dark:bg-zinc-950 border border-black dark:border-white p-2 shadow-lg">

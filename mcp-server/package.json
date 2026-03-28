@@ -1,0 +1,13 @@
+{
+  "name": "openplan-work-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP Server for OpenPlan.work",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.6.0"
+  }
+}

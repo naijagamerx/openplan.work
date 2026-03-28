@@ -326,8 +326,12 @@ switch (requestMethod()) {
                 errorResponse('Invalid date format', 400, ERROR_VALIDATION);
             }
             $status = strtolower((string)($body['status'] ?? 'complete'));
-            if (!in_array($status, ['complete', 'incomplete'], true)) {
+            $validStatuses = ['complete', 'incomplete', 'missed'];
+            if (!in_array($status, $validStatuses, true)) {
                 $status = 'complete';
+            }
+            if ($status === 'missed') {
+                $status = 'incomplete';
             }
             $providedDuration = isset($body['duration']) ? (int)$body['duration'] : null;
 
@@ -1545,6 +1549,28 @@ PROMPT;
             if (!$habitFound) {
                 errorResponse('Habit not found', 404, ERROR_NOT_FOUND);
             }
+        } elseif ($action === 'add') {
+            if (empty($body['name'])) {
+                errorResponse('Habit name is required', 400, ERROR_VALIDATION);
+            }
+
+            $habits = $db->load('habits', true);
+            $newHabit = [
+                'id' => $db->generateId(),
+                'name' => $body['name'],
+                'category' => $body['category'] ?? 'general',
+                'frequency' => $body['frequency'] ?? 'daily',
+                'reminderTime' => $body['reminderTime'] ?? null,
+                'targetDuration' => (int)($body['targetDuration'] ?? 0),
+                'isActive' => true, // Default to active
+                'isAiGenerated' => $body['isAiGenerated'] ?? false,
+                'createdAt' => date('c'),
+                'updatedAt' => date('c')
+            ];
+
+            $habits[] = $newHabit;
+            $db->save('habits', $habits);
+            successResponse($newHabit, 'Habit created');
         } else {
             if (empty($body['name'])) {
                 errorResponse('Habit name is required', 400, ERROR_VALIDATION);

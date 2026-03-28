@@ -323,6 +323,12 @@ function getMasterPassword(): string {
         return $_SESSION[SESSION_MASTER_KEY];
     }
 
+    // Check HTTP header (sent by MCP server for token authentication)
+    $httpHeader = $_SERVER['HTTP_X_MASTER_PASSWORD'] ?? '';
+    if ($httpHeader !== '') {
+        return $httpHeader;
+    }
+
     // Check master_password.php config file
     $configFile = INCLUDES_PATH . '/master_password.php';
     if (file_exists($configFile)) {
@@ -488,7 +494,7 @@ function isValidEmail(string $email): bool {
  */
 function getFaviconUrl(string $filename = 'favicon-32x32.png'): string {
     $path = ASSETS_PATH . '/favicons/' . $filename;
-    $baseUrl = 'assets/favicons/' . $filename;
+    $baseUrl = APP_URL . '/assets/favicons/' . $filename;
 
     return file_exists($path) ? $baseUrl . '?v=' . filemtime($path) : $baseUrl;
 }
@@ -528,13 +534,13 @@ function getSidebarLogoHtml(int $size = 40): string {
 
     // Prioritize PNG favicon (uploaded custom favicon) over default SVG
     if ($hasPng) {
-        $url = 'assets/favicons/favicon-32x32.png?v=' . filemtime($pngPath);
+        $url = APP_URL . '/assets/favicons/favicon-32x32.png?v=' . filemtime($pngPath);
         return '<img src="' . $url . '" alt="Logo" class="w-full h-full object-contain">';
     }
 
     // Only show SVG if it's NOT the default (i.e., user uploaded an SVG)
     if ($hasSvg && !$isDefaultSvg) {
-        $url = 'assets/favicons/favicon.svg?v=' . filemtime($svgPath);
+        $url = APP_URL . '/assets/favicons/favicon.svg?v=' . filemtime($svgPath);
         return '<img src="' . $url . '" alt="Logo" class="w-full h-full object-contain">';
     }
 

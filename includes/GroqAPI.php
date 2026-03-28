@@ -17,7 +17,7 @@ class GroqAPI {
      * CRITICAL: Model must be explicitly provided. NO fallback to hardcoded defaults.
      * Models MUST come from database (Model Settings page: /?page=model-settings)
      */
-    public function chatCompletion(array $messages, ?string $model = null): array {
+    public function chatCompletion(array $messages, ?string $model = null, array $options = []): array {
         if (empty($model)) {
             throw new APIException(
                 'Groq model must be explicitly specified. Configure a model in Model Settings (/?page=model-settings).',
@@ -30,8 +30,8 @@ class GroqAPI {
         $payload = [
             'model' => $model,
             'messages' => $messages,
-            'temperature' => 0.7,
-            'max_tokens' => 8192
+            'temperature' => (float)($options['temperature'] ?? 0.7),
+            'max_tokens' => (int)($options['maxTokens'] ?? 8192)
         ];
 
         return $this->makeRequest('/chat/completions', $payload);
@@ -43,7 +43,7 @@ class GroqAPI {
      * CRITICAL: Model must be explicitly provided. NO fallback to hardcoded defaults.
      * Models MUST come from database (Model Settings page: /?page=model-settings)
      */
-    public function chatWithFunctions(array $messages, array $functions, ?string $model = null): array {
+    public function chatWithFunctions(array $messages, array $functions, ?string $model = null, array $options = []): array {
         if (empty($model)) {
             throw new APIException(
                 'Groq model must be explicitly specified. Configure a model in Model Settings (/?page=model-settings).',
@@ -58,8 +58,8 @@ class GroqAPI {
             'messages' => $messages,
             'tools' => $functions,
             'tool_choice' => 'auto',
-            'temperature' => 0.7,
-            'max_tokens' => 8192
+            'temperature' => (float)($options['temperature'] ?? 0.7),
+            'max_tokens' => (int)($options['maxTokens'] ?? 8192)
         ];
 
         return $this->makeRequest('/chat/completions', $payload);

@@ -605,6 +605,24 @@ csrf_token: CSRF_TOKEN
 - **Embedded tasks**: Tasks are stored within project records, not separate entities
 - **Multi-currency**: Support for USD, EUR, GBP, ZAR with automatic symbol formatting
 
+## FTP Upload (CRITICAL — Read Before Every Upload)
+
+**FTP root IS the web root.** The FTP login drops you directly into the document root where `index.php`, `views/`, `mobile/`, `api/` live.
+
+- **WRONG**: `ftp://141.136.39.117/public_html/views/file.php`
+- **CORRECT**: `ftp://141.136.39.117/views/file.php`
+- **NEVER** use `--ftp-create-dirs` for directories that already exist. Always **LIST** the target directory first to confirm it exists before uploading.
+- **ALWAYS** verify uploads by listing the directory afterward to confirm the file timestamp updated.
+- **NEVER** create a `public_html/` directory — it does not exist and is not served by the web server.
+
+### FTP Credentials
+| Field | Value |
+|-------|-------|
+| FTP IP | `ftp://141.136.39.117` |
+| Username | `u397530364.openplan.work` |
+| Password | Use the password from the `ftp-upload` skill |
+| Port | 21 |
+
 ## Project Version
 
 v1.0.0 - Complete business suite with task management, CRM, invoicing, finance, inventory, time tracking, and AI integration.

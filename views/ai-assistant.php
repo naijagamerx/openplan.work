@@ -21,16 +21,26 @@ $hasAnyKey = $hasGroqKey || $hasOpenRouterKey;
 $groqModels = array_filter($models['groq'] ?? [], fn($m) => $m['enabled'] ?? true);
 $openRouterModels = array_filter($models['openrouter'] ?? [], fn($m) => $m['enabled'] ?? true);
 
-// Only use static model lists as fallback if database is completely empty
-// This prevents overriding user's configured models
-if (empty($groqModels) && empty($openRouterModels)) {
-    // Database is empty, use static lists as fallback
+// Per-provider fallback: only use static list for providers that have NO DB models
+if (empty($groqModels)) {
     $groqModels = array_map(fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
         array_keys(GroqAPI::getModels()), GroqAPI::getModels());
+}
+if (empty($openRouterModels)) {
     $openRouterModels = array_map(fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
         array_keys(OpenRouterAPI::getModels()), OpenRouterAPI::getModels());
 }
 ?>
+
+<style>
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+    animation: fadeInUp 0.5s ease-out forwards;
+}
+</style>
 
 <div class="space-y-6">
     <!-- PHP Requirements Warning -->
@@ -51,42 +61,74 @@ if (empty($groqModels) && empty($openRouterModels)) {
         </div>
     <?php endif; ?>
     
-    <!-- AI Tools Buttons -->
-    <div class="flex flex-wrap gap-3 mb-4">
-        <!-- Task Generator -->
-        <button onclick="openTaskGenerator()" class="flex items-center gap-2 px-4 py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition shadow-lg <?php echo !$hasAnyKey ? 'opacity-50 cursor-not-allowed' : ''; ?>" <?php echo !$hasAnyKey ? 'disabled' : ''; ?>>
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-            Task Generator
-        </button>
-        
-        <!-- PRD Generator -->
-        <button onclick="openPRDGenerator()" class="flex items-center gap-2 px-4 py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition shadow-lg <?php echo !$hasAnyKey ? 'opacity-50 cursor-not-allowed' : ''; ?>" <?php echo !$hasAnyKey ? 'disabled' : ''; ?>>
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-            </svg>
-            PRD Generator
-        </button>
-        
-        <!-- AI Verification -->
-        <button onclick="runAIVerification()" class="flex items-center gap-2 px-4 py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition shadow-lg <?php echo !$hasAnyKey ? 'opacity-50 cursor-not-allowed' : ''; ?>" <?php echo !$hasAnyKey ? 'disabled' : ''; ?>>
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-            AI Verification
-        </button>
+    <!-- AI Tools Header -->
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h2 class="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            AI Assistant
+            <!-- Connection Status Icon -->
+            <button onclick="runAIVerification()" id="ai-status-icon" class="p-1 rounded-full hover:bg-gray-100 transition" title="Check AI Connection">
+                <div class="w-3 h-3 rounded-full bg-gray-300 ring-2 ring-white"></div>
+            </button>
+        </h2>
+
+        <!-- Tools Dropdown -->
+        <div class="relative inline-block text-left" id="ai-tools-dropdown">
+            <button onclick="toggleToolsDropdown()" class="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition">
+                <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
+                </svg>
+                AI Tools
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+            <div id="ai-tools-menu" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg ring-1 ring-black ring-opacity-5 z-50 transform origin-top-right transition-all duration-200">
+                <div class="py-1">
+                    <button onclick="openPRDGenerator()" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Generate PRD
+                    </button>
+                    <button onclick="openModelSettingsSidebar()" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 border-t border-gray-100">
+                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        Configure Models
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
     
-    <!-- Chat Interface -->
-    <div class="bg-white rounded-xl border border-gray-200">
-        <div class="p-4 border-b border-gray-200">
+    <!-- Off-Canvas Sidebar for Model Settings -->
+    <div id="model-settings-sidebar" class="fixed inset-y-0 right-0 w-96 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-[60] flex flex-col">
+        <div class="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+            <h3 class="font-semibold text-gray-900">Configure AI Models</h3>
+            <button onclick="closeModelSettingsSidebar()" class="text-gray-500 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-200">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div id="model-settings-sidebar-content" class="flex-1 overflow-y-auto p-4 space-y-6">
+            <!-- Content populated by JS -->
+            <div class="flex items-center justify-center h-full">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overlay for Sidebar -->
+    <div id="model-settings-overlay" onclick="closeModelSettingsSidebar()" class="fixed inset-0 bg-black/30 z-[55] hidden transition-opacity duration-300 opacity-0"></div>
+
+    <div class="bg-white rounded-xl border border-gray-200 flex flex-col" style="height: calc(100vh - 140px);">
+        <div class="p-4 border-b border-gray-200 flex-shrink-0">
             <div class="flex items-center justify-between mb-3">
-                <h3 class="font-semibold text-gray-900">AI Chat</h3>
+                <h3 class="font-semibold text-gray-900">Chat Session</h3>
                 <div class="flex items-center gap-2">
                     <button type="button" onclick="clearConversationHistory()" class="px-3 py-1.5 border border-red-200 text-red-600 rounded-lg text-xs font-semibold hover:bg-red-50 flex items-center gap-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                        Clear History
+                        Clear
                     </button>
                     <button type="button" onclick="toggleConversationHistory()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50 flex items-center gap-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -119,7 +161,7 @@ if (empty($groqModels) && empty($openRouterModels)) {
             </div>
         </div>
 
-        <div class="flex">
+        <div class="flex flex-1 overflow-hidden">
             <!-- Conversation History Sidebar -->
             <div id="conversation-sidebar" class="hidden w-64 border-r border-gray-200 bg-gray-50 flex-shrink-0">
                 <div class="p-3 border-b border-gray-200 flex items-center justify-between">
@@ -140,6 +182,7 @@ if (empty($groqModels) && empty($openRouterModels)) {
                 <!-- AI Provider and Model Selection -->
                 <div class="p-3 border-b border-gray-200 flex items-center gap-2 flex-wrap bg-gray-50 flex-shrink-0">
                     <select id="ai-provider" onchange="updateModelList(); updateConversationState()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm">
+                        <?php if ($hasGroqKey && $hasOpenRouterKey): ?><option value="smart">Smart (Groq chat / OpenRouter complex)</option><?php endif; ?>
                         <?php if ($hasGroqKey): ?><option value="groq">Groq</option><?php endif; ?>
                         <?php if ($hasOpenRouterKey): ?><option value="openrouter">OpenRouter</option><?php endif; ?>
                     </select>
@@ -149,30 +192,30 @@ if (empty($groqModels) && empty($openRouterModels)) {
                     <select id="ai-kb-folder" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm" title="Knowledge Base context">
                         <option value="">No Knowledge Base</option>
                     </select>
-                    <button type="button" onclick="copyChatTranscript()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50">
-                        Copy
-                    </button>
-                    <button type="button" onclick="exportChatMarkdown()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50">
-                        Export MD
-                    </button>
-                    <button type="button" onclick="openChatSaveToKnowledgeBase()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50">
-                        Save to KB
-                    </button>
-                    <button type="button" onclick="saveChatToNotes()" class="px-3 py-1.5 bg-black text-white rounded-lg text-xs font-semibold hover:bg-gray-800">
-                        Save to Notes
-                    </button>
-                    <button type="button" onclick="startNewConversation()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50">
-                        New Chat
-                    </button>
+                    <div class="relative">
+                        <button type="button" onclick="toggleAssistantActionsMenu()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50">
+                            Actions
+                        </button>
+                        <div id="assistant-actions-menu" class="hidden absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
+                            <button type="button" onclick="copyChatTranscript(); closeAssistantActionsMenu();" class="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50">Copy</button>
+                            <button type="button" onclick="exportChatMarkdown(); closeAssistantActionsMenu();" class="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50">Export MD</button>
+                            <button type="button" onclick="openChatSaveToKnowledgeBase(); closeAssistantActionsMenu();" class="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50">Save to KB</button>
+                            <button type="button" onclick="saveChatToNotes(); closeAssistantActionsMenu();" class="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50">Save to Notes</button>
+                            <button type="button" onclick="startNewConversation(); closeAssistantActionsMenu();" class="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50">New Chat</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Chat Messages -->
-                <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 min-h-0" style="max-height: 500px; min-height: 300px;">
-                    <div class="text-center text-gray-400 text-sm py-8">
+                <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+                    <div id="chat-empty-state" class="text-center text-gray-400 text-sm h-full flex flex-col justify-center items-center">
                         <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
                         </svg>
-                        Start a conversation with the AI assistant
+                        <p class="mb-4">Start a conversation with the AI assistant</p>
+                        <div id="smart-start-suggestions" class="flex flex-wrap justify-center gap-2 max-w-lg mx-auto hidden transition-all duration-500 opacity-0">
+                            <!-- Populated by JS -->
+                        </div>
                     </div>
                 </div>
 
@@ -203,11 +246,45 @@ function updateModelList() {
     const provider = document.getElementById('ai-provider').value;
     const modelSelect = document.getElementById('ai-model');
     if (!modelSelect) return;
+    if (provider === 'smart') {
+        modelSelect.innerHTML = `<option value="auto">Auto by provider</option>`;
+        modelSelect.disabled = true;
+        return;
+    }
+    modelSelect.disabled = false;
     const models = ALL_MODELS[provider] || [];
-    
-    modelSelect.innerHTML = models.map(m => 
-        `<option value="${m.modelId}" ${m.isDefault ? 'selected' : ''}>${m.displayName}</option>`
-    ).join('');
+    modelSelect.innerHTML = `<option value="auto" class="font-bold">Auto (Best Available)</option>` +
+        models.map(m => `<option value="${m.modelId}" ${m.isDefault ? 'selected' : ''}>${m.displayName}</option>`).join('');
+}
+
+function closeAssistantActionsMenu() {
+    document.getElementById('assistant-actions-menu')?.classList.add('hidden');
+}
+
+function toggleAssistantActionsMenu() {
+    document.getElementById('assistant-actions-menu')?.classList.toggle('hidden');
+}
+
+function isComplexPrompt(prompt) {
+    const text = String(prompt || '').toLowerCase();
+    if (text.length > 220) return true;
+    const keywords = ['complex', 'analyze', 'analysis', 'plan', 'strategy', 'architecture', 'debug', 'refactor', 'workflow', 'agentic', 'multi-step', 'tradeoff', 'prioritize', 'schedule'];
+    return keywords.some((k) => text.includes(k));
+}
+
+function resolveProviderForMessage(message) {
+    const selected = document.getElementById('ai-provider')?.value || 'groq';
+    if (selected !== 'smart') return selected;
+    return isComplexPrompt(message) ? 'openrouter' : 'groq';
+}
+
+function resolveModelForProvider(provider) {
+    if (document.getElementById('ai-provider')?.value !== 'smart') {
+        return document.getElementById('ai-model')?.value || undefined;
+    }
+    const models = ALL_MODELS[provider] || [];
+    const preferred = models.find((m) => m.isDefault) || models[0];
+    return preferred?.modelId || 'auto';
 }
 
 // Initial population
@@ -215,7 +292,25 @@ window.addEventListener('DOMContentLoaded', () => {
     updateModelList();
     loadKBFolders();
     checkPHPRequirements();
+    
+    // Close dropdown on click outside
+    document.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('ai-tools-menu');
+        const button = document.getElementById('ai-tools-dropdown');
+        if (!dropdown.contains(e.target) && !button.contains(e.target)) {
+            dropdown.classList.add('hidden');
+        }
+        const actionsMenu = document.getElementById('assistant-actions-menu');
+        const actionsBtn = e.target?.closest?.('button[onclick*="toggleAssistantActionsMenu"]');
+        if (actionsMenu && !actionsMenu.contains(e.target) && !actionsBtn) {
+            actionsMenu.classList.add('hidden');
+        }
+    });
 });
+
+function toggleToolsDropdown() {
+    document.getElementById('ai-tools-menu').classList.toggle('hidden');
+}
 
 // Check PHP extensions requirements
 async function checkPHPRequirements() {
@@ -328,111 +423,8 @@ let currentConversationId = null;
 let agentModeEnabled = true;
 let autoConfirmEnabled = true;
 let pendingActions = [];
-
-// Task Generator
-let generatedTasks = [];
-let selectedProjectId = '';
-
-function openTaskGenerator() {
-    openModal(`
-        <div class="p-6">
-            <h3 class="text-lg font-semibold text-gray-900 mb-4">Generate Task Breakdown</h3>
-            <form id="task-gen-form" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Project Description</label>
-                    <textarea name="description" rows="5" required
-                              placeholder="Describe your project in detail. For example: Build an e-commerce website with product catalog, shopping cart, checkout, and user authentication..."
-                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none text-sm"></textarea>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Save to Project (Optional)</label>
-                    <select name="projectId" id="task-project-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                        <option value="">Select a project...</option>
-                        <?php foreach ($projects as $p): ?>
-                            <option value="<?php echo e($p['id']); ?>"><?php echo e($p['name']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="flex gap-3 justify-end pt-4">
-                    <button type="button" onclick="closeModal()" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 flex items-center gap-2">
-                        <span>Generate</span>
-                        <div class="spinner hidden" id="task-gen-spinner"></div>
-                    </button>
-                </div>
-            </form>
-            <div id="task-gen-result" class="mt-4 hidden"></div>
-        </div>
-    `);
-
-    document.getElementById('task-gen-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const spinner = document.getElementById('task-gen-spinner');
-        const result = document.getElementById('task-gen-result');
-        const projectSelect = document.getElementById('task-project-select');
-        spinner.classList.remove('hidden');
-
-        const formData = new FormData(e.target);
-        const data = {
-            description: formData.get('description'),
-            projectId: projectSelect.value,
-            provider: document.getElementById('ai-provider')?.value || 'groq',
-            csrf_token: CSRF_TOKEN
-        };
-
-        selectedProjectId = projectSelect.value;
-
-        const response = await api.post('api/ai.php?action=generate_tasks', data);
-        spinner.classList.add('hidden');
-
-        if (response.success && response.data?.tasks) {
-            generatedTasks = response.data.tasks;
-            let html = '<div class="bg-gray-50 rounded-lg p-4 max-h-60 overflow-y-auto"><h4 class="font-medium mb-2">Generated Tasks:</h4><ul class="space-y-2">';
-            response.data.tasks.forEach(task => {
-                html += '<li class="text-sm"><strong>' + task.title + '</strong> (' + task.priority + ', ~' + task.estimatedMinutes + 'min)</li>';
-            });
-            html += '</ul></div>';
-
-            // Add save button if project is selected
-            if (selectedProjectId) {
-                html += '<button onclick="saveTasksToProject()" class="mt-3 w-full py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2">';
-                html += '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
-                html += 'Save to Project</button>';
-            } else {
-                html += '<p class="mt-3 text-sm text-gray-500">Select a project above and generate again to save.</p>';
-            }
-
-            result.innerHTML = html;
-            result.classList.remove('hidden');
-
-            showToast('Tasks generated!', 'success');
-        } else {
-            showToast(response.error || 'Generation failed', 'error');
-        }
-    });
-}
-
-async function saveTasksToProject() {
-    if (!selectedProjectId || generatedTasks.length === 0) {
-        showToast('No project or tasks to save', 'error');
-        return;
-    }
-
-    const response = await api.post('api/ai.php?action=import_tasks', {
-        projectId: selectedProjectId,
-        tasks: generatedTasks,
-        csrf_token: CSRF_TOKEN
-    });
-
-    if (response.success) {
-        showToast('Tasks saved to project!', 'success');
-        closeModal();
-        // Redirect to project page
-        window.location.href = '?page=projects';
-    } else {
-        showToast(response.error || 'Failed to save tasks', 'error');
-    }
-}
+let eventCursor = 0;
+let timelineEvents = [];
 
 // PRD Generator
 let generatedPRD = '';
@@ -617,7 +609,7 @@ async function openPRDGenerator() {
         const response = await api.post('api/ai.php?action=generate_prd', {
             idea: formData.get('idea'),
             projectId: selectedPRDProjectId,
-            provider: document.getElementById('ai-provider')?.value || 'groq',
+            provider: resolveProviderForMessage(String(formData.get('idea') || '')),
             csrf_token: CSRF_TOKEN
         });
 
@@ -730,8 +722,6 @@ async function savePRDToKnowledgeBase() {
     }
 }
 
-
-
 async function openChatSaveToKnowledgeBase() {
     const content = await getChatMarkdown();
     if (!content) {
@@ -822,45 +812,55 @@ async function saveChatToKnowledgeBase() {
 
 // AI Verification
 async function runAIVerification() {
-    const provider = document.getElementById('ai-provider').value;
-    const model = document.getElementById('ai-model').value;
+    const providerSelection = document.getElementById('ai-provider').value;
+    const provider = providerSelection === 'smart' ? 'groq' : providerSelection;
+    const model = providerSelection === 'smart' ? (ALL_MODELS[provider]?.find?.(m => m.isDefault)?.modelId || ALL_MODELS[provider]?.[0]?.modelId || 'auto') : document.getElementById('ai-model').value;
+    
+    // Animate icon
+    const icon = document.getElementById('ai-status-icon');
+    if (icon) {
+        icon.innerHTML = '<div class="w-3 h-3 rounded-full bg-yellow-400 ring-2 ring-white animate-pulse"></div>';
+    }
     
     let results = [];
     
-    if (provider === 'groq') {
-        try {
-            const response = await api.post('api/ai-test.php?action=test_groq', {
-                model: model,
-                csrf_token: CSRF_TOKEN
+    try {
+        // Use the unified test_connection endpoint
+        const response = await api.post('api/ai.php?action=test_connection', {
+            provider: provider,
+            model: model,
+            csrf_token: CSRF_TOKEN
+        });
+
+        if (response.success && response.data.connected) {
+             results.push({ 
+                provider: provider.charAt(0).toUpperCase() + provider.slice(1), 
+                model, 
+                success: true,
+                response: response.data.response,
+                latency: '0.5', // Simulated/approximate since backend doesn't return it yet
+                status_code: 200,
+                timestamp: new Date().toLocaleTimeString()
             });
-            results.push({ provider: 'Groq', model, ...response.data });
-        } catch (error) {
-            results.push({
-                provider: 'Groq',
-                model,
-                success: false,
-                error: error.response?.error?.message || error.message || 'Failed to connect',
-                latency: 0,
-                status_code: error.status
-            });
+        } else {
+            throw new Error(response.data?.error || response.error || 'Connection failed');
         }
-    } else if (provider === 'openrouter') {
-        try {
-            const response = await api.post('api/ai-test.php?action=test_openrouter', {
-                model: model,
-                csrf_token: CSRF_TOKEN
-            });
-            results.push({ provider: 'OpenRouter', model, ...response.data });
-        } catch (error) {
-            results.push({
-                provider: 'OpenRouter',
-                model,
-                success: false,
-                error: error.response?.error?.message || error.message || 'Failed to connect',
-                latency: 0,
-                status_code: error.status
-            });
-        }
+    } catch (error) {
+        results.push({
+            provider: provider.charAt(0).toUpperCase() + provider.slice(1),
+            model,
+            success: false,
+            error: error.message || 'Failed to connect',
+            latency: 0,
+            status_code: error.status || 500,
+            timestamp: new Date().toLocaleTimeString()
+        });
+    }
+    
+    // Update icon based on result
+    if (icon) {
+        const allSuccess = results.every(r => r.success);
+        icon.innerHTML = `<div class="w-3 h-3 rounded-full ${allSuccess ? 'bg-green-500' : 'bg-red-500'} ring-2 ring-white"></div>`;
     }
     
     displayVerificationResults(results);
@@ -978,18 +978,41 @@ document.getElementById('chat-form')?.addEventListener('submit', async (e) => {
 });
 
 // Send message using Agent API
-// Send message using Agent API
 async function sendAgentMessage(message) {
     showTypingIndicator(); // Keep showing typing indicator (with polling tailored details)
+    timelineEvents = [];
+    renderTimeline();
+
+    if (!currentConversationId) {
+        try {
+            const startResponse = await api.post('api/ai-agent.php?action=start_conversation', {
+                titleSeed: message,
+                csrf_token: CSRF_TOKEN
+            });
+            if (startResponse.success && startResponse.data?.conversationId) {
+                currentConversationId = startResponse.data.conversationId;
+                eventCursor = 0;
+            }
+        } catch (error) {
+            console.warn('Failed to pre-start conversation, fallback to chat create.', error);
+        }
+    }
+
+    if (currentConversationId && eventCursor === 0) {
+        await syncEventCursorToLatest();
+    }
+
     startPolling();        // Start real-time updates
 
     try {
+        const effectiveProvider = resolveProviderForMessage(message);
+        const effectiveModel = resolveModelForProvider(effectiveProvider);
         const response = await api.post('api/ai-agent.php?action=chat', {
             message: message,
             conversationId: currentConversationId,
             autoConfirm: autoConfirmEnabled,
-            provider: document.getElementById('ai-provider')?.value || 'groq',
-            model: document.getElementById('ai-model')?.value || undefined,
+            provider: effectiveProvider,
+            model: effectiveModel,
             kbFolderId: document.getElementById('ai-kb-folder')?.value || null,
             csrf_token: CSRF_TOKEN
         });
@@ -1018,10 +1041,12 @@ async function sendChatMessage(message) {
     showTypingIndicator();
 
     try {
+        const effectiveProvider = resolveProviderForMessage(message);
+        const effectiveModel = resolveModelForProvider(effectiveProvider);
         const response = await api.post('api/ai.php?action=chat', {
             messages: chatHistory,
-            provider: document.getElementById('ai-provider')?.value || 'groq',
-            model: document.getElementById('ai-model')?.value || undefined,
+            provider: effectiveProvider,
+            model: effectiveModel,
             kbFolderId: document.getElementById('ai-kb-folder')?.value || '',
             csrf_token: CSRF_TOKEN
         });
@@ -1115,7 +1140,7 @@ function addChatMessage(role, content, functionCalls = [], toolResults = []) {
     const container = document.getElementById('chat-messages');
     const isUser = role === 'user';
 
-    const placeholder = container.querySelector('.text-center');
+    const placeholder = container.querySelector('#chat-empty-state');
     if (placeholder) placeholder.remove();
 
     const div = document.createElement('div');
@@ -1172,20 +1197,26 @@ async function clearConversationHistory() {
         });
 
         if (response.success) {
+            stopPolling();
+            hideTypingIndicator();
             // Clear UI
             document.getElementById('chat-messages').innerHTML = `
-                <div class="text-center text-gray-400 text-sm py-8">
+                <div id="chat-empty-state" class="text-center text-gray-400 text-sm h-full flex flex-col justify-center items-center">
                     <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
                     </svg>
-                    Start a conversation with the AI assistant
+                    <p class="mb-4">Start a conversation with the AI assistant</p>
+                    <div id="smart-start-suggestions" class="flex flex-wrap justify-center gap-2 max-w-lg mx-auto hidden transition-all duration-500 opacity-0"></div>
                 </div>
             `;
             chatHistory = [];
             currentConversationId = null;
+            eventCursor = 0;
+            timelineEvents = [];
 
             // Reload conversation list
             loadConversations();
+            loadSuggestions();
 
             showToast('All conversations cleared', 'success');
         } else {
@@ -1215,6 +1246,66 @@ function updateLiveStatus(status) {
     }
 }
 
+function renderTimeline() {
+    const indicator = document.getElementById('typing-indicator');
+    if (!indicator) return;
+    const timeline = indicator.querySelector('.typing-timeline');
+    if (!timeline) return;
+    if (!timelineEvents.length) {
+        timeline.innerHTML = '';
+        return;
+    }
+    const lastItems = timelineEvents.slice(-8);
+    timeline.innerHTML = lastItems.map((item) => {
+        return `<div class="text-[11px] text-gray-600 leading-4">${escapeHtml(item)}</div>`;
+    }).join('');
+}
+
+function applyConversationEvent(event) {
+    const type = event?.type || '';
+    const data = event?.data || {};
+    let line = '';
+    if (type === 'thinking_started') line = 'Thinking...';
+    if (type === 'tool_started') line = `Running ${data.name || 'tool'}...`;
+    if (type === 'tool_succeeded') line = `✓ ${data.summary || data.name || 'Tool completed'}`;
+    if (type === 'tool_failed') line = `✕ ${data.name || 'tool'} failed: ${data.error || 'Unknown error'}`;
+    if (type === 'token_retry') line = `Retrying with lower context/token budget...`;
+    if (type === 'run_cancelled') line = 'Run cancelled.';
+    if (type === 'run_error') line = `Error: ${data.error || 'Run failed'}`;
+    if (type === 'summary_ready') line = 'Final summary ready.';
+
+    if (line) {
+        timelineEvents.push(line);
+        updateLiveStatus(line);
+        renderTimeline();
+    }
+}
+
+async function pollConversationEvents() {
+    if (!currentConversationId) return;
+    try {
+        const response = await api.get(`api/ai-agent.php?action=get_conversation_events&id=${encodeURIComponent(currentConversationId)}&cursor=${eventCursor}&limit=100`);
+        if (!response.success || !response.data) return;
+        const events = Array.isArray(response.data.events) ? response.data.events : [];
+        events.forEach((event) => applyConversationEvent(event));
+        eventCursor = Number(response.data.nextCursor || eventCursor || 0);
+    } catch (error) {
+        console.warn('Event polling error', error);
+    }
+}
+
+async function syncEventCursorToLatest() {
+    if (!currentConversationId) return;
+    try {
+        const response = await api.get(`api/ai-agent.php?action=get_conversation_events&id=${encodeURIComponent(currentConversationId)}&cursor=0&limit=1`);
+        if (response.success && response.data) {
+            eventCursor = Number(response.data.nextCursor || eventCursor || 0);
+        }
+    } catch (error) {
+        console.warn('Event cursor sync error', error);
+    }
+}
+
 // Override showTypingIndicator to support status
 const originalShowTypingIndicator = showTypingIndicator;
 showTypingIndicator = function() {
@@ -1229,7 +1320,7 @@ function addFunctionResult(result) {
     const div = document.createElement('div');
     div.className = 'flex justify-start';
 
-    let html = '<div class="max-w-[80%] px-4 py-2 rounded-xl bg-green-50 border border-green-200">';
+    let html = `<div class="max-w-[80%] px-4 py-2 rounded-xl bg-green-50 border border-green-200">`;
     if (result.error) {
         html += `<div class="text-sm text-red-800">❌ ${escapeHtml(result.name)}: ${escapeHtml(result.error)}</div>`;
     } else {
@@ -1245,7 +1336,7 @@ function addFunctionResult(result) {
 // Show typing indicator
 function showTypingIndicator() {
     const container = document.getElementById('chat-messages');
-    const placeholder = container.querySelector('.text-center');
+    const placeholder = container.querySelector('#chat-empty-state');
     if (placeholder) placeholder.remove();
 
     const div = document.createElement('div');
@@ -1258,6 +1349,8 @@ function showTypingIndicator() {
                 <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
                 <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
             </div>
+            <div class="typing-details text-xs text-gray-500 mt-2 font-mono"></div>
+            <div class="typing-timeline mt-2 space-y-1"></div>
         </div>
     `;
     container.appendChild(div);
@@ -1423,6 +1516,8 @@ async function loadConversation(conversationId) {
             
             // Set message count for polling baseline
             lastMessageCount = (conv.messages || []).length;
+            eventCursor = 0;
+            timelineEvents = [];
 
             // Clear and reload messages
             const container = document.getElementById('chat-messages');
@@ -1456,19 +1551,25 @@ async function loadConversation(conversationId) {
 
 // Start a new conversation
 function startNewConversation() {
+    stopPolling();
+    hideTypingIndicator();
     currentConversationId = null;
     chatHistory = [];
     lastMessageCount = 0; // Reset for polling
+    eventCursor = 0;
+    timelineEvents = [];
     const container = document.getElementById('chat-messages');
     container.innerHTML = `
-        <div class="text-center text-gray-400 text-sm py-8">
+        <div id="chat-empty-state" class="text-center text-gray-400 text-sm h-full flex flex-col justify-center items-center">
             <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
             </svg>
-            Start a conversation with the AI assistant
+            <p class="mb-4">Start a conversation with the AI assistant</p>
+            <div id="smart-start-suggestions" class="flex flex-wrap justify-center gap-2 max-w-lg mx-auto hidden transition-all duration-500 opacity-0"></div>
         </div>
     `;
     loadConversations();
+    loadSuggestions();
     showToast('Started new conversation', 'info');
 }
 
@@ -1524,8 +1625,11 @@ function startPolling() {
         };
     }
 
-    // Poll every 3 seconds
-    pollInterval = setInterval(refreshConversation, 3000);
+    // Poll every ~1.2s to keep timeline responsive.
+    pollInterval = setInterval(async () => {
+        await pollConversationEvents();
+        await refreshConversation();
+    }, 1200);
 }
 
 // Stop polling for updates
@@ -1539,7 +1643,7 @@ function stopPolling() {
     // Revert Send button
     const sendBtn = document.getElementById('send-message');
     if (sendBtn) {
-        sendBtn.innerHTML = '<svg class="w-5 h-5 transform rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>';
+        sendBtn.innerHTML = 'Send';
         sendBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
         sendBtn.classList.add('bg-black', 'hover:bg-gray-800');
         // Restore original handler (assumed form submission handles it)
@@ -1584,8 +1688,6 @@ async function refreshConversation() {
     }
 }
 
-// ... existing code ...
-
 // Initial load of conversations
 window.addEventListener('DOMContentLoaded', () => {
     // After initial setup, load conversations
@@ -1593,7 +1695,271 @@ window.addEventListener('DOMContentLoaded', () => {
         if (agentModeEnabled) {
             loadConversations();
         }
+        loadSuggestions();
     }, 1000);
 });
+
+// Smart Start Suggestions
+async function loadSuggestions() {
+    try {
+        const response = await api.get('api/ai-agent.php?action=suggest_actions');
+        if (response.success && response.data.suggestions) {
+            renderSuggestions(response.data.suggestions);
+        }
+    } catch (e) {
+        console.warn('Failed to load suggestions', e);
+    }
+}
+
+function renderSuggestions(suggestions) {
+    const container = document.getElementById('smart-start-suggestions');
+    if (!container) return;
+    
+    if (suggestions.length === 0) return;
+    
+    container.innerHTML = suggestions.map(s => `
+        <button onclick="useSuggestion('${escapeHtml(s.prompt)}')" 
+                class="px-3 py-1.5 bg-white border border-gray-200 rounded-full text-xs font-medium text-gray-600 hover:border-black hover:text-black transition shadow-sm animate-fade-in-up">
+            ✨ ${escapeHtml(s.label)}
+        </button>
+    `).join('');
+    container.classList.remove('hidden');
+    // Add small delay for fade in
+    setTimeout(() => container.classList.remove('opacity-0'), 50);
+}
+
+function useSuggestion(prompt) {
+    const input = document.getElementById('chat-input');
+    if (!input) return;
+    input.value = prompt;
+    document.getElementById('chat-form').requestSubmit();
+}
+
+// =====================
+// Model Settings Sidebar
+// =====================
+
+function openModelSettingsSidebar() {
+    const sidebar = document.getElementById('model-settings-sidebar');
+    const overlay = document.getElementById('model-settings-overlay');
+    
+    sidebar.classList.remove('translate-x-full');
+    overlay.classList.remove('hidden');
+    // slight delay to allow display:block to apply before opacity transition
+    setTimeout(() => overlay.classList.remove('opacity-0'), 10);
+    
+    loadModelSettingsContent();
+}
+
+function closeModelSettingsSidebar() {
+    const sidebar = document.getElementById('model-settings-sidebar');
+    const overlay = document.getElementById('model-settings-overlay');
+    
+    sidebar.classList.add('translate-x-full');
+    overlay.classList.add('opacity-0');
+    setTimeout(() => overlay.classList.add('hidden'), 300);
+}
+
+async function loadModelSettingsContent() {
+    const container = document.getElementById('model-settings-sidebar-content');
+    container.innerHTML = '<div class="flex items-center justify-center h-full"><div class="spinner"></div></div>';
+
+    try {
+        const response = await api.get('api/models.php?action=list');
+        if (response.success) {
+            renderModelSettings(response.data);
+        } else {
+            container.innerHTML = '<p class="text-red-500 text-center mt-10">Failed to load models</p>';
+        }
+    } catch (error) {
+        container.innerHTML = '<p class="text-red-500 text-center mt-10">Error loading models</p>';
+    }
+}
+
+function renderModelSettings(models) {
+    const container = document.getElementById('model-settings-sidebar-content');
+    if (!container) return;
+
+    let html = '<div class="space-y-6">';
+    
+    // Groq
+    html += buildModelTable('Groq', 'groq', models.groq || []);
+    
+    // OpenRouter
+    html += buildModelTable('OpenRouter', 'openrouter', models.openrouter || []);
+    
+    html += '</div>';
+    
+    container.innerHTML = html;
+}
+
+function buildModelTable(title, provider, models) {
+    let html = `
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+                <h4 class="font-semibold text-gray-900">${title}</h4>
+                <button onclick="openAddModelModal('${provider}')" class="px-3 py-1.5 bg-black text-white text-xs rounded-lg hover:bg-gray-800">
+                    Add
+                </button>
+            </div>
+            <div class="">
+    `;
+    
+    if (models.length === 0) {
+        html += `<div class="p-4 text-center text-gray-500 text-sm">No models configured</div>`;
+    } else {
+        html += `<div class="divide-y divide-gray-100">`;
+        models.forEach(m => {
+            const modelJson = JSON.stringify(m).replace(/"/g, '&quot;');
+            html += `
+                <div class="p-3 hover:bg-gray-50 transition group">
+                    <div class="flex justify-between items-start mb-1">
+                        <div class="font-medium text-gray-900 text-sm">${escapeHtml(m.displayName)}</div>
+                        <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onclick="openEditModelModal(${modelJson}, '${provider}')" class="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
+                            ${!m.isDefault ? `<button onclick="deleteModel('${m.id}')" class="text-red-600 hover:text-red-800 text-xs font-medium">Delete</button>` : ''}
+                        </div>
+                    </div>
+                    <div class="text-xs font-mono text-gray-500 truncate mb-2">${escapeHtml(m.modelId)}</div>
+                    <div class="flex items-center justify-between">
+                        <span class="px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold rounded-full ${m.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}">
+                            ${m.enabled ? 'Active' : 'Disabled'}
+                        </span>
+                        ${m.isDefault ? '<span class="text-[10px] font-bold text-blue-600">Default</span>' : ''}
+                    </div>
+                </div>
+            `;
+        });
+        html += `</div>`;
+    }
+    
+    html += `</div></div>`;
+    return html;
+}
+
+function openAddModelModal(provider) {
+    // Close parent modal first? No, we can stack or replace.
+    // Ideally we replace content or stack. The modal system supports one modal usually.
+    // Let's replace content.
+    
+    openModal(`
+        <div class="p-6">
+            <h3 class="text-lg font-semibold mb-4">Add ${provider} Model</h3>
+            <form id="add-model-form" class="space-y-4">
+                <input type="hidden" name="provider" value="${provider}">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+                    <input type="text" name="displayName" required class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Model ID</label>
+                    <input type="text" name="modelId" required placeholder="e.g., llama-3.3-70b-versatile" class="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono">
+                    <p class="text-xs text-gray-500 mt-1">Use the provider model identifier. API keys are managed in Settings.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea name="description" class="w-full px-3 py-2 border border-gray-300 rounded-lg"></textarea>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" name="enabled" checked id="model-enabled" class="rounded border-gray-300">
+                    <label for="model-enabled" class="ml-2 text-sm text-gray-600">Enabled</label>
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-black text-white rounded-lg">Add Model</button>
+                </div>
+            </form>
+        </div>
+    `);
+    
+    document.getElementById('add-model-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+        data.enabled = !!data.enabled;
+
+        try {
+            const result = await api.post('api/models.php?action=add', data);
+            if (result.success) {
+                showToast(result.message || 'Model added successfully', 'success');
+                closeModal();
+                loadModelSettingsContent(); // Refresh sidebar
+            } else {
+                showToast(result.error?.message || 'Failed to add model', 'error');
+            }
+        } catch (error) {
+            console.error('Add model error:', error);
+            showToast('Failed to add model', 'error');
+        }
+    });
+}
+
+function openEditModelModal(model, provider) {
+    openModal(`
+        <div class="p-6">
+            <h3 class="text-lg font-semibold mb-4">Edit Model</h3>
+            <form id="edit-model-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+                    <input type="text" name="displayName" value="${escapeHtml(model.displayName)}" required class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Model ID</label>
+                    <input type="text" name="modelId" value="${escapeHtml(model.modelId)}" required class="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono">
+                    <p class="text-xs text-gray-500 mt-1">Use the provider model identifier. API keys are managed in Settings.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea name="description" class="w-full px-3 py-2 border border-gray-300 rounded-lg">${escapeHtml(model.description)}</textarea>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" name="enabled" ${model.enabled ? 'checked' : ''} id="edit-model-enabled" class="rounded border-gray-300">
+                    <label for="edit-model-enabled" class="ml-2 text-sm text-gray-600">Enabled</label>
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-black text-white rounded-lg">Update Model</button>
+                </div>
+            </form>
+        </div>
+    `);
+    
+    document.getElementById('edit-model-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+        data.enabled = !!data.enabled;
+
+        try {
+            const result = await api.post(`api/models.php?action=update&id=${model.id}`, data);
+            if (result.success) {
+                showToast(result.message || 'Model updated successfully', 'success');
+                closeModal();
+                loadModelSettingsContent(); // Refresh sidebar
+            } else {
+                showToast(result.error?.message || 'Failed to update model', 'error');
+            }
+        } catch (error) {
+            console.error('Update model error:', error);
+            showToast('Failed to update model', 'error');
+        }
+    });
+}
+
+async function deleteModel(id) {
+    if (!confirm('Are you sure you want to delete this model?')) return;
+    try {
+        const result = await api.delete(`api/models.php?action=delete&id=${id}`);
+        if (result.success) {
+            showToast(result.message || 'Model deleted successfully', 'success');
+            loadModelSettingsContent(); // Refresh sidebar
+        } else {
+            showToast(result.error?.message || 'Failed to delete model', 'error');
+        }
+    } catch (error) {
+        console.error('Delete model error:', error);
+        showToast('Failed to delete model', 'error');
+    }
+}
 </script>
 

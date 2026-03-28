@@ -19,7 +19,7 @@ class OpenRouterAPI {
      * CRITICAL: Model must be explicitly provided. NO fallback to hardcoded defaults.
      * Models MUST come from database (Model Settings page: /?page=model-settings)
      */
-    public function chatCompletion(array $messages, ?string $model = null): array {
+    public function chatCompletion(array $messages, ?string $model = null, array $options = []): array {
         if (empty($model)) {
             throw new APIException(
                 'OpenRouter model must be explicitly specified. Configure a model in Model Settings (/?page=model-settings).',
@@ -32,8 +32,11 @@ class OpenRouterAPI {
         $payload = [
             'model' => $model,
             'messages' => $messages,
-            'max_tokens' => 8192
+            'max_tokens' => (int)($options['maxTokens'] ?? 8192)
         ];
+        if (isset($options['temperature'])) {
+            $payload['temperature'] = (float)$options['temperature'];
+        }
 
         return $this->makeRequest('/chat/completions', $payload);
     }
@@ -44,7 +47,7 @@ class OpenRouterAPI {
      * CRITICAL: Model must be explicitly provided. NO fallback to hardcoded defaults.
      * Models MUST come from database (Model Settings page: /?page=model-settings)
      */
-    public function chatWithFunctions(array $messages, array $functions, ?string $model = null): array {
+    public function chatWithFunctions(array $messages, array $functions, ?string $model = null, array $options = []): array {
         if (empty($model)) {
             throw new APIException(
                 'OpenRouter model must be explicitly specified. Configure a model in Model Settings (/?page=model-settings).',
@@ -59,8 +62,11 @@ class OpenRouterAPI {
             'messages' => $messages,
             'tools' => $functions,
             'tool_choice' => 'auto',
-            'max_tokens' => 8192
+            'max_tokens' => (int)($options['maxTokens'] ?? 8192)
         ];
+        if (isset($options['temperature'])) {
+            $payload['temperature'] = (float)$options['temperature'];
+        }
 
         return $this->makeRequest('/chat/completions', $payload);
     }

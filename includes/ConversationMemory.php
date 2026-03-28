@@ -57,6 +57,8 @@ class ConversationMemory {
             'userId' => $this->userId,
             'title' => $title,
             'messages' => [],
+            'events' => [],
+            'nextEventSeq' => 1,
             'isCancelled' => false,
             'createdAt' => date('c'),
             'updatedAt' => date('c')
@@ -108,6 +110,96 @@ class ConversationMemory {
         }
 
         $this->db->save('conversations', $conversations);
+    }
+
+    /**
+     * Save a structured event for live UI timelines.
+     *
+     * @param string $type Event type (e.g. tool_started, tool_succeeded)
+     * @param array $data Event payload
+     * @return int Event sequence number
+     */
+    public function saveEvent(string $type, array $data = []): int {
+        if (empty($this->conversationId)) {
+            throw new ValidationException('No active conversation');
+        }
+
+        $conversations = $this->db->load('conversations') ?? [];
+        $seq = 0;
+
+        foreach ($conversations as &$conv) {
+            if ($conv['id'] === $this->conversationId && $conv['userId'] === $this->userId) {
+                if (!isset($conv['events']) || !is_array($conv['events'])) {
+                    $conv['events'] = [];
+                }
+                $nextSeq = (int)($conv['nextEventSeq'] ?? (count($conv['events']) + 1));
+                if ($nextSeq < 1) {
+                    $nextSeq = 1;
+                }
+
+                $event = [
+                    'seq' => $nextSeq,
+                    'type' => $type,
+                    'data' => $data,
+                    'timestamp' => date('c')
+                ];
+
+                $conv['events'][] = $event;
+                $seq = $nextSeq;
+                $conv['nextEventSeq'] = $nextSeq + 1;
+
+                // Keep a bounded event log for polling.
+                if (count($conv['events']) > 400) {
+                    $conv['events'] = array_slice($conv['events'], -400);
+                }
+
+                $conv['updatedAt'] = date('c');
+                break;
+            }
+        }
+
+        $this->db->save('conversations', $conversations);
+        return $seq;
+    }
+
+    /**
+     * Return events after a cursor for incremental polling.
+     *
+     * @param string $conversationId
+     * @param int $cursor Last seen event sequence
+     * @param int $limit Maximum events to return
+     * @return array{events: array, nextCursor: int}
+     */
+    public function getEventsSince(string $conversationId, int $cursor = 0, int $limit = 100): array {
+        $conversation = $this->loadConversation($conversationId);
+        if (!$conversation) {
+            return ['events' => [], 'nextCursor' => $cursor];
+        }
+
+        $events = is_array($conversation['events'] ?? null) ? $conversation['events'] : [];
+        $cursor = max(0, (int)$cursor);
+        $limit = max(1, min(200, (int)$limit));
+
+        $filtered = array_values(array_filter($events, function($event) use ($cursor) {
+            return (int)($event['seq'] ?? 0) > $cursor;
+        }));
+
+        if (count($filtered) > $limit) {
+            $filtered = array_slice($filtered, -$limit);
+        }
+
+        $nextCursor = $cursor;
+        foreach ($filtered as $event) {
+            $seq = (int)($event['seq'] ?? 0);
+            if ($seq > $nextCursor) {
+                $nextCursor = $seq;
+            }
+        }
+
+        return [
+            'events' => $filtered,
+            'nextCursor' => $nextCursor
+        ];
     }
 
     /**

@@ -196,6 +196,11 @@ $longestStreak = max(array_column($habits, 'longestStreak') ?: [0]);
                                 title="Archive this habit">
                             Archive
                         </button>
+                        <button onclick="deleteHabit('<?php echo e($habit['id']); ?>', '<?php echo e($habit['name']); ?>')"
+                                class="flex-1 h-10 border border-black bg-white text-center font-black text-[11px] uppercase tracking-widest hover:bg-red-50 text-red-600 transition-all flex items-center justify-center"
+                                title="Delete this habit">
+                            Delete
+                        </button>
                         <a href="?page=view-habit&id=<?php echo e($habit['id']); ?>"
                            class="flex-1 h-10 border border-black bg-black text-white text-center font-black text-[11px] uppercase tracking-widest hover:opacity-90 transition-all flex items-center justify-center">
                             View Details
@@ -225,6 +230,18 @@ async function toggleHabitArchive(habitId, habitName) {
             setTimeout(() => location.reload(), 500);
         } else {
             showToast(response.error || 'Failed to archive habit', 'error');
+        }
+    });
+}
+async function deleteHabit(habitId, habitName) {
+    confirmAction(`Delete "${habitName}" and all its history? This cannot be undone.`, async () => {
+        const response = await api.delete('api/habits.php?id=' + habitId);
+
+        if (response.success) {
+            showToast(response.message || 'Habit deleted', 'success');
+            setTimeout(() => location.reload(), 500);
+        } else {
+            showToast(response.error || 'Failed to delete habit', 'error');
         }
     });
 }

@@ -35,12 +35,15 @@ $hasAnyKey = $hasGroqKey || $hasOpenRouterKey;
 
 $groqModels = array_values(array_filter($models['groq'] ?? [], static fn($m) => $m['enabled'] ?? true));
 $openRouterModels = array_values(array_filter($models['openrouter'] ?? [], static fn($m) => $m['enabled'] ?? true));
-if (empty($groqModels) && empty($openRouterModels)) {
+// Per-provider fallback: only use static list for providers that have NO DB models
+if (empty($groqModels)) {
     $groqModels = array_map(
         static fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
         array_keys(GroqAPI::getModels()),
         GroqAPI::getModels()
     );
+}
+if (empty($openRouterModels)) {
     $openRouterModels = array_map(
         static fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
         array_keys(OpenRouterAPI::getModels()),
@@ -138,6 +141,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     </div>
     <div class="grid grid-cols-2 gap-2">
       <select id="ai-provider" class="w-full bg-white border border-black px-3 py-2 text-xs font-bold uppercase tracking-widest focus:ring-0 focus:outline-none" <?= !$hasAnyKey ? 'disabled' : '' ?>>
+        <?php if ($hasGroqKey && $hasOpenRouterKey): ?><option value="smart">Smart (Groq/OpenRouter)</option><?php endif; ?>
         <?php if ($hasGroqKey): ?><option value="groq">Groq</option><?php endif; ?>
         <?php if ($hasOpenRouterKey): ?><option value="openrouter">OpenRouter</option><?php endif; ?>
       </select>
@@ -162,7 +166,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
   </section>
 </main>
 
-<div class="absolute left-0 right-0 bottom-[74px] bg-white z-30">
+<div class="absolute left-0 right-0 bottom-[78px] bg-white z-[45]">
   <div class="flex items-center justify-around border-y border-black py-1">
     <button onclick="copyChatTranscript()" class="p-2 hover:bg-gray-100"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2M8 16h8a2 2 0 002-2v-4a2 2 0 00-2-2H8a2 2 0 00-2 2v4a2 2 0 002 2z"/></svg></button>
     <button onclick="exportChatMarkdown()" class="p-2 hover:bg-gray-100"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 12l-4-4m4 4l4-4M4 20h16"/></svg></button>
@@ -235,6 +239,9 @@ let isSending = false;
 let generatedTasksBuffer = [];
 let generatedPRDBuffer = '';
 let generatedPRDIdea = '';
+let agentPollTimer = null;
+let agentEventCursor = 0;
+let agentTimelineEvents = [];
 
 function showToast(message, type) {
   if (window.Mobile && Mobile.ui && typeof Mobile.ui.showToast === 'function') Mobile.ui.showToast(message, type || 'info');
@@ -244,10 +251,33 @@ function escapeHtml(str) { const d = document.createElement('div'); d.textConten
 function timeAgo(dateStr) { if (!dateStr) return '--'; const d = new Date(dateStr); const diff = Math.floor((Date.now() - d.getTime()) / 1000); if (diff < 60) return diff + 's ago'; if (diff < 3600) return Math.floor(diff / 60) + 'm ago'; if (diff < 86400) return Math.floor(diff / 3600) + 'h ago'; return Math.floor(diff / 86400) + 'd ago'; }
 function getProvider() { const el = document.getElementById('ai-provider'); return el ? el.value : 'groq'; }
 function getModel() { const el = document.getElementById('ai-model'); return el ? el.value : ''; }
+function isComplexPrompt(prompt) {
+  const text = String(prompt || '').toLowerCase();
+  if (text.length > 220) return true;
+  const keywords = ['complex', 'analyze', 'analysis', 'plan', 'strategy', 'architecture', 'debug', 'refactor', 'workflow', 'agentic', 'multi-step', 'tradeoff', 'prioritize', 'schedule'];
+  return keywords.some((k) => text.includes(k));
+}
+function resolveProviderForMessage(message) {
+  const selected = getProvider();
+  if (selected !== 'smart') return selected;
+  return isComplexPrompt(message) ? 'openrouter' : 'groq';
+}
+function resolveModelForProvider(provider) {
+  if (getProvider() !== 'smart') return getModel() || undefined;
+  const models = Array.isArray(ALL_MODELS[provider]) ? ALL_MODELS[provider] : [];
+  const preferred = models.find((m) => m.isDefault) || models[0];
+  return preferred?.modelId || 'auto';
+}
 
 function updateModelList() {
   const provider = getProvider();
   const select = document.getElementById('ai-model');
+  if (provider === 'smart') {
+    select.innerHTML = `<option value="auto">Auto by provider</option>`;
+    select.disabled = true;
+    return;
+  }
+  select.disabled = false;
   const models = Array.isArray(ALL_MODELS[provider]) ? ALL_MODELS[provider] : [];
   select.innerHTML = models.map((m, i) => `<option value="${escapeHtml(m.modelId || '')}" ${(m.isDefault || i === 0) ? 'selected' : ''}>${escapeHtml(m.displayName || m.modelId || 'Model')}</option>`).join('');
 }
@@ -273,15 +303,95 @@ function addChatMessage(role, content, functionCalls, toolResults) {
   container.appendChild(wrapper);
   container.scrollTop = container.scrollHeight;
 }
-function showTyping() { const c = document.getElementById('chat-messages'); const e = document.getElementById('chat-empty-state'); if (e) e.remove(); const div = document.createElement('div'); div.id='typing-indicator'; div.className='chat-message assistant'; div.innerHTML='<div class="chat-bubble"><span class="text-xs text-gray-500 uppercase tracking-widest">Thinking...</span></div>'; c.appendChild(div); c.scrollTop = c.scrollHeight; }
+function showTyping() {
+  const c = document.getElementById('chat-messages');
+  const e = document.getElementById('chat-empty-state');
+  if (e) e.remove();
+  const div = document.createElement('div');
+  div.id='typing-indicator';
+  div.className='chat-message assistant';
+  div.innerHTML='<div class="chat-bubble"><span class="text-xs text-gray-500 uppercase tracking-widest typing-live-status">Thinking...</span><div class="typing-live-timeline mt-2 space-y-1"></div></div>';
+  c.appendChild(div);
+  c.scrollTop = c.scrollHeight;
+}
 function hideTyping() { const t = document.getElementById('typing-indicator'); if (t) t.remove(); }
 function renderWelcomeIfEmpty() { const c = document.getElementById('chat-messages'); if (!c.children.length) c.innerHTML = `<div id="chat-empty-state" class="text-center space-y-3 opacity-40 py-16"><svg class="w-10 h-10 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h8m-8 4h5m8 5l-3.4-2.2A8 8 0 104 12a8 8 0 0012.6 6.4L20 20z"/></svg><p class="text-xs font-medium max-w-[220px] mx-auto">Start a conversation with the AI assistant.</p></div>`; }
+
+function renderMobileTimeline() {
+  const root = document.getElementById('typing-indicator');
+  if (!root) return;
+  const status = root.querySelector('.typing-live-status');
+  const timeline = root.querySelector('.typing-live-timeline');
+  if (!timeline || !status) return;
+  const lines = agentTimelineEvents.slice(-6);
+  if (lines.length) status.textContent = lines[lines.length - 1];
+  timeline.innerHTML = lines.map((line) => `<div class="text-[10px] text-gray-500">${escapeHtml(line)}</div>`).join('');
+}
+
+function applyMobileAgentEvent(event) {
+  const type = event?.type || '';
+  const data = event?.data || {};
+  let line = '';
+  if (type === 'thinking_started') line = 'Thinking...';
+  if (type === 'tool_started') line = `Running ${data.name || 'tool'}...`;
+  if (type === 'tool_succeeded') line = `✓ ${data.summary || data.name || 'Tool completed'}`;
+  if (type === 'tool_failed') line = `✕ ${data.name || 'tool'} failed`;
+  if (type === 'token_retry') line = 'Retrying with lower context/token...';
+  if (type === 'summary_ready') line = 'Final summary ready.';
+  if (type === 'run_cancelled') line = 'Run cancelled.';
+  if (type === 'run_error') line = `Error: ${data.error || 'Run failed'}`;
+  if (line) {
+    agentTimelineEvents.push(line);
+    renderMobileTimeline();
+  }
+}
+
+async function pollMobileAgentEvents() {
+  if (!currentConversationId) return;
+  try {
+    const response = await App.api.get('api/ai-agent.php?action=get_conversation_events&id=' + encodeURIComponent(currentConversationId) + '&cursor=' + agentEventCursor + '&limit=100');
+    if (!response.success || !response.data) return;
+    const events = Array.isArray(response.data.events) ? response.data.events : [];
+    events.forEach(applyMobileAgentEvent);
+    agentEventCursor = Number(response.data.nextCursor || agentEventCursor || 0);
+  } catch (error) {
+    console.warn('Mobile event polling failed', error);
+  }
+}
+
+async function syncMobileEventCursor() {
+  if (!currentConversationId) return;
+  try {
+    const response = await App.api.get('api/ai-agent.php?action=get_conversation_events&id=' + encodeURIComponent(currentConversationId) + '&cursor=0&limit=1');
+    if (response.success && response.data) {
+      agentEventCursor = Number(response.data.nextCursor || agentEventCursor || 0);
+    }
+  } catch (error) {
+    console.warn('syncMobileEventCursor failed', error);
+  }
+}
+
+function startMobileAgentPolling() {
+  if (agentPollTimer) return;
+  agentPollTimer = setInterval(async () => {
+    await pollMobileAgentEvents();
+    await refreshConversation();
+  }, 1200);
+}
+
+function stopMobileAgentPolling() {
+  if (!agentPollTimer) return;
+  clearInterval(agentPollTimer);
+  agentPollTimer = null;
+}
 
 async function sendStandardMessage(message) {
   chatHistory.push({ role: 'user', content: message });
   showTyping();
   try {
-    const response = await App.api.post('api/ai.php?action=chat', { messages: chatHistory, provider: getProvider(), model: getModel(), kbFolderId: selectedKbFolderId || '', csrf_token: CSRF_TOKEN });
+    const effectiveProvider = resolveProviderForMessage(message);
+    const effectiveModel = resolveModelForProvider(effectiveProvider);
+    const response = await App.api.post('api/ai.php?action=chat', { messages: chatHistory, provider: effectiveProvider, model: effectiveModel, kbFolderId: selectedKbFolderId || '', csrf_token: CSRF_TOKEN });
     hideTyping();
     if (response.success && response.data && response.data.response) {
       chatHistory.push({ role: 'assistant', content: response.data.response });
@@ -312,15 +422,47 @@ async function refreshConversation() {
 
 async function sendAgentMessage(message) {
   showTyping();
+  agentTimelineEvents = [];
+  renderMobileTimeline();
+  if (!currentConversationId) {
+    try {
+      const startResponse = await App.api.post('api/ai-agent.php?action=start_conversation', { titleSeed: message, csrf_token: CSRF_TOKEN });
+      if (startResponse.success && startResponse.data?.conversationId) {
+        currentConversationId = startResponse.data.conversationId;
+        agentEventCursor = 0;
+      }
+    } catch (error) {
+      console.warn('start_conversation failed on mobile, fallback to chat create', error);
+    }
+  }
+  if (currentConversationId && agentEventCursor === 0) {
+    await syncMobileEventCursor();
+  }
+  startMobileAgentPolling();
   try {
-    const response = await App.api.post('api/ai-agent.php?action=chat', { message, conversationId: currentConversationId, autoConfirm: true, provider: getProvider(), model: getModel(), kbFolderId: selectedKbFolderId || null, csrf_token: CSRF_TOKEN });
+    const effectiveProvider = resolveProviderForMessage(message);
+    const effectiveModel = resolveModelForProvider(effectiveProvider);
+    const response = await App.api.post('api/ai-agent.php?action=chat', {
+      message,
+      conversationId: currentConversationId,
+      autoConfirm: true,
+      provider: effectiveProvider,
+      model: effectiveModel,
+      kbFolderId: selectedKbFolderId || null,
+      csrf_token: CSRF_TOKEN
+    });
+    stopMobileAgentPolling();
     hideTyping();
     if (response.success && response.data) {
       currentConversationId = response.data.conversationId || currentConversationId;
       await refreshConversation();
       await loadConversations();
     } else addChatMessage('assistant', 'Error: ' + (response.error || 'Failed to get response'));
-  } catch (error) { hideTyping(); addChatMessage('assistant', 'Error: ' + (error.message || 'Network error')); }
+  } catch (error) {
+    stopMobileAgentPolling();
+    hideTyping();
+    addChatMessage('assistant', 'Error: ' + (error.message || 'Network error'));
+  }
 }
 
 async function handleSendMessage(event) {
@@ -337,7 +479,7 @@ async function handleSendMessage(event) {
   isSending = false;
 }
 
-function startNewConversation() { currentConversationId = null; chatHistory = []; document.getElementById('chat-messages').innerHTML = ''; renderWelcomeIfEmpty(); loadConversations(); showToast('New conversation started.', 'info'); }
+function startNewConversation() { currentConversationId = null; chatHistory = []; agentEventCursor = 0; agentTimelineEvents = []; stopMobileAgentPolling(); document.getElementById('chat-messages').innerHTML = ''; renderWelcomeIfEmpty(); loadConversations(); showToast('New conversation started.', 'info'); }
 
 function toggleConversationHistory() {
   const backdrop = document.getElementById('conversation-drawer');
@@ -355,12 +497,12 @@ async function loadConversations() {
     list.innerHTML = rows.map((r) => `<button class="w-full text-left p-3 border-b border-gray-100 hover:bg-gray-50 ${r.id === currentConversationId ? 'bg-gray-50' : ''}" onclick="openConversation('${r.id}')"><p class="text-xs font-black uppercase tracking-tight truncate">${escapeHtml(r.title || 'Conversation')}</p><p class="text-[10px] text-gray-500 uppercase tracking-widest mt-1">${Number(r.messageCount || 0)} msgs · ${timeAgo(r.updatedAt)}</p></button>`).join('');
   } catch (error) { list.innerHTML = '<div class="p-4 text-sm text-red-600">Failed to load conversations.</div>'; }
 }
-async function openConversation(id) { currentConversationId = id; await refreshConversation(); await loadConversations(); toggleConversationHistory(); }
+async function openConversation(id) { currentConversationId = id; agentEventCursor = 0; agentTimelineEvents = []; await refreshConversation(); await loadConversations(); toggleConversationHistory(); }
 async function clearConversationHistory() {
   if (!window.confirm('Clear all AI conversations?')) return;
   try {
     const response = await App.api.post('api/ai-agent.php?action=clear_all_conversations', { csrf_token: CSRF_TOKEN });
-    if (response.success) { startNewConversation(); showToast('All conversations cleared.', 'success'); }
+    if (response.success) { stopMobileAgentPolling(); hideTyping(); startNewConversation(); showToast('All conversations cleared.', 'success'); }
     else showToast(response.error || 'Failed to clear conversations', 'error');
   } catch (error) { showToast('Failed to clear conversations', 'error'); }
 }
@@ -455,7 +597,9 @@ function openTaskGenerator() {
     resultBox.textContent = 'Generating tasks...';
     generatedTasksBuffer = [];
     try {
-      const r = await App.api.post('api/ai.php?action=generate_tasks', { description, provider: getProvider(), model: getModel(), csrf_token: CSRF_TOKEN });
+      const provider = resolveProviderForMessage(description);
+      const model = resolveModelForProvider(provider);
+      const r = await App.api.post('api/ai.php?action=generate_tasks', { description, provider, model, csrf_token: CSRF_TOKEN });
       if (!r.success || !r.data || !Array.isArray(r.data.tasks)) { resultBox.textContent = r.error || 'Failed to generate tasks.'; return; }
       generatedTasksBuffer = r.data.tasks;
       resultBox.innerHTML = '<p class="font-bold mb-2">Generated Tasks</p><ul class="space-y-1 text-xs">' + r.data.tasks.map((t, i) => '<li><strong>' + (i + 1) + '.</strong> ' + escapeHtml(t.title || 'Task') + '</li>').join('') + '</ul>' + (projectId ? '<button type="button" onclick="saveGeneratedTasksToProject(\'' + escapeHtml(projectId) + '\')" class="mt-3 w-full py-2 bg-black text-white text-[10px] font-black uppercase tracking-widest">Save To Project</button>' : '');
@@ -486,7 +630,9 @@ function openPRDGenerator() {
     generatedPRDBuffer = '';
     generatedPRDIdea = idea;
     try {
-      const r = await App.api.post('api/ai.php?action=generate_prd', { idea, provider: getProvider(), model: getModel(), csrf_token: CSRF_TOKEN });
+      const provider = resolveProviderForMessage(idea);
+      const model = resolveModelForProvider(provider);
+      const r = await App.api.post('api/ai.php?action=generate_prd', { idea, provider, model, csrf_token: CSRF_TOKEN });
       if (!r.success || !r.data || !r.data.prd) { box.textContent = r.error || 'Failed to generate PRD.'; saveBtn.classList.add('hidden'); return; }
       generatedPRDBuffer = r.data.prd;
       generatedPRDIdea = r.data.idea || idea;
@@ -505,8 +651,11 @@ async function saveGeneratedPRDToProject(projectId) {
   } catch (e) { showToast('Failed to save PRD.', 'error'); }
 }
 async function runAIVerification() {
-  const provider = getProvider();
-  const model = getModel();
+  const selectedProvider = getProvider();
+  const provider = selectedProvider === 'smart' ? 'groq' : selectedProvider;
+  const model = selectedProvider === 'smart'
+    ? (ALL_MODELS[provider]?.find?.(m => m.isDefault)?.modelId || ALL_MODELS[provider]?.[0]?.modelId || 'auto')
+    : getModel();
   const action = provider === 'openrouter' ? 'test_openrouter' : 'test_groq';
   openModal('AI Verification', '<div class="text-sm text-gray-600">Running verification...</div>');
   try {

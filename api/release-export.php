@@ -75,7 +75,7 @@ if ($method === 'POST') {
         mkdir($stagingPath, 0755, true);
 
         // Define included directories and files
-        $includedDirectories = ['api', 'assets', 'cron', 'includes', 'mobile', 'templates', 'views'];
+        $includedDirectories = ['api', 'android', 'assets', 'cron', 'includes', 'mobile', 'templates', 'views'];
         $includedRootFiles = [
             '.env.example', '.gitignore', '.user.ini', 'cacert.pem',
             'composer.json', 'composer.lock', 'config.php', 'index.php',
@@ -116,7 +116,14 @@ if ($method === 'POST') {
             '/views\/notes-three-pane-sample\.php$/', '/views\/mcp\.php$/', '/views\/speckitty\.php$/',
             '/\.bak$/', '/\.backup$/', '/\.log$/', '/\.pid$/', '/\.tmp$/',
             '/^mobile\/views\/tasks\.php\.backup$/',
-            '/cron\/scheduler_status\.json$/'
+            '/cron\/scheduler_status\.json$/',
+            // Exclude android build artifacts and cache
+            '/^android\/\.gradle\//',
+            '/^android\/\.idea\//',
+            '/^android\/build\//',
+            '/^android\/app\/build\//',
+            '/^android\/local\.properties$/',
+            '/^android\/\.gradle-v2\.json$/'
         ];
 
         if ($exportType !== 'local') {
@@ -197,6 +204,23 @@ if ($method === 'POST') {
         ];
         file_put_contents($dataDir . '/public_config.json', json_encode($publicConfig, JSON_PRETTY_PRINT));
 
+        // Create release-artifacts/android directory structure (empty, for APK downloads)
+        $releaseArtifactsDir = $stagingPath . '/release-artifacts';
+        mkdir($releaseArtifactsDir, 0755, true);
+        mkdir($releaseArtifactsDir . '/android', 0755, true);
+
+        file_put_contents($releaseArtifactsDir . '/android/README.md', implode("\n", [
+            '# Android Release Artifacts',
+            '',
+            'Place compiled APK files in this directory to enable',
+            'homepage download functionality.',
+            '',
+            'Example: openplan-1.0.apk',
+            '',
+            'The homepage will automatically detect and offer the',
+            'latest APK file for download.'
+        ]));
+
         // Create release manifest
         $releaseManifest = [
             'project' => $projectName,
@@ -207,7 +231,8 @@ if ($method === 'POST') {
             'includedDirectories' => $includedDirectories,
             'includedRootFiles' => $includedRootFiles,
             'includedDocs' => $includedDocs,
-            'generatedDataDirectories' => ['backups', 'sessions', 'uploads', 'users']
+            'generatedDataDirectories' => ['backups', 'sessions', 'uploads', 'users'],
+            'generatedReleaseArtifacts' => ['android']
         ];
         file_put_contents($stagingPath . '/release-manifest.json', json_encode($releaseManifest, JSON_PRETTY_PRINT));
 

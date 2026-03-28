@@ -144,9 +144,9 @@ switch ($action) {
 function handleListFolders($db) {
     $parentId = $_GET['parentId'] ?? null;
 
-    // For MCP requests, get first user ID to use for data access
-    // MCP bypasses normal authentication but we still need a user context
-    $userId = Auth::isMcp() ? getFirstUserId($db) : Auth::userId();
+    // Resolve user context for both normal requests and MCP requests.
+    // In MCP mode this uses Auth::userId(), which is populated from X-MCP-User-Email.
+    $userId = getUserId($db);
 
     // Load knowledge base data
     $kbData = loadKnowledgeBase($db);
@@ -929,6 +929,11 @@ function getFirstUserId($db) {
  */
 function getUserId($db) {
     if (Auth::isMcp()) {
+        $resolved = Auth::userId();
+        if (!empty($resolved)) {
+            return $resolved;
+        }
+        // Backward-compatible fallback for older MCP clients that do not pass user email.
         return getFirstUserId($db);
     }
     return Auth::userId();

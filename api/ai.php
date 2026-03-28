@@ -206,6 +206,9 @@ if (empty($mcpTool)) {
 $provider = $body['provider'] ?? 'groq';
 $model = $body['model'] ?? null;
 
+// Resolve 'auto' model to the default or first enabled model for the provider
+// We must do this after $db is initialized, see below.
+
 if (modelLooksLikeApiKey($model, $provider)) {
     errorResponse('Model ID looks like an API key. Choose a real model in Model Settings and keep API keys in Settings.', 400, ERROR_VALIDATION);
 }
@@ -242,6 +245,36 @@ if (!$apiLimit['allowed']) {
         429,
         'RATE_LIMIT_EXCEEDED'
     );
+}
+
+// Resolve 'auto' model to the default or first enabled model for the provider
+if ($model === 'auto') {
+    $models = $db->load('models') ?? [];
+    $resolvedModel = null;
+    
+    // First try to find a default model for this provider
+    foreach ($models as $m) {
+        if (($m['provider'] ?? '') === $provider && ($m['isDefault'] ?? false)) {
+            $resolvedModel = $m['modelId'];
+            break;
+        }
+    }
+    
+    // If no default, find the first enabled model
+    if (!$resolvedModel) {
+        foreach ($models as $m) {
+            if (($m['provider'] ?? '') === $provider && ($m['enabled'] ?? true)) {
+                $resolvedModel = $m['modelId'];
+                break;
+            }
+        }
+    }
+    
+    if ($resolvedModel) {
+        $model = $resolvedModel;
+    } else {
+        errorResponse("No {$provider} model configured. Please configure a model in Model Settings.", 400, ERROR_VALIDATION);
+    }
 }
 
 $config = $db->load('config', true);

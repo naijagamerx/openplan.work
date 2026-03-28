@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenPlan Work - User Manual</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.7;
+            color: #1f2937;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 30px;
+            background: #ffffff;
+        }
+        .cover {
+            text-align: center;
+            margin-bottom: 50px;
+            padding-bottom: 40px;
+            border-bottom: 3px solid #1f2937;
+        }
+        .cover h1 {
+            font-size: 3rem;
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+        .cover .subtitle {
+            font-size: 1.4rem;
+            color: #6b7280;
+            margin-bottom: 20px;
+        }
+        .print-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #1f2937;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+        }
+        .print-btn:hover { background: #374151; }
+        @media print { .print-btn { display: none; } }
+
+        .toc {
+            background: #f9fafb;
+            padding: 30px;
+            border-radius: 12px;
+            margin: 40px 0;
+            border: 1px solid #e5e7eb;
+        }
+        .toc h2 { margin-top: 0; margin-bottom: 20px; color: #1f2937; }
+        .toc-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .toc-item { padding: 8px 12px; background: white; border-radius: 6px; border: 1px solid #e5e7eb; }
+        .toc-item a { color: #1f2937; text-decoration: none; font-weight: 500; }
+
+        section { margin: 50px 0; page-break-inside: avoid; }
+        h1 {
+            font-size: 2.2rem;
+            color: #1f2937;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #1f2937;
+        }
+        h2 {
+            font-size: 1.6rem;
+            color: #1f2937;
+            margin-top: 40px;
+            margin-bottom: 15px;
+        }
+        h3 { font-size: 1.2rem; color: #1f2937; margin-top: 25px; margin-bottom: 10px; }
+        p { margin-bottom: 15px; }
+
+        .step-box {
+            background: #f9fafb;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        .step-box h4 { color: #1f2937; margin-bottom: 10px; }
+        .step-number {
+            display: inline-block;
+            background: #1f2937;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 28px;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        .steps-list { margin: 20px 0; }
+        .steps-list li {
+            margin-bottom: 15px;
+            padding-left: 10px;
+        }
+
+        .tip-box {
+            background: #f9fafb;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        .tip-box strong { color: #1f2937; }
+        .tip-box::before { content: "💡 "; font-size: 1.2rem; }
+
+        .warning-box {
+            background: #f9fafb;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 1px solid #9ca3af;
+        }
+        .warning-box strong { color: #1f2937; }
+        .warning-box::before { content: "⚠️ "; font-size: 1.2rem; }
+
+        .note-box {
+            background: #f9fafb;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        .note-box strong { color: #1f2937; }
+        .note-box::before { content: "📌 "; font-size: 1.2rem; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #1f2937;
+            padding: 12px 14px;
+            text-align: left;
+        }
+        th {
+            background: #1f2937;
+            color: white;
+            font-weight: 600;
+        }
+        tr:nth-child(even) { background: #f9fafb; }
+
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .nav-item {
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #e5e7eb;
+        }
+        .nav-item:hover { border-color: #1f2937; }
+        .nav-item .icon { font-size: 2rem; margin-bottom: 8px; }
+        .nav-item .name { font-weight: 600; color: #1f2937; }
+        .nav-item .desc { font-size: 0.85rem; color: #6b7280; margin-top: 5px; }
+
+        .screenshot-placeholder {
+            background: #e5e7eb;
+            padding: 60px 20px;
+            text-align: center;
+            border-radius: 8px;
+            margin: 20px 0;
+            color: #6b7280;
+            border: 2px dashed #9ca3af;
+        }
+
+        .screenshot {
+            width: 100%;
+            max-width: 800px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin: 25px auto;
+            display: block;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .screenshot-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .screenshot-caption {
+            font-size: 0.85rem;
+            color: #6b7280;
+            margin-top: 10px;
+            font-style: italic;
+        }
+
+        @media print {
+            /* Page Setup */
+            @page {
+                size: A4;
+                margin: 12mm 15mm 12mm 15mm;
+            }
+
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
+
+            body {
+                padding: 0 !important;
+                margin: 0 !important;
+                font-size: 10pt;
+                line-height: 1.4;
+                max-width: 100% !important;
+                background: white !important;
+            }
+
+            /* Hide print button */
+            .print-btn { display: none !important; }
+
+            /* Cover Page */
+            .cover {
+                page-break-after: always;
+                padding: 30px 0 !important;
+                margin: 0 !important;
+                border: none !important;
+            }
+            .cover h1 {
+                font-size: 1.8rem !important;
+                border: none !important;
+                margin: 10px 0 !important;
+            }
+            .cover .subtitle { font-size: 1rem !important; }
+
+            /* Table of Contents */
+            .toc {
+                page-break-after: always;
+                page-break-inside: avoid;
+                margin: 15px 0 !important;
+                padding: 15px !important;
+            }
+            .toc h2 {
+                font-size: 1.1rem !important;
+                margin-bottom: 10px !important;
+            }
+            .toc-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+                gap: 6px !important;
+            }
+            .toc-item {
+                padding: 4px 8px !important;
+                font-size: 9pt !important;
+            }
+
+            /* Sections */
+            section {
+                page-break-inside: avoid;
+                margin: 20px 0 !important;
+                padding: 0 !important;
+            }
+
+            /* Headings */
+            h1 {
+                font-size: 1.3rem !important;
+                margin-top: 20px !important;
+                margin-bottom: 10px !important;
+                page-break-after: avoid;
+                page-break-before: auto;
+                border: none !important;
+            }
+            h1:first-of-type {
+                page-break-before: avoid;
+            }
+            h2 {
+                font-size: 1.1rem !important;
+                margin-top: 15px !important;
+                margin-bottom: 8px !important;
+                page-break-after: avoid;
+                border: none !important;
+            }
+            h3 {
+                font-size: 0.95rem !important;
+                margin-top: 12px !important;
+                margin-bottom: 6px !important;
+                page-break-after: avoid;
+            }
+            h4 {
+                font-size: 0.9rem !important;
+                page-break-after: avoid;
+            }
+
+            /* Paragraphs */
+            p {
+                margin-bottom: 8px !important;
+            }
+
+            /* Prevent breaks inside important elements */
+            .step-box, .tip-box, .warning-box, .note-box,
+            table, .screenshot-container, .nav-grid {
+                page-break-inside: avoid !important;
+            }
+
+            /* Screenshots for print - scale down significantly */
+            .screenshot {
+                width: 100% !important;
+                max-width: 650px !important;
+                max-height: 400px !important;
+                height: auto !important;
+                object-fit: contain !important;
+                margin: 10px auto !important;
+                page-break-inside: avoid !important;
+                display: block !important;
+                border: 1px solid #e5e7eb !important;
+                box-shadow: none !important;
+            }
+            .screenshot-container {
+                margin: 15px 0 !important;
+                page-break-inside: avoid !important;
+                text-align: center !important;
+            }
+            .screenshot-caption {
+                font-size: 8pt !important;
+                color: #6b7280 !important;
+                margin-top: 4px !important;
+            }
+
+            /* Tables */
+            table {
+                width: 100% !important;
+                font-size: 8pt !important;
+                margin: 10px 0 !important;
+                page-break-inside: avoid !important;
+            }
+            th, td {
+                padding: 4px 6px !important;
+                border: 1px solid #1f2937 !important;
+            }
+            th {
+                background: #1f2937 !important;
+                color: white !important;
+            }
+
+            /* Lists */
+            .steps-list li {
+                margin-bottom: 6px !important;
+            }
+            .step-number {
+                width: 18px !important;
+                height: 18px !important;
+                line-height: 18px !important;
+                font-size: 9pt !important;
+                margin-right: 6px !important;
+            }
+
+            /* Navigation Grid - simpler layout */
+            .nav-grid {
+                grid-template-columns: repeat(3, 1fr) !important;
+                gap: 6px !important;
+                margin: 10px 0 !important;
+            }
+            .nav-item {
+                padding: 6px !important;
+                font-size: 8pt !important;
+                border: 1px solid #e5e7eb !important;
+            }
+            .nav-item .icon {
+                font-size: 1.2rem !important;
+                margin-bottom: 2px !important;
+            }
+            .nav-item .name { font-size: 9pt !important; }
+            .nav-item .desc {
+                font-size: 7pt !important;
+                margin-top: 2px !important;
+            }
+
+            /* Boxes - simpler styling */
+            .step-box, .tip-box, .warning-box, .note-box {
+                padding: 8px 12px !important;
+                margin: 10px 0 !important;
+                page-break-inside: avoid !important;
+                border: 1px solid #e5e7eb !important;
+                background: #f9fafb !important;
+            }
+
+            /* Links */
+            a {
+                text-decoration: underline !important;
+                color: #1f2937 !important;
+            }
+
+            /* Footer */
+            body > div:last-child {
+                page-break-before: always;
+                margin-top: 20px !important;
+                padding-top: 15px !important;
+                border-top: 2px solid #1f2937 !important;
+                text-align: center !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="print-btn" onclick="window.print()">📄 Save as PDF</button>
+
+    <div class="cover">
+        <h1>OpenPlan Work</h1>
+        <p class="subtitle">Complete User Manual</p>
+        <p style="color: #6b7280;">Version 1.0.0 | March 22, 2026</p>
+    </div>
+
+    <div class="toc">
+        <h2>📋 Table of Contents</h2>
+        <div class="toc-grid">
+            <div class="toc-item"><a href="#getting-started">1. Getting Started</a></div>
+            <div class="toc-item"><a href="#navigation">2. Navigation Guide</a></div>
+            <div class="toc-item"><a href="#dashboard">3. Dashboard</a></div>
+            <div class="toc-item"><a href="#tasks">4. Tasks & Projects</a></div>
+            <div class="toc-item"><a href="#clients">5. Clients (CRM)</a></div>
+            <div class="toc-item"><a href="#invoices">6. Invoices</a></div>
+            <div class="toc-item"><a href="#notes">7. Notes</a></div>
+            <div class="toc-item"><a href="#habits">8. Habits & Productivity</a></div>
+            <div class="toc-item"><a href="#ai-assistant">9. AI Assistant</a></div>
+            <div class="toc-item"><a href="#settings">10. Settings</a></div>
+        </div>
+    </div>
+
+    <!-- Getting Started -->
+    <section id="getting-started">
+        <h1>1. Getting Started</h1>
+
+        <h2>First-Time Setup</h2>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li><span class="step-number">1</span><strong>Open your browser</strong> and navigate to your OpenPlan Work URL</li>
+                <li><span class="step-number">2</span><strong>Click "Get Started"</strong> on the welcome page</li>
+                <li><span class="step-number">3</span><strong>Create your admin account:</strong>
+                    <ul>
+                        <li>Enter your email address</li>
+                        <li>Create a password (minimum 8 characters)</li>
+                        <li><strong>IMPORTANT:</strong> Create a master password - this encrypts all your data and <strong>cannot be recovered</strong> if lost!</li>
+                    </ul>
+                </li>
+                <li><span class="step-number">4</span><strong>Configure your business:</strong>
+                    <ul>
+                        <li>Business name</li>
+                        <li>Currency preference (USD, EUR, GBP, ZAR)</li>
+                        <li>Tax rate</li>
+                    </ul>
+                </li>
+                <li><span class="step-number">5</span><strong>Setup AI features</strong> (optional):
+                    <ul>
+                        <li>Add Groq API key for free AI</li>
+                        <li>Add OpenRouter API key for premium AI models</li>
+                    </ul>
+                </li>
+                <li><span class="step-number">6</span><strong>Click "Complete Setup"</strong> - you'll be redirected to your dashboard!</li>
+            </ol>
+        </div>
+
+        <div class="warning-box">
+            <strong>Important:</strong> Your master password is the key to all your data. Write it down and store it securely. Without it, your data cannot be recovered!
+        </div>
+
+        <h2>Daily Login</h2>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li><span class="step-number">1</span>Enter your email and password</li>
+                <li><span class="step-number">2</span>Enter your <strong>master password</strong> to decrypt your data</li>
+                <li><span class="step-number">3</span>Click "Login"</li>
+            </ol>
+        </div>
+
+        <div class="tip-box">
+            <strong>Tip:</strong> Check "Remember me" to stay logged in longer. You can adjust session timeout in Settings.
+        </div>
+    </section>
+
+    <!-- Navigation -->
+    <section id="navigation">
+        <h1>2. Navigation Guide</h1>
+
+        <h2>Desktop Navigation</h2>
+        <p>On desktop, OpenPlan Work has a sidebar on the left side of the screen:</p>
+
+        <div class="nav-grid">
+            <div class="nav-item">
+                <div class="icon">🏠</div>
+                <div class="name">Dashboard</div>
+                <div class="desc">Overview & stats</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">✅</div>
+                <div class="name">Tasks</div>
+                <div class="desc">Manage tasks</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">📁</div>
+                <div class="name">Projects</div>
+                <div class="desc">Project management</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">👥</div>
+                <div class="name">Clients</div>
+                <div class="desc">CRM & contacts</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">📄</div>
+                <div class="name">Invoices</div>
+                <div class="desc">Billing & payments</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">💰</div>
+                <div class="name">Finance</div>
+                <div class="desc">Income & expenses</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">📦</div>
+                <div class="name">Inventory</div>
+                <div class="desc">Stock management</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">📝</div>
+                <div class="name">Notes</div>
+                <div class="desc">Quick notes</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">📚</div>
+                <div class="name">Knowledge</div>
+                <div class="desc">Document storage</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">🎯</div>
+                <div class="name">Habits</div>
+                <div class="desc">Track routines</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">⏱️</div>
+                <div class="name">Pomodoro</div>
+                <div class="desc">Focus timer</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">📅</div>
+                <div class="name">Calendar</div>
+                <div class="desc">View schedule</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">🤖</div>
+                <div class="name">AI Assistant</div>
+                <div class="desc">Smart helper</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">⚙️</div>
+                <div class="name">Settings</div>
+                <div class="desc">Configuration</div>
+            </div>
+        </div>
+
+        <h2>Mobile Navigation</h2>
+        <p>On mobile devices, navigation is at the bottom of the screen for easy thumb access:</p>
+        <ul>
+            <li><strong>Bottom Navigation Bar:</strong> Quick access to main features</li>
+            <li><strong>Menu Button:</strong> Access all features via the hamburger menu</li>
+            <li><strong>Swipe Actions:</strong> Swipe left/right on tasks for quick actions</li>
+        </ul>
+
+        <h2>Header Bar</h2>
+        <p>The top header contains:</p>
+        <ul>
+            <li><strong>Search:</strong> Quick search across tasks, notes, clients</li>
+            <li><strong>Add Button (+):</strong> Quickly create new items</li>
+            <li><strong>Profile:</strong> Account menu and logout</li>
+        </ul>
+    </section>
+
+    <!-- Dashboard -->
+    <section id="dashboard">
+        <h1>3. Dashboard</h1>
+
+        <p>The Dashboard is your home base - it shows an overview of everything happening in your workspace.</p>
+
+        <h2>Dashboard Features</h2>
+
+        <h3>📊 Statistics Cards</h3>
+        <p>At the top of the dashboard, you'll see key metrics:</p>
+        <ul>
+            <li><strong>Total Tasks:</strong> Number of active tasks</li>
+            <li><strong>Tasks Due Today:</strong> Urgent tasks needing attention</li>
+            <li><strong>Active Projects:</strong> Current projects in progress</li>
+            <li><strong>Pending Invoices:</strong> Invoices awaiting payment</li>
+            <li><strong>Monthly Revenue:</strong> Total income this month</li>
+            <li><strong>Monthly Expenses:</strong> Total expenses this month</li>
+        </ul>
+
+        <h3>📋 Tasks Due Today</h3>
+        <p>A list of tasks that are due today. Click any task to view details or mark complete.</p>
+
+        <h3>🎯 Habit Streaks</h3>
+        <p>Shows your current habits and completion streaks. Click to log today's progress.</p>
+
+        <h3>💧 Water Tracker</h3>
+        <p>Quick log your water intake. Shows today's progress toward your daily goal.</p>
+
+        <h3>📅 Upcoming</h3>
+        <p>A calendar view showing upcoming due dates for tasks, invoices, and reminders.</p>
+
+        <div class="screenshot-container">
+            <img src="screenshots/01-dashboard.png" alt="Dashboard Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 1: Dashboard Overview</p>
+        </div>
+
+        <div class="step-box">
+            <h4>Customizing Your Dashboard</h4>
+            <ol class="steps-list">
+                <li>Go to <strong>Settings</strong></li>
+                <li>Click <strong>Dashboard Settings</strong></li>
+                <li>Toggle which widgets to show</li>
+                <li>Adjust the layout order</li>
+                <li>Click <strong>Save</strong></li>
+            </ol>
+        </div>
+    </section>
+
+    <!-- Tasks & Projects -->
+    <section id="tasks">
+        <h1>4. Tasks & Projects</h1>
+
+        <div class="screenshot-container">
+            <img src="screenshots/02-tasks.png" alt="Tasks Page Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 2: Tasks Management Page</p>
+        </div>
+
+        <h2>Creating a Task</h2>
+        <div class="step-box">
+            <h4>Method 1: Quick Add Button</h4>
+            <ol class="steps-list">
+                <li>Click the <strong>+</strong> button in the header</li>
+                <li>Select "Task" from the menu</li>
+                <li>Enter task title and details</li>
+                <li>Click <strong>Create</strong></li>
+            </ol>
+        </div>
+
+        <div class="step-box">
+            <h4>Method 2: From Tasks Page</h4>
+            <ol class="steps-list">
+                <li>Go to <strong>Tasks</strong> in the sidebar</li>
+                <li>Click <strong>+ New Task</strong> button</li>
+                <li>Fill in the task form:
+                    <ul>
+                        <li><strong>Title:</strong> What needs to be done</li>
+                        <li><strong>Description:</strong> Additional details (optional)</li>
+                        <li><strong>Project:</strong> Link to a project (optional)</li>
+                        <li><strong>Status:</strong> Backlog, Todo, In Progress, Review, Done</li>
+                        <li><strong>Priority:</strong> Low, Medium, High, Urgent</li>
+                        <li><strong>Due Date:</strong> When is it due?</li>
+                        <li><strong>Estimated Time:</strong> How long will it take? (minutes)</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Create Task</strong></li>
+            </ol>
+        </div>
+
+        <h2>Managing Tasks</h2>
+
+        <h3>Task Status Workflow</h3>
+        <p>Tasks move through these stages:</p>
+        <table>
+            <tr>
+                <th>Status</th>
+                <th>Description</th>
+            </tr>
+            <tr><td>Backlog</td><td>Idea or future task - not actively working on</td></tr>
+            <tr><td>Todo</td><td>Ready to start - added to your todo list</td></tr>
+            <tr><td>In Progress</td><td>Currently working on this task</td></tr>
+            <tr><td>Review</td><td>Completed, needs review or approval</td></tr>
+            <tr><td>Done</td><td>Finished and approved</td></tr>
+        </table>
+
+        <h3>Task Actions</h3>
+        <p>On any task, you can:</p>
+        <ul>
+            <li><strong>View:</strong> Click the task to see full details</li>
+            <li><strong>Edit:</strong> Click the edit icon to modify</li>
+            <li><strong>Complete:</strong> Click the checkmark to mark done</li>
+            <li><strong>Delete:</strong> Click the trash icon to remove</li>
+            <li><strong>Add Subtask:</strong> Break down into smaller steps</li>
+            <li><strong>Track Time:</strong> Log time spent on task</li>
+        </ul>
+
+        <h2>Working with Subtasks</h2>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Open a task</li>
+                <li>Scroll to <strong>Subtasks</strong> section</li>
+                <li>Click <strong>+ Add Subtask</strong></li>
+                <li>Enter subtask title</li>
+                <li>Optionally add estimated time</li>
+                <li>Click <strong>Add</strong></li>
+            </ol>
+        </div>
+
+        <div class="tip-box">
+            <strong>Tip:</strong> Use subtasks to break down complex tasks. Check them off as you complete each piece!
+        </div>
+
+        <div class="screenshot-container">
+            <img src="screenshots/11-inventory.png" alt="Inventory Page Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 11: Inventory Management Page</p>
+        </div>
+
+        <h2>Time Tracking</h2>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Open a task</li>
+                <li>Scroll to <strong>Time Entries</strong> section</li>
+                <li>Click <strong>+ Add Time Entry</strong></li>
+                <li>Enter:
+                    <ul>
+                        <li><strong>Date:</strong> When did you work?</li>
+                        <li><strong>Minutes:</strong> How long did you work?</li>
+                        <li><strong>Description:</strong> What did you accomplish?</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Add Entry</strong></li>
+            </ol>
+        </div>
+
+        <h2>Creating Projects</h2>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Go to <strong>Projects</strong> in the sidebar</li>
+                <li>Click <strong>+ New Project</strong></li>
+                <li>Fill in project details:
+                    <ul>
+                        <li><strong>Name:</strong> Project name</li>
+                        <li><strong>Description:</strong> What is this project about?</li>
+                        <li><strong>Client:</strong> Link to a client (optional)</li>
+                        <li><strong>Status:</strong> Active, Completed, On Hold, Cancelled</li>
+                        <li><strong>Color:</strong> Pick a color for visual organization</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Create Project</strong></li>
+            </ol>
+        </div>
+
+        <h2>Project View</h2>
+        <p>When you open a project, you'll see:</p>
+
+        <div class="screenshot-container">
+            <img src="screenshots/03-projects.png" alt="Projects Page Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 3: Projects Management Page</p>
+        </div>
+        <ul>
+            <li><strong>Project Details:</strong> Name, description, client link</li>
+            <li><strong>Project Tasks:</strong> All tasks in this project</li>
+            <li><strong>Project Stats:</strong> Total tasks, completed, pending</li>
+            <li><strong>Add Task:</strong> Quickly add tasks to this project</li>
+        </ul>
+
+        <h2>Kanban Board</h2>
+        <p>View your tasks as a Kanban board:</p>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Go to <strong>Tasks</strong></li>
+                <li>Click the <strong>Board View</strong> icon (grid icon)</li>
+                <li>Drag tasks between columns to change status</li>
+                <li>Click <strong>Save</strong> to apply changes</li>
+            </ol>
+        </div>
+
+        <h2>Task Templates</h2>
+        <p>Save time by creating reusable task templates:</p>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Create a task with all the details you want to reuse</li>
+                <li>Click <strong>Save as Template</strong></li>
+                <li>Give your template a name</li>
+                <li>Next time, click <strong>From Template</strong> when creating a task</li>
+            </ol>
+        </div>
+    </section>
+
+    <!-- Clients -->
+    <section id="clients">
+        <h1>5. Clients (CRM)</h1>
+
+        <div class="screenshot-container">
+            <img src="screenshots/04-clients.png" alt="Clients Page Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 4: Clients CRM Page</p>
+        </div>
+
+        <h2>Adding a Client</h2>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Go to <strong>Clients</strong> in the sidebar</li>
+                <li>Click <strong>+ New Client</strong></li>
+                <li>Fill in client information:
+                    <ul>
+                        <li><strong>Name:</strong> Contact person's name (required)</li>
+                        <li><strong>Email:</strong> Email address</li>
+                        <li><strong>Phone:</strong> Phone number</li>
+                        <li><strong>Company:</strong> Company name</li>
+                        <li><strong>Address:</strong> Street, City, State, ZIP, Country</li>
+                        <li><strong>Notes:</strong> Additional information</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Create Client</strong></li>
+            </ol>
+        </div>
+
+        <h2>Client View</h2>
+        <p>Opening a client shows:</p>
+        <ul>
+            <li><strong>Contact Information:</strong> All client details</li>
+            <li><strong>Linked Projects:</strong> All projects for this client</li>
+            <li><strong>Linked Invoices:</strong> All invoices sent to this client</li>
+            <li><strong>Edit/Delete:</strong> Manage client information</li>
+        </ul>
+
+        <div class="screenshot-container">
+            <img src="screenshots/12-finance.png" alt="Finance Page Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 12: Finance Tracking Page</p>
+        </div>
+
+        <div class="tip-box">
+            <strong>Tip:</strong> Link clients to projects and invoices for better tracking. You can see all work done for a client in one place!
+        </div>
+
+        <h2>Client Actions</h2>
+        <ul>
+            <li><strong>Edit:</strong> Update client information</li>
+            <li><strong>Delete:</strong> Remove client (warning: this affects linked projects/invoices)</li>
+            <li><strong>Create Project:</strong> Start a new project for this client</li>
+            <li><strong>Create Invoice:</strong> Send an invoice to this client</li>
+        </ul>
+    </section>
+
+    <!-- Invoices -->
+    <section id="invoices">
+        <h1>6. Invoices</h1>
+
+        <h2>Creating a Standard Invoice</h2>
+        <div class="screenshot-container">
+            <img src="screenshots/13-invoices.png" alt="Invoices Page Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 13: Invoices Page</p>
+        </div>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Go to <strong>Invoices</strong> in the sidebar</li>
+                <li>Click <strong>+ New Invoice</strong></li>
+                <li>Select or create a <strong>Client</strong></li>
+                <li>Optionally select a <strong>Project</strong></li>
+                <li>Add line items:
+                    <ul>
+                        <li><strong>Description:</strong> What are you billing for?</li>
+                        <li><strong>Quantity:</strong> How many?</li>
+                        <li><strong>Unit Price:</strong> Price per unit</li>
+                        <li>Click <strong>+ Add Item</strong> for more lines</li>
+                    </ul>
+                </li>
+                <li>Set invoice details:
+                    <ul>
+                        <li><strong>Currency:</strong> USD, EUR, GBP, or ZAR</li>
+                        <li><strong>Due Date:</strong> When is payment due?</li>
+                        <li><strong>Notes:</strong> Additional notes (optional)</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Create Invoice</strong></li>
+            </ol>
+        </div>
+
+        <h2>Invoice Status</h2>
+        <table>
+            <tr>
+                <th>Status</th>
+                <th>Description</th>
+            </tr>
+            <tr><td>Draft</td><td>Not yet sent to client</td></tr>
+            <tr><td>Sent</td><td>Invoice has been sent</td></tr>
+            <tr><td>Paid</td><td>Payment received</td></tr>
+            <tr><td>Overdue</td><td>Past due date, not paid</td></tr>
+            <tr><td>Cancelled</td><td>Invoice cancelled</td></tr>
+        </table>
+
+        <h2>Invoice Actions</h2>
+        <ul>
+            <li><strong>View:</strong> See full invoice details</li>
+            <li><strong>Print:</strong> Generate PDF for printing/emailing</li>
+            <li><strong>Mark as Sent:</strong> Change status to "Sent"</li>
+            <li><strong>Mark as Paid:</strong> Record payment</li>
+            <li><strong>Edit:</strong> Modify invoice (draft only)</li>
+            <li><strong>Delete:</strong> Remove invoice</li>
+        </ul>
+
+        <h2>Advanced Invoice Generator</h2>
+        <p>For more complex invoices, use the Advanced Invoice Generator:</p>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Go to <strong>Invoices</strong></li>
+                <li>Click <strong>Advanced Invoices</strong></li>
+                <li>Click <strong>+ Create Advanced Invoice</strong></li>
+                <li>Customize your invoice:
+                    <ul>
+                        <li><strong>Company Header:</strong> Add logo, company details</li>
+                        <li><strong>Customer Details:</strong> Full customer information</li>
+                        <li><strong>Line Items:</strong> Date, reference, description, amount</li>
+                        <li><strong>Payment Details:</strong> Bank info, due date, reference</li>
+                        <li><strong>Custom Fields:</strong> Add any extra fields you need</li>
+                        <li><strong>Footer Text:</strong> Terms, thank you message</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Create Invoice</strong></li>
+            </ol>
+        </div>
+
+        <div class="tip-box">
+            <strong>Tip:</strong> Use Advanced Invoices for professional billing with custom branding, payment details, and terms.
+        </div>
+
+        <div class="screenshot-container">
+            <img src="screenshots/14-advanced-invoices.png" alt="Advanced Invoices Page Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 14: Advanced Invoices Generator</p>
+        </div>
+    </section>
+
+    <!-- Notes -->
+    <section id="notes">
+        <h1>7. Notes</h1>
+
+        <div class="screenshot-container">
+            <img src="screenshots/05-notes.png" alt="Notes Page Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 5: Notes Page</p>
+        </div>
+
+        <h2>Creating a Note</h2>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Go to <strong>Notes</strong> in the sidebar</li>
+                <li>Click <strong>+ New Note</strong></li>
+                <li>Fill in note details:
+                    <ul>
+                        <li><strong>Title:</strong> Note title (required)</li>
+                        <li><strong>Content:</strong> Your note (up to 10,000 characters)</li>
+                        <li><strong>Tags:</strong> Add tags for organization (e.g., work, ideas)</li>
+                        <li><strong>Color:</strong> Pick a background color</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Create Note</strong></li>
+            </ol>
+        </div>
+
+        <h2>Organizing Notes</h2>
+        <h3>Using Tags</h3>
+        <p>Tags help you organize and find notes:</p>
+        <ul>
+            <li>Add tags when creating or editing a note</li>
+            <li>Click on a tag in the sidebar to filter notes</li>
+            <li>Use the <strong>Manage Tags</strong> button to delete unused tags</li>
+        </ul>
+
+        <h3>Pinning & Favorites</h3>
+        <ul>
+            <li><strong>Pin:</strong> Keeps important notes at the top</li>
+            <li><strong>Favorite:</strong> Mark notes as favorites for quick access</li>
+        </ul>
+
+        <h2>AI-Powered Note Editing</h2>
+        <p>Let AI help you improve your notes:</p>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Open a note</li>
+                <li>Click the <strong>AI Edit</strong> button</li>
+                <li>Choose an action:
+                    <ul>
+                        <li><strong>Rewrite:</strong> Rephrase for clarity</li>
+                        <li><strong>Improve:</strong> Fix grammar and readability</li>
+                        <li><strong>Expand:</strong> Add more details</li>
+                        <li><strong>Summarize:</strong> Create bullet point summary</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Apply</strong> to update your note</li>
+            </ol>
+        </div>
+
+        <h2>Notes Views</h2>
+        <p>Switch between different views:</p>
+
+        <div class="screenshot-container">
+            <img src="screenshots/06-knowledge-base.png" alt="Knowledge Base Page Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 6: Knowledge Base Page</p>
+        </div>
+        <ul>
+            <li><strong>Three-Pane View:</strong> Sidebar, notes list, and note content</li>
+            <li><strong>List View:</strong> All notes in a grid</li>
+            <li><strong>Single Note:</strong> Focus on one note</li>
+        </ul>
+
+        <div class="tip-box">
+            <strong>Tip:</strong> Link notes to tasks or projects to keep related information together. Use tags to create topic-based collections.
+        </div>
+    </section>
+
+    <!-- Habits & Productivity -->
+    <section id="habits">
+        <h1>8. Habits & Productivity</h1>
+
+        <h2>Habit Tracker</h2>
+        <h3>Creating a Habit</h3>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Go to <strong>Habits</strong> in the sidebar</li>
+                <li>Click <strong>+ New Habit</strong></li>
+                <li>Fill in habit details:
+                    <ul>
+                        <li><strong>Name:</strong> What habit do you want to track?</li>
+                        <li><strong>Category:</strong> Health, work, personal, etc.</li>
+                        <li><strong>Frequency:</strong> Daily, weekly, or monthly</li>
+                        <li><strong>Reminder Time:</strong> When should you be reminded?</li>
+                        <li><strong>Target Duration:</strong> How long should it take? (minutes)</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Create Habit</strong></li>
+            </ol>
+        </div>
+
+        <div class="screenshot-container">
+            <img src="screenshots/10-habits.png" alt="Habits Page Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 10: Habits Tracker Page</p>
+        </div>
+
+        <h3>Tracking Habits</h3>
+        <ul>
+            <li>Each habit shows a checkbox for today</li>
+            <li>Click the checkbox to mark complete</li>
+            <li>View your streak (consecutive days completed)</li>
+            <li>Click a habit to see history and statistics</li>
+        </ul>
+
+        <h3>Habit Timer</h3>
+        <p>Some habits have a target duration. You can time yourself:</p>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Open a habit</li>
+                <li>Click <strong>Start Timer</strong></li>
+                <li>Work on your habit</li>
+                <li>Click <strong>Stop Timer</strong> when done</li>
+                <li>The time is automatically logged</li>
+            </ol>
+        </div>
+
+        <h2>Pomodoro Timer</h2>
+        <p>The Pomodoro Technique helps you focus with timed work sessions:</p>
+
+        <div class="screenshot-container">
+            <img src="screenshots/08-pomodoro.png" alt="Pomodoro Timer Page Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 8: Pomodoro Focus Timer</p>
+        </div>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Go to <strong>Pomodoro</strong> in the sidebar</li>
+                <li>Optionally select a task to work on</li>
+                <li>Click <strong>Start Focus Session</strong> (25 minutes)</li>
+                <li>Work until the timer ends</li>
+                <li>Take a <strong>Short Break</strong> (5 minutes)</li>
+                <li>After 4 sessions, take a <strong>Long Break</strong> (15 minutes)</li>
+            </ol>
+        </div>
+
+        <h2>Water Tracker</h2>
+        <h3>Setting Up Water Tracking</h3>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Go to <strong>Water Tracker</strong></li>
+                <li>Set your <strong>daily goal</strong> (number of glasses)</li>
+                <li>Configure your <strong>glass size</strong> (default: 250ml)</li>
+                <li>Click <strong>Generate AI Plan</strong> for personalized schedule</li>
+            </ol>
+        </div>
+
+        <div class="screenshot-container">
+            <img src="screenshots/09-water-plan.png" alt="Water Plan Page Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 9: Water Tracker Page</p>
+        </div>
+
+        <h3>Logging Water Intake</h3>
+        <ul>
+            <li>Click the <strong>+</strong> button to add a glass of water</li>
+            <li>Watch the progress bar fill up</li>
+            <li>View your intake history</li>
+            <li>Get reminders to drink water throughout the day</li>
+        </ul>
+
+        <h3>AI Hydration Plan</h3>
+        <p>Let AI create a personalized hydration plan based on:</p>
+        <ul>
+            <li>Your weight</li>
+            <li>Activity level (sedentary, moderate, active, athlete)</li>
+            <li>Climate (temperate, hot, humid, cold)</li>
+            <li>Your wake/sleep schedule</li>
+        </ul>
+
+        <h2>Calendar View</h2>
+        <p>See all your tasks, habits, and reminders in one place:</p>
+
+        <div class="screenshot-container">
+            <img src="screenshots/07-calendar.png" alt="Calendar Page Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 7: Calendar View</p>
+        </div>
+        <ul>
+            <li>Go to <strong>Calendar</strong></li>
+            <li>View by month</li>
+            <li>Click on any date to see what's due</li>
+            <li>Tasks show their due dates</li>
+            <li>Habits show reminder times</li>
+            <li>Invoices show due dates</li>
+        </ul>
+    </section>
+
+    <!-- AI Assistant -->
+    <section id="ai-assistant">
+        <h1>9. AI Assistant</h1>
+
+        <h2>What is the AI Assistant?</h2>
+        <p>The AI Assistant is like having a virtual assistant that can help you manage your tasks, projects, and more using natural language. It can understand what you want and take action for you!</p>
+
+        <h2>Setting Up AI</h2>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Go to <strong>Settings</strong> → <strong>AI API Keys</strong></li>
+                <li>Add an API key:
+                    <ul>
+                        <li><strong>Groq:</strong> Free, fast AI (recommended for starters)</li>
+                        <li><strong>OpenRouter:</strong> Access to premium models (Claude, GPT-4, etc.)</li>
+                    </ul>
+                </li>
+                <li>Save your API key</li>
+            </ol>
+        </div>
+
+        <div class="warning-box">
+            <strong>Note:</strong> You need an API key to use AI features. Groq offers a free tier with generous limits.
+        </div>
+
+        <h2>Using the AI Assistant</h2>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Go to <strong>AI Assistant</strong> in the sidebar</li>
+                <li>Type your request in natural language, such as:
+                    <ul>
+                        <li>"Create a task to call John tomorrow at 2pm"</li>
+                        <li>"Add a new project for website redesign"</li>
+                        <li>"Show me all my high priority tasks"</li>
+                        <li>"Create an invoice for client ABC for $500"</li>
+                        <li>"I need to track my daily meditation habit"</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Send</strong> or press Enter</li>
+                <li>The AI will understand your request and take action</li>
+                <li>Review what the AI did and confirm or adjust as needed</li>
+            </ol>
+        </div>
+
+        <h2>What the AI Can Do</h2>
+        <div class="nav-grid">
+            <div class="nav-item">
+                <div class="icon">✅</div>
+                <div class="name">Tasks</div>
+                <div class="desc">Create, update, complete</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">📁</div>
+                <div class="name">Projects</div>
+                <div class="desc">Create and manage</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">👥</div>
+                <div class="name">Clients</div>
+                <div class="desc">Add clients</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">📄</div>
+                <div class="name">Invoices</div>
+                <div class="desc">Generate invoices</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">📝</div>
+                <div class="name">Notes</div>
+                <div class="desc">Create notes</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">🎯</div>
+                <div class="name">Habits</div>
+                <div class="desc">Track habits</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">💰</div>
+                <div class="name">Finance</div>
+                <div class="desc">Log transactions</div>
+            </div>
+            <div class="nav-item">
+                <div class="icon">📊</div>
+                <div class="name">Reports</div>
+                <div class="desc">Get summaries</div>
+            </div>
+        </div>
+
+        <h2>Example Conversations</h2>
+
+        <h3>Create a Client and Project</h3>
+        <p><strong>You:</strong> "Add a client called Acme Corp with email contact@acme.com, then create a website redesign project for them"</p>
+        <p><strong>AI:</strong> Creates the client, creates the project linked to that client</p>
+
+        <h3>Generate Multiple Tasks</h3>
+        <p><strong>You:</strong> "Create 5 tasks for the website project: design mockups, develop homepage, develop about page, testing, and deployment"</p>
+        <p><strong>AI:</strong> Creates all 5 tasks in the project</p>
+
+        <h3>Create an Invoice</h3>
+        <p><strong>You:</strong> "Send an invoice to Acme Corp for 10 hours of web development at $50 per hour"</p>
+        <p><strong>AI:</strong> Creates an invoice with line item: 10 hours × $50 = $500</p>
+
+        <h2>AI Memory</h2>
+        <p>The AI Assistant remembers your conversation within the session. You can reference things you mentioned earlier:</p>
+        <ul>
+            <li>"What was that client's name again?"</li>
+            <li>"Add another task to the project I just created"</li>
+            <li>"Show me the tasks for this week"</li>
+        </ul>
+
+        <div class="tip-box">
+            <strong>Tip:</strong> Be specific in your requests. The more details you provide, the better the AI can help!
+        </div>
+
+        <div class="screenshot-container">
+            <img src="screenshots/15-ai-assistant.png" alt="AI Assistant Page Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 15: AI Assistant Interface</p>
+        </div>
+    </section>
+
+    <!-- Settings -->
+    <section id="settings">
+        <h1>10. Settings</h1>
+
+        <h2>Business Settings</h2>
+        <p>Configure your business information:</p>
+        <ul>
+            <li><strong>Business Name</strong></li>
+            <li><strong>Email</strong> - Displayed on invoices</li>
+            <li><strong>Phone</strong></li>
+            <li><strong>Address</strong></li>
+            <li><strong>Default Currency</strong> - USD, EUR, GBP, ZAR</li>
+            <li><strong>Tax Rate</strong> - Applied to invoices</li>
+        </ul>
+
+        <h2>AI Configuration</h2>
+        <h3>AI API Keys</h3>
+        <p>Add your AI provider API keys:</p>
+        <ul>
+            <li><strong>Groq API Key:</strong> Get free at <a href="https://groq.com">groq.com</a></li>
+            <li><strong>OpenRouter API Key:</strong> Get at <a href="https://openrouter.ai">openrouter.ai</a></li>
+        </ul>
+
+        <h3>Model Settings</h3>
+        <p>Choose which AI models to use:</p>
+        <ul>
+            <li><strong>Chat Model:</strong> For AI Assistant conversations</li>
+            <li><strong>Tasks Model:</strong> For generating tasks from descriptions</li>
+            <li><strong>Notes Model:</strong> For AI note editing</li>
+        </ul>
+
+        <div class="note-box">
+            <strong>Note:</strong> Groq models are free and fast. OpenRouter gives you access to premium models like Claude and GPT-4.
+        </div>
+
+        <h2>Session Settings</h2>
+        <p>Choose how long you stay logged in:</p>
+        <ul>
+            <li><strong>20 minutes</strong> - High security (auto-logout after 20min of inactivity)</li>
+            <li><strong>1 hour</strong> - Default (recommended)</li>
+            <li><strong>Indefinite</strong> - Stay logged in until you logout</li>
+        </ul>
+
+        <h2>Backup Settings</h2>
+        <p>Configure automatic backups:</p>
+        <ul>
+            <li><strong>Enable Auto-Backup:</strong> Turn on automatic backups</li>
+            <li><strong>Backup Frequency:</strong> Daily, weekly, monthly</li>
+            <li><strong>Retention:</strong> How many backups to keep</li>
+        </ul>
+
+        <h2>Data Management</h2>
+        <h3>Export Data</h3>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Go to <strong>Settings</strong> → <strong>Data Management</strong></li>
+                <li>Choose export format:
+                    <ul>
+                        <li><strong>JSON:</strong> Machine-readable format</li>
+                        <li><strong>ZIP:</strong> Complete backup with all files</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Export</strong></li>
+                <li>Save the file to your computer</li>
+            </ol>
+        </div>
+
+        <h3>Import Data</h3>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Go to <strong>Settings</strong> → <strong>Import Data</strong></li>
+                <li>Choose a file (JSON or ZIP from export)</li>
+                <li>Click <strong>Import</strong></li>
+                <li><strong>Warning:</strong> This will merge with existing data</li>
+            </ol>
+        </div>
+
+        <div class="warning-box">
+            <strong>Important:</strong> Always export a backup before importing data. Imports cannot be undone!
+        </div>
+
+        <h2>MCP Configuration</h2>
+        <p>For developers using Claude Code or other AI coding agents:</p>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Go to <strong>Settings</strong> → <strong>Developer Tools</strong></li>
+                <li>Click <strong>Generate Token</strong> (or copy existing)</li>
+                <li>Copy the configuration JSON</li>
+                <li>Paste into your Claude Code settings file</li>
+            </ol>
+        </div>
+
+        <h2>Custom Instructions</h2>
+        <p>Tell the AI Assistant how to help you:</p>
+        <div class="step-box">
+            <ol class="steps-list">
+                <li>Go to <strong>Settings</strong> → <strong>Custom Instructions</strong></li>
+                <li>Write instructions like:
+                    <ul>
+                        <li>"Always ask me before creating invoices"</li>
+                        <li>"Set task priority to high by default"</li>
+                        <li>"Remind me about deadlines 2 days before"</li>
+                    </ul>
+                </li>
+                <li>Click <strong>Save</strong></li>
+            </ol>
+        </div>
+
+        <h2>Account Settings</h2>
+        <ul>
+            <li><strong>Change Password</strong> - Update your login password</li>
+            <li><strong>Update Profile</strong> - Change your name or email</li>
+        </ul>
+
+        <div class="screenshot-container">
+            <img src="screenshots/16-settings.png" alt="Settings Page Screenshot" class="screenshot">
+            <p class="screenshot-caption">Figure 16: Settings Page</p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <div style="margin-top: 80px; padding-top: 30px; border-top: 2px solid #1f2937; text-align: center; color: #6b7280;">
+        <h3 style="color: #1f2937;">OpenPlan Work User Manual</h3>
+        <p>Version 1.0.0 | March 22, 2026</p>
+        <p>https://github.com/naijagamerx/openplan.work</p>
+    </div>
+
+    <script>
+        document.querySelectorAll('.toc-item a').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

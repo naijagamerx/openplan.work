@@ -101,7 +101,7 @@ function getHeatmapColor($count, $max = 5) {
 }
 ?>
 
-<div class="p-6 max-w-7xl mx-auto">
+<div class="p-6 w-full">
     <!-- Header -->
     <div class="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div>
@@ -368,9 +368,12 @@ async function toggleHabitComplete(habitId) {
     const habitItem = document.querySelector(`.habit-item[data-id="${habitId}"]`);
     const isCompleted = habitItem.dataset.completed === 'true';
 
+    // Use local date instead of UTC to avoid "tomorrow" issues late at night
+    const localDate = new Date().toLocaleDateString('en-CA'); // Returns YYYY-MM-DD in local time
+    
     const response = await api.post('api/habits.php?action=complete', {
         habitId: habitId,
-        date: new Date().toISOString().split('T')[0],
+        date: localDate,
         status: isCompleted ? 'missed' : 'complete',
         csrf_token: CSRF_TOKEN
     });
