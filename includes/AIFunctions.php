@@ -44,6 +44,13 @@ class AIFunctions {
             self::createInventoryItem(),
             self::listInventory(),
             self::setPomodoroTimer(),
+            self::listTransactions(),
+            self::listInvoices(),
+            self::logWater(),
+            self::getWaterStatus(),
+            self::updateSubtask(),
+            self::createKbNote(),
+            self::listNotes(),
         ];
     }
 
@@ -1052,6 +1059,190 @@ class AIFunctions {
                         'taskId' => [
                             'type' => 'string',
                             'description' => 'Optional task ID to associate with timer'
+                        ]
+                    ]
+                ]
+            ]
+        ];
+    }
+
+    private static function listTransactions(): array {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'list_transactions',
+                'description' => 'List financial transactions (expenses and revenue). Use to review spending, income, or financial history.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'type' => [
+                            'type' => 'string',
+                            'enum' => ['expense', 'revenue'],
+                            'description' => 'Filter by transaction type'
+                        ],
+                        'category' => [
+                            'type' => 'string',
+                            'description' => 'Filter by category name'
+                        ],
+                        'limit' => [
+                            'type' => 'integer',
+                            'description' => 'Maximum transactions to return (default 50)'
+                        ]
+                    ]
+                ]
+            ]
+        ];
+    }
+
+    private static function listInvoices(): array {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'list_invoices',
+                'description' => 'List invoices. Use to view pending, paid, sent, or overdue invoices.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'status' => [
+                            'type' => 'string',
+                            'enum' => ['draft', 'sent', 'paid', 'overdue', 'cancelled'],
+                            'description' => 'Filter by invoice status'
+                        ],
+                        'limit' => [
+                            'type' => 'integer',
+                            'description' => 'Max invoices to return (default 50)'
+                        ]
+                    ]
+                ]
+            ]
+        ];
+    }
+
+    private static function logWater(): array {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'log_water',
+                'description' => 'Log water intake for today. Adds glasses of water to the daily tracker.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'glasses' => [
+                            'type' => 'integer',
+                            'description' => 'Number of glasses to add (default 1). Use negative to remove.'
+                        ],
+                        'total' => [
+                            'type' => 'integer',
+                            'description' => 'Set the total directly (overrides glasses parameter)'
+                        ]
+                    ]
+                ]
+            ]
+        ];
+    }
+
+    private static function getWaterStatus(): array {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'get_water_status',
+                'description' => "Get today's water intake status — glasses logged vs goal, and recent history.",
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => (object)[]
+                ]
+            ]
+        ];
+    }
+
+    private static function updateSubtask(): array {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'update_subtask',
+                'description' => 'Update or complete a subtask within a task. Use to mark a subtask done, rename it, or update its time estimate.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'taskId' => [
+                            'type' => 'string',
+                            'description' => 'The parent task ID'
+                        ],
+                        'subtaskTitle' => [
+                            'type' => 'string',
+                            'description' => 'Match subtask by title (when ID unknown)'
+                        ],
+                        'subtaskId' => [
+                            'type' => 'string',
+                            'description' => 'The subtask ID (if known)'
+                        ],
+                        'completed' => [
+                            'type' => 'boolean',
+                            'description' => 'Mark subtask as completed or uncompleted'
+                        ],
+                        'title' => [
+                            'type' => 'string',
+                            'description' => 'New title for the subtask'
+                        ],
+                        'estimatedMinutes' => [
+                            'type' => 'integer',
+                            'description' => 'Update estimated minutes'
+                        ]
+                    ],
+                    'required' => ['taskId']
+                ]
+            ]
+        ];
+    }
+
+    private static function createKbNote(): array {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'create_kb_note',
+                'description' => 'Create a text note in the Knowledge Base for long-term reference. Different from Notes — stored as a KB file.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'title' => [
+                            'type' => 'string',
+                            'description' => 'Title / file name of the note'
+                        ],
+                        'content' => [
+                            'type' => 'string',
+                            'description' => 'Text content of the note'
+                        ],
+                        'folderId' => [
+                            'type' => 'string',
+                            'description' => 'Optional KB folder ID. Auto-creates a "Notes" folder if omitted.'
+                        ]
+                    ],
+                    'required' => ['title', 'content']
+                ]
+            ]
+        ];
+    }
+
+    private static function listNotes(): array {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'list_notes',
+                'description' => 'List user notes with optional tag or text search filter.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'tag' => [
+                            'type' => 'string',
+                            'description' => 'Filter notes by tag'
+                        ],
+                        'query' => [
+                            'type' => 'string',
+                            'description' => 'Search notes by title or content'
+                        ],
+                        'limit' => [
+                            'type' => 'integer',
+                            'description' => 'Max notes to return (default 30)'
                         ]
                     ]
                 ]

@@ -19,11 +19,15 @@ try {
 
 $hasGroqKey = !empty($config['groqApiKey']);
 $hasOpenRouterKey = !empty($config['openrouterApiKey']);
-$hasAnyKey = $hasGroqKey || $hasOpenRouterKey;
+$hasGeminiKey = !empty($config['geminiApiKey']);
+$hasOllama = !empty($models['ollama']);
+$hasAnyKey = $hasGroqKey || $hasOpenRouterKey || $hasGeminiKey || $hasOllama;
 
 // Filter enabled models
-$groqModels = array_filter($models['groq'] ?? [], fn($m) => $m['enabled']);
-$openRouterModels = array_filter($models['openrouter'] ?? [], fn($m) => $m['enabled']);
+$groqModels = array_filter($models['groq'] ?? [], fn($m) => $m['enabled'] ?? true);
+$openRouterModels = array_filter($models['openrouter'] ?? [], fn($m) => $m['enabled'] ?? true);
+$geminiModels = array_filter($models['gemini'] ?? [], fn($m) => $m['enabled'] ?? true);
+$ollamaModels = array_filter($models['ollama'] ?? [], fn($m) => $m['enabled'] ?? true);
 
 // Fallback to static model lists if database is empty
 if (empty($groqModels)) {
@@ -38,6 +42,10 @@ if (empty($groqModels)) {
 if (empty($openRouterModels)) {
     $openRouterModels = array_map(fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
         array_keys(OpenRouterAPI::getModels()), OpenRouterAPI::getModels());
+}
+if (empty($geminiModels) && $hasGeminiKey) {
+    $geminiModels = array_map(fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
+        array_keys(GeminiAPI::getModels()), GeminiAPI::getModels());
 }
 ?>
 
@@ -1463,8 +1471,10 @@ document.addEventListener('keydown', function(e) {
 // ==================== AI NOTE GENERATION ====================
 
 const ALL_MODELS = <?php echo json_encode([
-    'groq' => array_values($groqModels),
-    'openrouter' => array_values($openRouterModels)
+    'groq'        => array_values($groqModels),
+    'openrouter'  => array_values($openRouterModels),
+    'gemini'      => array_values($geminiModels),
+    'ollama'      => array_values($ollamaModels),
 ]); ?>;
 
 let kbFolders = [];
@@ -1502,7 +1512,9 @@ function openAIGenerateModal() {
 
 function openAIGenerateModalInternal() {
     const providerOptions = <?php echo $hasGroqKey ? "'<option value=\"groq\">Groq</option>'" : "''"; ?>
-        + <?php echo $hasOpenRouterKey ? "'<option value=\"openrouter\">OpenRouter</option>'" : "''"; ?>;
+        + <?php echo $hasOpenRouterKey ? "'<option value=\"openrouter\">OpenRouter</option>'" : "''"; ?>
+        + <?php echo $hasGeminiKey ? "'<option value=\"gemini\">Google Gemini</option>'" : "''"; ?>
+        + <?php echo $hasOllama ? "'<option value=\"ollama\">Ollama (Local)</option>'" : "''"; ?>;
 
     openModal(`
         <div class="p-6">
@@ -1836,7 +1848,9 @@ function openAIEditModal() {
     if (!note) return;
 
     const providerOptions = <?php echo $hasGroqKey ? "'<option value=\"groq\">Groq</option>'" : "''"; ?>
-        + <?php echo $hasOpenRouterKey ? "'<option value=\"openrouter\">OpenRouter</option>'" : "''"; ?>;
+        + <?php echo $hasOpenRouterKey ? "'<option value=\"openrouter\">OpenRouter</option>'" : "''"; ?>
+        + <?php echo $hasGeminiKey ? "'<option value=\"gemini\">Google Gemini</option>'" : "''"; ?>
+        + <?php echo $hasOllama ? "'<option value=\"ollama\">Ollama (Local)</option>'" : "''"; ?>;
 
     const previewText = (note.content || '').substring(0, 200);
     const notePreview = previewText + ((note.content || '').length > 200 ? '...' : '');

@@ -1,5 +1,8 @@
 <?php
-// Habit History Page - Table view of all completed habit history
+/**
+ * Habit History Page - Table view of all completed habit history
+ * Route: ?page=habit-history
+ */
 $db = new Database(getMasterPassword(), Auth::userId());
 $habits = $db->load('habits');
 $completions = $db->load('habit_completions');
@@ -13,7 +16,7 @@ foreach ($habits as $habit) {
     $habitMap[$habit['id']] = $habit;
 }
 
-// Filter completions for "complete" status and sort by date descending
+// Filter complet habits for "complete" status and sort by date descending
 $completedHistory = array_filter($completions, fn($c) => $c['status'] === 'complete');
 usort($completedHistory, fn($a, $b) => strcmp($b['date'] ?? '', $a['date'] ?? ''));
 
@@ -48,38 +51,56 @@ function formatDuration($seconds) {
 }
 ?>
 
-<div class="p-6">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
+<div class="p-6 w-full">
+    <!-- Navigation Menu -->
+    <div class="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div>
-            <h2 class="text-2xl font-bold text-gray-900">Habit History</h2>
-            <p class="text-gray-500 font-medium tracking-tight">All completed habit records</p>
+            <h2 class="text-3xl font-black text-gray-900 tracking-tight">Habit History</h2>
+            <p class="text-gray-500 font-medium">All completed habit records</p>
         </div>
-        <div class="flex items-center gap-3">
-            <a href="?page=habits" class="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition">
+        <div class="flex gap-3">
+            <button onclick="exportHistoryCSV()" class="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl font-bold hover:bg-gray-50 transition shadow-sm">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
-                Back to Habits
+                Export CSV
+            </button>
+            <a href="?page=habits" class="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl font-bold hover:bg-gray-50 transition shadow-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2-2v-2z"></path>
+                </svg>
+                All Habits
+            </a>
+            <a href="?page=habits-calendar" class="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl font-bold hover:bg-gray-50 transition shadow-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Calendar
+            </a>
+            <a href="?page=habit-form" class="flex items-center gap-2 px-4 py-2.5 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition shadow-lg">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                New Habit
             </a>
         </div>
     </div>
 
     <!-- Stats -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div class="bg-white rounded-xl p-5 border border-gray-200">
+        <div class="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
             <p class="text-sm text-gray-500 uppercase tracking-widest font-bold">Total Completions</p>
             <p class="text-3xl font-bold text-gray-900 mt-1"><?php echo $totalCompletions; ?></p>
         </div>
-        <div class="bg-white rounded-xl p-5 border border-gray-200">
+        <div class="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
             <p class="text-sm text-gray-500 uppercase tracking-widest font-bold">Unique Habits</p>
             <p class="text-3xl font-bold text-gray-900 mt-1"><?php echo $uniqueHabitsCompleted; ?></p>
         </div>
-        <div class="bg-white rounded-xl p-5 border border-gray-200">
+        <div class="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
             <p class="text-sm text-gray-500 uppercase tracking-widest font-bold">Date Range</p>
             <p class="text-lg font-bold text-gray-900 mt-1"><?php echo $dateRange; ?></p>
         </div>
-        <div class="bg-white rounded-xl p-5 border border-gray-200">
+        <div class="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
             <p class="text-sm text-gray-500 uppercase tracking-widest font-bold">Completion Rate</p>
             <p class="text-3xl font-bold text-green-600 mt-1">
                 <?php echo count($habits) > 0 ? round(($uniqueHabitsCompleted / count($habits)) * 100) : 0; ?>%
@@ -88,7 +109,7 @@ function formatDuration($seconds) {
     </div>
 
     <!-- History Table -->
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
         <?php if (empty($completedHistory)): ?>
             <div class="p-10 text-center">
                 <svg class="w-16 h-16 text-gray-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -96,7 +117,7 @@ function formatDuration($seconds) {
                 </svg>
                 <h3 class="text-lg font-bold text-gray-900 mt-4">No completed habits yet</h3>
                 <p class="text-gray-500 mt-2">Complete some habits to see your history</p>
-                <a href="?page=habits" class="inline-block mt-4 px-6 py-2 bg-black text-white rounded-lg font-bold hover:bg-gray-800 transition">Go to Habits →</a>
+                <a href="?page=habits" class="inline-block mt-4 px-6 py-2 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition">Go to Habits</a>
             </div>
         <?php else: ?>
             <div class="overflow-x-auto">
@@ -142,7 +163,6 @@ function formatDuration($seconds) {
                                             </div>
                                             <div>
                                                 <p class="font-bold text-gray-900"><?php echo e($habit['name']); ?></p>
-                                                <p class="text-xs text-gray-400"><?php echo e($comp['id']); ?></p>
                                             </div>
                                         </div>
                                     </td>
@@ -168,11 +188,7 @@ function formatDuration($seconds) {
                                     </td>
                                     <td class="px-6 py-4 text-right">
                                         <a href="?page=view-habit&id=<?php echo e($comp['habitId']); ?>"
-                                           class="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:text-black hover:border-black transition">
-                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                                            </svg>
+                                           class="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:text-black hover:border-black transition">
                                             View
                                         </a>
                                     </td>
@@ -194,3 +210,23 @@ function formatDuration($seconds) {
     </div>
 </div>
 
+<script>
+async function exportHistoryCSV() {
+    const completions = <?php echo json_encode(array_column($completedHistory, null)); ?>;
+    const habitMap = <?php echo json_encode($habitMap); ?>;
+    let csvContent = "data:text/csv;charset=utf-8,Date,Habit,Category,Status\n";
+    completions.forEach(c => {
+        const habit = habitMap[c.habitId];
+        if (habit) {
+            csvContent += `${c.date},"${habit.name}",${habit.category || 'general'}",${c.status}\n`;
+        }
+    });
+    const link = document.createElement('a');
+    link.setAttribute('href', encodeURI(csvContent));
+    link.setAttribute('download', `habit-history-${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('History CSV exported', 'success');
+}
+</script>

@@ -37,6 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
             case 'api':
                 $config['groqApiKey'] = trim($_POST['groqApiKey'] ?? '');
                 $config['openrouterApiKey'] = trim($_POST['openrouterApiKey'] ?? '');
+                $config['geminiApiKey'] = trim($_POST['geminiApiKey'] ?? '');
+                $config['ollamaUrl'] = trim($_POST['ollamaUrl'] ?? 'http://localhost:11434') ?: 'http://localhost:11434';
                 $db->save('config', $config);
                 $success = 'API keys saved';
                 break;
@@ -259,7 +261,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
                        placeholder="sk-or-..."
                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none font-mono text-sm">
             </div>
-            
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    Google Gemini API Key
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 font-normal ml-2">Get key →</a>
+                </label>
+                <input type="password" name="geminiApiKey" value="<?php echo e($config['geminiApiKey'] ?? ''); ?>"
+                       placeholder="AIza..."
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none font-mono text-sm">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    Ollama URL
+                    <span class="text-gray-400 font-normal ml-2">(local AI — no API key needed)</span>
+                </label>
+                <input type="text" name="ollamaUrl" value="<?php echo e($config['ollamaUrl'] ?? 'http://localhost:11434'); ?>"
+                       placeholder="http://localhost:11434"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none font-mono text-sm">
+                <p class="text-xs text-gray-400 mt-1">
+                    <strong>Local (offline):</strong> Keep <code>http://localhost:11434</code>. Make sure Ollama is running, then go to <a href="?page=model-settings" class="text-blue-600 hover:underline">Model Settings</a> to detect models.<br>
+                    <strong>Online (Hostinger):</strong> Ollama at localhost won't work. Use Groq/OpenRouter/Gemini instead, or use <a href="https://ngrok.com" target="_blank" class="text-blue-600 hover:underline">ngrok</a> to expose your local Ollama publicly.
+                </p>
+            </div>
+
             <button type="submit" class="px-4 py-2 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition">
                 Save API Keys
             </button>

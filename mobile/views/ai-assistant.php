@@ -29,12 +29,17 @@ try {
     $models = [];
 }
 
-$hasGroqKey = !empty($config['groqApiKey']);
-$hasOpenRouterKey = !empty($config['openrouterApiKey']);
-$hasAnyKey = $hasGroqKey || $hasOpenRouterKey;
+$hasGroqKey       = !empty($config['groqApiKey']);
+$hasOpenRouterKey  = !empty($config['openrouterApiKey']);
+$hasGeminiKey      = !empty($config['geminiApiKey']);
+$hasOllama         = !empty($models['ollama']);
+$hasAnyKey         = $hasGroqKey || $hasOpenRouterKey || $hasGeminiKey || $hasOllama;
 
-$groqModels = array_values(array_filter($models['groq'] ?? [], static fn($m) => $m['enabled'] ?? true));
+$groqModels       = array_values(array_filter($models['groq'] ?? [],       static fn($m) => $m['enabled'] ?? true));
 $openRouterModels = array_values(array_filter($models['openrouter'] ?? [], static fn($m) => $m['enabled'] ?? true));
+$geminiModels     = array_values(array_filter($models['gemini'] ?? [],     static fn($m) => $m['enabled'] ?? true));
+$ollamaModels     = array_values(array_filter($models['ollama'] ?? [],     static fn($m) => $m['enabled'] ?? true));
+
 // Per-provider fallback: only use static list for providers that have NO DB models
 if (empty($groqModels)) {
     $groqModels = array_map(
@@ -50,11 +55,18 @@ if (empty($openRouterModels)) {
         OpenRouterAPI::getModels()
     );
 }
+if (empty($geminiModels) && $hasGeminiKey) {
+    $geminiModels = array_map(
+        static fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
+        array_keys(GeminiAPI::getModels()),
+        GeminiAPI::getModels()
+    );
+}
 
 $siteName = getSiteName() ?? 'LazyMan';
 ?>
 <!DOCTYPE html>
-<html class="light" lang="en">
+<html class="light overflow-x-hidden" lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
@@ -67,6 +79,10 @@ $siteName = getSiteName() ?? 'LazyMan';
 <link rel="apple-touch-icon" sizes="180x180" href="<?= APP_URL ?>/assets/favicons/apple-touch-icon.png"/>
 
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>if(typeof mermaid!=='undefined'){mermaid.initialize({startOnLoad:false,theme:'default',flowchart:{useMaxWidth:true,htmlLabels:true},securityLevel:'loose'});}</script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <script id="tailwind-config">
 tailwind.config = {
@@ -89,12 +105,25 @@ tailwind.config = {
   .chat-message { @apply mb-3; }
   .chat-message.user { @apply flex justify-end; }
   .chat-message.assistant { @apply flex justify-start; }
-  .chat-bubble { @apply max-w-[86%] border border-black px-3 py-2 text-sm whitespace-pre-wrap break-words; }
+  .chat-bubble { @apply max-w-[86%] border border-black px-3 py-2 text-sm whitespace-pre-wrap break-words overflow-hidden; word-break: break-word; overflow-wrap: anywhere; }
   .chat-message.user .chat-bubble { @apply bg-black text-white; }
   .chat-message.assistant .chat-bubble { @apply bg-white text-black; }
+  select { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  /* Markdown styles inside assistant bubbles */
+  .chat-bubble .ai-markdown { white-space: normal; font-size: 0.8125rem; line-height: 1.5; }
+  .chat-bubble .ai-markdown p { margin: 0.3em 0; }
+  .chat-bubble .ai-markdown ul,.chat-bubble .ai-markdown ol { padding-left:1.2em; margin:0.3em 0; }
+  .chat-bubble .ai-markdown li { margin:0.1em 0; }
+  .chat-bubble .ai-markdown code { background:#f3f4f6; padding:0.1em 0.3em; border-radius:3px; font-size:0.78em; font-family:monospace; }
+  .chat-bubble .ai-markdown pre { background:#1e1e2e; color:#cdd6f4; padding:0.6em 0.8em; border-radius:5px; overflow-x:auto; margin:0.4em 0; }
+  .chat-bubble .ai-markdown pre code { background:none; padding:0; color:inherit; }
+  .chat-bubble .ai-markdown table { border-collapse:collapse; width:100%; margin:0.4em 0; font-size:0.78em; }
+  .chat-bubble .ai-markdown th,.chat-bubble .ai-markdown td { border:1px solid #e5e7eb; padding:0.3em 0.5em; }
+  .chat-bubble .ai-markdown th { background:#f9fafb; font-weight:600; }
+  .chat-bubble .ai-markdown blockquote { border-left:2px solid #d1d5db; margin:0.3em 0; padding:0.2em 0.6em; color:#6b7280; }
 </style>
 </head>
-<body class="bg-gray-100 flex justify-center">
+<body class="bg-white text-black font-display antialiased overflow-x-hidden">
 <div class="relative w-full max-w-[420px] h-screen bg-white shadow-2xl flex flex-col border-x border-black/5 overflow-hidden">
 
 <?php
@@ -110,7 +139,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 </div>
 <?php endif; ?>
 
-<main class="flex-1 overflow-y-auto no-scrollbar pb-[250px]">
+<main class="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar pb-[250px]">
   <section class="mt-4 px-4">
     <div class="flex gap-3 overflow-x-auto no-scrollbar pb-2">
       <button onclick="openTaskGenerator()" class="tool-card bg-black text-white <?= !$hasAnyKey ? 'opacity-50 cursor-not-allowed' : '' ?>" <?= !$hasAnyKey ? 'disabled' : '' ?>>
@@ -129,25 +158,28 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
   </section>
 
   <section class="mt-4 px-4 space-y-3">
-    <div class="flex border border-black overflow-hidden">
-      <div class="flex-1 flex items-center justify-between px-3 py-2 border-r border-black">
-        <span class="text-[10px] font-bold uppercase tracking-widest">Agent Mode</span>
-        <input id="agent-mode" type="checkbox" class="w-4 h-4 accent-black" checked>
+    <div class="flex border border-black overflow-hidden min-w-0">
+      <div class="flex-1 min-w-0 flex items-center justify-between px-2 py-2 border-r border-black">
+        <span class="text-[9px] font-bold uppercase tracking-wider truncate">Agent</span>
+        <input id="agent-mode" type="checkbox" class="w-4 h-4 accent-black flex-shrink-0" checked>
       </div>
-      <div class="flex-1 flex items-center justify-between px-3 py-2">
-        <span class="text-[10px] font-bold uppercase tracking-widest">Auto-Confirm</span>
+      <div class="flex-1 min-w-0 flex items-center justify-between px-2 py-2">
+        <span class="text-[9px] font-bold uppercase tracking-wider truncate">Auto</span>
         <input id="auto-confirm" type="checkbox" class="w-4 h-4 accent-black" checked disabled>
       </div>
     </div>
     <div class="grid grid-cols-2 gap-2">
-      <select id="ai-provider" class="w-full bg-white border border-black px-3 py-2 text-xs font-bold uppercase tracking-widest focus:ring-0 focus:outline-none" <?= !$hasAnyKey ? 'disabled' : '' ?>>
-        <?php if ($hasGroqKey && $hasOpenRouterKey): ?><option value="smart">Smart (Groq/OpenRouter)</option><?php endif; ?>
-        <?php if ($hasGroqKey): ?><option value="groq">Groq</option><?php endif; ?>
-        <?php if ($hasOpenRouterKey): ?><option value="openrouter">OpenRouter</option><?php endif; ?>
+      <?php $mobileConfiguredCount = ($hasGroqKey?1:0)+($hasOpenRouterKey?1:0)+($hasGeminiKey?1:0)+($hasOllama?1:0); ?>
+      <select id="ai-provider" class="w-full min-w-0 bg-white border border-black px-2 py-2 text-[10px] font-bold uppercase tracking-widest focus:ring-0 focus:outline-none truncate" <?= !$hasAnyKey ? 'disabled' : '' ?>>
+        <?php if ($mobileConfiguredCount >= 2): ?><option value="smart">⚡ Smart</option><?php endif; ?>
+        <option value="groq"><?= $hasGroqKey ? 'Groq' : 'Groq*' ?></option>
+        <option value="openrouter"><?= $hasOpenRouterKey ? 'OpenRouter' : 'OpenRouter*' ?></option>
+        <option value="gemini"><?= $hasGeminiKey ? 'Gemini' : 'Gemini*' ?></option>
+        <option value="ollama"><?= $hasOllama ? 'Ollama' : 'Ollama*' ?></option>
       </select>
-      <select id="ai-model" class="w-full bg-white border border-black px-3 py-2 text-xs font-bold uppercase tracking-widest focus:ring-0 focus:outline-none" <?= !$hasAnyKey ? 'disabled' : '' ?>></select>
+      <select id="ai-model" class="w-full min-w-0 bg-white border border-black px-2 py-2 text-[10px] font-bold uppercase tracking-widest focus:ring-0 focus:outline-none truncate" <?= !$hasAnyKey ? 'disabled' : '' ?>></select>
     </div>
-    <select id="ai-kb-folder" class="w-full bg-white border border-black px-3 py-2 text-xs font-bold focus:ring-0 focus:outline-none" <?= !$hasAnyKey ? 'disabled' : '' ?>>
+    <select id="ai-kb-folder" class="w-full min-w-0 bg-white border border-black px-2 py-2 text-[10px] font-bold focus:ring-0 focus:outline-none truncate" <?= !$hasAnyKey ? 'disabled' : '' ?>>
       <option value="">No Knowledge Base</option>
     </select>
   </section>
@@ -166,7 +198,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
   </section>
 </main>
 
-<div class="absolute left-0 right-0 bottom-[78px] bg-white z-[45]">
+<div class="absolute left-0 right-0 bottom-[78px] bg-white z-[45] overflow-hidden">
   <div class="flex items-center justify-around border-y border-black py-1">
     <button onclick="copyChatTranscript()" class="p-2 hover:bg-gray-100"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2M8 16h8a2 2 0 002-2v-4a2 2 0 00-2-2H8a2 2 0 00-2 2v4a2 2 0 002 2z"/></svg></button>
     <button onclick="exportChatMarkdown()" class="p-2 hover:bg-gray-100"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 12l-4-4m4 4l4-4M4 20h16"/></svg></button>
@@ -174,6 +206,11 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     <button onclick="saveChatToNotes()" class="p-2 hover:bg-gray-100"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>
     <div class="h-5 w-[1px] bg-black/20"></div>
     <button onclick="startNewConversation()" class="p-2 hover:bg-gray-100"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg></button>
+  </div>
+  <div id="switch-provider-banner" class="hidden mx-3 mt-2 p-2 border border-amber-400 bg-amber-50 text-[11px] text-amber-900">
+    <div id="switch-provider-banner-text" class="font-bold mb-1"></div>
+    <div id="switch-provider-banner-actions" class="flex flex-wrap gap-1"></div>
+    <button type="button" onclick="dismissSwitchProviderBanner()" class="absolute top-1 right-1 text-amber-700 text-xs font-bold">×</button>
   </div>
   <form id="chat-form" class="p-3 flex gap-2 items-end">
     <textarea id="chat-input" rows="1" placeholder="Type your prompt..." class="flex-1 min-h-[44px] max-h-28 border border-black p-3 text-sm focus:ring-0 focus:outline-none resize-none placeholder:text-gray-400" <?= !$hasAnyKey ? 'disabled' : '' ?>></textarea>
@@ -222,7 +259,7 @@ include MOBILE_VIEW_PATH . '/partials/bottom-nav.php';
   const APP_URL = '<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>';
   const CSRF_TOKEN = '<?= $_SESSION['csrf_token'] ?? '' ?>';
   const HAS_AI_KEY = <?= $hasAnyKey ? 'true' : 'false' ?>;
-  const ALL_MODELS = <?= json_encode(['groq' => $groqModels, 'openrouter' => $openRouterModels]) ?>;
+  const ALL_MODELS = <?= json_encode(['groq' => $groqModels, 'openrouter' => $openRouterModels, 'gemini' => $geminiModels, 'ollama' => $ollamaModels]) ?>;
   const PROJECTS = <?= json_encode(array_values($projects)) ?>;
 </script>
 <script src="<?= MOBILE_JS_URL ?>/mobile.js"></script>
@@ -232,6 +269,13 @@ if (window.Mobile && typeof Mobile.init === 'function') { Mobile.init(); }
 const KB_FOLDER_STORAGE_KEY = 'mobile.ai.kbFolder';
 let chatHistory = [];
 let currentConversationId = null;
+const AI_CONVERSATION_STORAGE_KEY = 'ai.currentConversationId';
+function _persistConvId() {
+  try {
+    if (currentConversationId) localStorage.setItem(AI_CONVERSATION_STORAGE_KEY, String(currentConversationId));
+    else localStorage.removeItem(AI_CONVERSATION_STORAGE_KEY);
+  } catch (_) {}
+}
 let agentModeEnabled = true;
 let selectedKbFolderId = '';
 let kbFolders = [];
@@ -248,6 +292,43 @@ function showToast(message, type) {
   else alert(message);
 }
 function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str == null ? '' : String(str); return d.innerHTML; }
+
+function renderMarkdown(content) {
+  if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
+    return escapeHtml(content);
+  }
+  try {
+    const renderer = new marked.Renderer();
+    renderer.code = function({ text, lang }) {
+      if ((lang || '').toLowerCase().trim() === 'mermaid') {
+        return `<div class="mermaid-block my-2 p-2 bg-white border border-gray-200 rounded-xl overflow-x-auto"><div class="mermaid">${escapeHtml(text)}</div></div>`;
+      }
+      const escaped = escapeHtml(text);
+      const cls = lang ? ` class="language-${escapeHtml(lang)}"` : '';
+      return `<pre><code${cls}>${escaped}</code></pre>`;
+    };
+    marked.use({ renderer, breaks: true, gfm: true });
+    return '<div class="ai-markdown">' + DOMPurify.sanitize(marked.parse(content), { ADD_TAGS: ['div'], ADD_ATTR: ['class', 'id'] }) + '</div>';
+  } catch (e) {
+    return escapeHtml(content);
+  }
+}
+function renderMermaidInEl(el) {
+  if (typeof mermaid === 'undefined') return;
+  const nodes = el.querySelectorAll('.mermaid');
+  if (!nodes.length) return;
+  mermaid.run({ nodes }).catch(() => {});
+}
+
+function copyMsgText(btn) {
+  const text = btn.dataset.text;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.innerHTML;
+    btn.textContent = '✓';
+    setTimeout(() => { btn.innerHTML = orig; }, 1200);
+  });
+}
 function timeAgo(dateStr) { if (!dateStr) return '--'; const d = new Date(dateStr); const diff = Math.floor((Date.now() - d.getTime()) / 1000); if (diff < 60) return diff + 's ago'; if (diff < 3600) return Math.floor(diff / 60) + 'm ago'; if (diff < 86400) return Math.floor(diff / 3600) + 'h ago'; return Math.floor(diff / 86400) + 'd ago'; }
 function getProvider() { const el = document.getElementById('ai-provider'); return el ? el.value : 'groq'; }
 function getModel() { const el = document.getElementById('ai-model'); return el ? el.value : ''; }
@@ -257,13 +338,25 @@ function isComplexPrompt(prompt) {
   const keywords = ['complex', 'analyze', 'analysis', 'plan', 'strategy', 'architecture', 'debug', 'refactor', 'workflow', 'agentic', 'multi-step', 'tradeoff', 'prioritize', 'schedule'];
   return keywords.some((k) => text.includes(k));
 }
+function getConfiguredProviders() {
+  const list = [];
+  if (<?= $hasGroqKey ? 'true' : 'false' ?>) list.push('groq');
+  if (<?= $hasOpenRouterKey ? 'true' : 'false' ?>) list.push('openrouter');
+  if (<?= $hasGeminiKey ? 'true' : 'false' ?>) list.push('gemini');
+  if (<?= $hasOllama ? 'true' : 'false' ?>) list.push('ollama');
+  return list;
+}
 function resolveProviderForMessage(message) {
   const selected = getProvider();
   if (selected !== 'smart') return selected;
-  return isComplexPrompt(message) ? 'openrouter' : 'groq';
+  const configured = getConfiguredProviders();
+  if (!configured.length) return 'groq';
+  if (isComplexPrompt(message)) return configured.find(p => p === 'openrouter' || p === 'gemini') || configured[0];
+  return configured[0];
 }
-function resolveModelForProvider(provider) {
-  if (getProvider() !== 'smart') return getModel() || undefined;
+function resolveModelForProvider(provider, smartMode = false) {
+  const isSmart = smartMode || getProvider() === 'smart';
+  if (!isSmart) return getModel() || undefined;
   const models = Array.isArray(ALL_MODELS[provider]) ? ALL_MODELS[provider] : [];
   const preferred = models.find((m) => m.isDefault) || models[0];
   return preferred?.modelId || 'auto';
@@ -281,6 +374,77 @@ function updateModelList() {
   const models = Array.isArray(ALL_MODELS[provider]) ? ALL_MODELS[provider] : [];
   select.innerHTML = models.map((m, i) => `<option value="${escapeHtml(m.modelId || '')}" ${(m.isDefault || i === 0) ? 'selected' : ''}>${escapeHtml(m.displayName || m.modelId || 'Model')}</option>`).join('');
 }
+
+const CHAT_ONLY_PROVIDERS = ['groq'];
+function isChatOnlyProvider(p) { return CHAT_ONLY_PROVIDERS.includes(String(p || '').toLowerCase()); }
+
+// Mobile constraints: Groq pick = sticky chat-only. Agent off + locked, KB
+// hidden. No silent fallback to other paid providers when user picked Groq.
+function applyProviderConstraints() {
+  const chatOnly = isChatOnlyProvider(getProvider());
+  const agent = document.getElementById('agent-mode');
+  const autoConf = document.getElementById('auto-confirm');
+  const kb = document.getElementById('ai-kb-folder');
+  if (agent) {
+    if (chatOnly) {
+      agent.checked = false;
+      agent.disabled = true;
+      agentModeEnabled = false;
+    } else {
+      agent.disabled = false;
+      agentModeEnabled = !!agent.checked;
+    }
+  }
+  if (autoConf) {
+    if (chatOnly) autoConf.checked = false;
+    autoConf.disabled = true;
+  }
+  if (kb) {
+    if (chatOnly) {
+      kb.value = '';
+      kb.disabled = true;
+      kb.classList.add('hidden');
+      selectedKbFolderId = '';
+    } else {
+      kb.disabled = false;
+      kb.classList.remove('hidden');
+    }
+  }
+}
+
+function showSwitchProviderBanner(data) {
+  const banner = document.getElementById('switch-provider-banner');
+  const text = document.getElementById('switch-provider-banner-text');
+  const actions = document.getElementById('switch-provider-banner-actions');
+  if (!banner || !text || !actions) return;
+  const reason = data?.reason || 'context_near_limit';
+  text.textContent = reason === 'context_overflow'
+    ? 'Hit Groq context limit. Switch provider for longer chats + actions.'
+    : 'Conversation getting long. Switch provider for longer chats + actions.';
+  const suggested = Array.isArray(data?.suggestedProviders) && data.suggestedProviders.length
+    ? data.suggestedProviders : ['openrouter', 'gemini'];
+  const labelMap = { openrouter: 'OpenRouter', gemini: 'Gemini' };
+  actions.innerHTML = '';
+  suggested.forEach((p) => {
+    const label = labelMap[p];
+    if (!label) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'px-2 py-1 bg-amber-600 text-white text-[10px] font-black uppercase';
+    btn.textContent = 'Switch to ' + label;
+    btn.onclick = () => {
+      const sel = document.getElementById('ai-provider');
+      if (sel) { sel.value = p; updateModelList(); applyProviderConstraints(); }
+      dismissSwitchProviderBanner();
+      document.getElementById('chat-input')?.focus();
+    };
+    actions.appendChild(btn);
+  });
+  banner.classList.remove('hidden');
+}
+function dismissSwitchProviderBanner() {
+  document.getElementById('switch-provider-banner')?.classList.add('hidden');
+}
 function openModal(title, html) { document.getElementById('ai-modal-title').textContent = title; document.getElementById('ai-modal-content').innerHTML = html; document.getElementById('ai-modal').classList.remove('hidden'); }
 function closeModal() { document.getElementById('ai-modal').classList.add('hidden'); }
 
@@ -288,11 +452,33 @@ function addChatMessage(role, content, functionCalls, toolResults) {
   const container = document.getElementById('chat-messages');
   const empty = document.getElementById('chat-empty-state');
   if (empty) empty.remove();
+
+  // Strip XML tool call tags (same as desktop)
+  const cleanContent = content
+    ? String(content).replace(/<tool_call>[\s\S]*/g, '').replace(/<tool_code>[\s\S]*/g, '').trim()
+    : '';
+
   const wrapper = document.createElement('div');
   wrapper.className = 'chat-message ' + (role === 'user' ? 'user' : 'assistant');
   let bubble = '<div class="chat-bubble">';
-  if (role !== 'user' && Array.isArray(functionCalls) && functionCalls.length) bubble += '<div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">Running tools...</div>';
-  bubble += content && String(content).trim() !== '' ? escapeHtml(content) : (role !== 'user' ? '<span class="text-xs text-gray-500">No textual response.</span>' : '');
+  if (role !== 'user' && Array.isArray(functionCalls) && functionCalls.length) {
+    bubble += '<div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">Running tools...</div>';
+  }
+  if (role === 'user') {
+    bubble += cleanContent ? escapeHtml(cleanContent) : '';
+  } else {
+    bubble += cleanContent
+      ? renderMarkdown(cleanContent)
+      : '<span class="text-xs text-gray-500">No textual response.</span>';
+    if (cleanContent) {
+      bubble += `<button onclick="copyMsgText(this)" data-text="${escapeHtml(cleanContent)}"
+        class="mt-1 text-[10px] text-gray-400 hover:text-gray-600 flex items-center gap-1">
+        <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+        </svg>Copy</button>`;
+    }
+  }
   if (role !== 'user' && Array.isArray(toolResults) && toolResults.length) {
     bubble += '<div class="mt-2 pt-2 border-t border-gray-200 space-y-1">';
     toolResults.forEach((r) => { bubble += '<div class="text-[10px] uppercase tracking-wider">' + escapeHtml(r.summary || r.name || 'Tool result') + '</div>'; });
@@ -301,6 +487,7 @@ function addChatMessage(role, content, functionCalls, toolResults) {
   bubble += '</div>';
   wrapper.innerHTML = bubble;
   container.appendChild(wrapper);
+  renderMermaidInEl(wrapper);
   container.scrollTop = container.scrollHeight;
 }
 function showTyping() {
@@ -340,6 +527,12 @@ function applyMobileAgentEvent(event) {
   if (type === 'summary_ready') line = 'Final summary ready.';
   if (type === 'run_cancelled') line = 'Run cancelled.';
   if (type === 'run_error') line = `Error: ${data.error || 'Run failed'}`;
+  if (type === 'switch_provider_recommended') {
+    showSwitchProviderBanner(data);
+    line = data.reason === 'context_overflow'
+      ? 'Hit chat-only context limit — see suggestion above.'
+      : 'Long conversation for chat-only model — see suggestion above.';
+  }
   if (line) {
     agentTimelineEvents.push(line);
     renderMobileTimeline();
@@ -385,25 +578,111 @@ function stopMobileAgentPolling() {
   agentPollTimer = null;
 }
 
+function estimateHistoryChars(history) {
+  if (!Array.isArray(history)) return 0;
+  let n = 0;
+  for (const m of history) n += String(m?.content || '').length;
+  return n;
+}
+
+function trimHistoryForChatOnly(history, maxChars) {
+  if (!Array.isArray(history) || history.length === 0) return [];
+  const out = [...history];
+  let total = estimateHistoryChars(out);
+  while (out.length > 1 && total > maxChars) {
+    const removed = out.shift();
+    total -= String(removed?.content || '').length;
+  }
+  if (out.length === 1 && total > maxChars) {
+    const last = out[0];
+    const head = String(last?.content || '').slice(0, Math.max(0, maxChars - 200));
+    out[0] = { ...last, content: head + '\n\n[truncated to fit chat-only model context]' };
+  }
+  return out;
+}
+
 async function sendStandardMessage(message) {
   chatHistory.push({ role: 'user', content: message });
   showTyping();
-  try {
-    const effectiveProvider = resolveProviderForMessage(message);
-    const effectiveModel = resolveModelForProvider(effectiveProvider);
-    const response = await App.api.post('api/ai.php?action=chat', { messages: chatHistory, provider: effectiveProvider, model: effectiveModel, kbFolderId: selectedKbFolderId || '', csrf_token: CSRF_TOKEN });
-    hideTyping();
-    if (response.success && response.data && response.data.response) {
-      chatHistory.push({ role: 'assistant', content: response.data.response });
-      addChatMessage('assistant', response.data.response);
-    } else addChatMessage('assistant', 'Error: ' + (response.error || 'Failed to get response'));
-  } catch (error) { hideTyping(); addChatMessage('assistant', 'Error: ' + (error.message || 'Network error')); }
+  const userPicked = getProvider();
+  const isSmart = userPicked === 'smart';
+  const configured = getConfiguredProviders();
+  const kbId = selectedKbFolderId || '';
+
+  // Sticky pick: explicit provider = only that provider is called and billed.
+  // Smart Auto = fallback chain (the only mode where the user opted into auto-routing).
+  let providersToTry;
+  if (isSmart) {
+    const firstProvider = resolveProviderForMessage(message);
+    providersToTry = [firstProvider, ...configured.filter(p => p !== firstProvider)];
+  } else {
+    providersToTry = [userPicked];
+  }
+
+  for (let i = 0; i < providersToTry.length; i++) {
+    const effectiveProvider = providersToTry[i];
+    const effectiveModel = resolveModelForProvider(effectiveProvider, isSmart);
+    const isChatOnly = isChatOnlyProvider(effectiveProvider);
+    const outboundMessages = isChatOnly ? trimHistoryForChatOnly(chatHistory, 24000) : chatHistory;
+    const hasNext = i < providersToTry.length - 1;
+
+    try {
+      const response = await App.api.post('api/ai.php?action=chat', {
+        messages: outboundMessages,
+        provider: effectiveProvider,
+        model: effectiveModel,
+        kbFolderId: isChatOnly ? '' : kbId,
+        csrf_token: CSRF_TOKEN
+      });
+      hideTyping();
+      if (response && response.data && response.data.switchProviderRecommended) {
+        // Smart Auto cycles to next; explicit pick shows banner, no silent re-route.
+        if (isSmart && hasNext) {
+          showTyping();
+          continue;
+        }
+        showSwitchProviderBanner({ reason: response.data.reason || 'context_overflow', suggestedProviders: response.data.suggestedProviders || [] });
+        addChatMessage('assistant', response.data.message || 'Pick a different provider above to continue.');
+        return;
+      }
+      if (response.success && response.data && response.data.response) {
+        chatHistory.push({ role: 'assistant', content: response.data.response });
+        addChatMessage('assistant', response.data.response);
+        return;
+      } else if (isSmart && hasNext) {
+        showToast(`${effectiveProvider} unavailable, trying next...`, 'warning');
+        showTyping();
+        continue;
+      } else {
+        addChatMessage('assistant', 'Error: ' + (response.error || 'Failed to get response'));
+        return;
+      }
+    } catch (error) {
+      const errMsg = error.message || 'Network error';
+      const isTpm = isChatOnly && /request too large|tokens per minute|\bTPM\b/i.test(errMsg);
+      if (isTpm) {
+        hideTyping();
+        showSwitchProviderBanner({ reason: 'context_overflow', suggestedProviders: configured.filter(p => p !== 'groq' && p !== 'ollama') });
+        addChatMessage('assistant', 'Groq hit its per-minute token limit. Wait ~60s or pick OpenRouter / Gemini above.');
+        return;
+      }
+      if (isSmart && hasNext) { showToast(`${effectiveProvider} failed, trying next...`, 'warning'); showTyping(); continue; }
+      hideTyping();
+      addChatMessage('assistant', 'Error: ' + errMsg);
+      return;
+    }
+  }
+  hideTyping();
 }
 
 function normalizeAgentMessages(messages) {
   const rows = [];
   (messages || []).forEach((m) => {
     if (m.role !== 'user' && m.role !== 'assistant') return;
+    // Drop tool-status messages saved by older builds — they pollute the
+    // chat transcript when replayed. Tool progress is event-driven now.
+    const c = String(m.content || '');
+    if (m.role === 'assistant' && /^\s*Executing tool:\s/i.test(c)) return;
     rows.push({ role: m.role, content: m.content || '', functionCalls: m.functionCalls || [], toolResults: m.toolResults || [] });
   });
   return rows;
@@ -429,6 +708,7 @@ async function sendAgentMessage(message) {
       const startResponse = await App.api.post('api/ai-agent.php?action=start_conversation', { titleSeed: message, csrf_token: CSRF_TOKEN });
       if (startResponse.success && startResponse.data?.conversationId) {
         currentConversationId = startResponse.data.conversationId;
+        _persistConvId();
         agentEventCursor = 0;
       }
     } catch (error) {
@@ -439,30 +719,39 @@ async function sendAgentMessage(message) {
     await syncMobileEventCursor();
   }
   startMobileAgentPolling();
-  try {
-    const effectiveProvider = resolveProviderForMessage(message);
-    const effectiveModel = resolveModelForProvider(effectiveProvider);
-    const response = await App.api.post('api/ai-agent.php?action=chat', {
-      message,
-      conversationId: currentConversationId,
-      autoConfirm: true,
-      provider: effectiveProvider,
-      model: effectiveModel,
-      kbFolderId: selectedKbFolderId || null,
-      csrf_token: CSRF_TOKEN
-    });
-    stopMobileAgentPolling();
-    hideTyping();
-    if (response.success && response.data) {
-      currentConversationId = response.data.conversationId || currentConversationId;
-      await refreshConversation();
-      await loadConversations();
-    } else addChatMessage('assistant', 'Error: ' + (response.error || 'Failed to get response'));
-  } catch (error) {
-    stopMobileAgentPolling();
-    hideTyping();
-    addChatMessage('assistant', 'Error: ' + (error.message || 'Network error'));
+  const isSmart = getProvider() === 'smart';
+  const firstProvider = resolveProviderForMessage(message);
+  const providersToTry = isSmart ? [firstProvider, ...getConfiguredProviders().filter(p => p !== firstProvider)] : [firstProvider];
+  for (let i = 0; i < providersToTry.length; i++) {
+    const effectiveProvider = providersToTry[i];
+    const effectiveModel = resolveModelForProvider(effectiveProvider, isSmart);
+    try {
+      const response = await App.api.post('api/ai-agent.php?action=chat', {
+        message, conversationId: currentConversationId, autoConfirm: true,
+        provider: effectiveProvider, model: effectiveModel,
+        kbFolderId: selectedKbFolderId || null,
+        smartMode: isSmart,
+        csrf_token: CSRF_TOKEN
+      });
+      stopMobileAgentPolling();
+      hideTyping();
+      if (response.success && response.data) {
+        currentConversationId = response.data.conversationId || currentConversationId;
+        _persistConvId();
+        await refreshConversation();
+        await loadConversations();
+        return;
+      } else if (isSmart && i < providersToTry.length - 1) {
+        startMobileAgentPolling(); continue;
+      } else { addChatMessage('assistant', 'Error: ' + (response.error || 'Failed to get response')); return; }
+    } catch (error) {
+      stopMobileAgentPolling();
+      if (isSmart && i < providersToTry.length - 1) { startMobileAgentPolling(); continue; }
+      hideTyping();
+      addChatMessage('assistant', 'Error: ' + (error.message || 'Network error')); return;
+    }
   }
+  stopMobileAgentPolling(); hideTyping();
 }
 
 async function handleSendMessage(event) {
@@ -479,7 +768,7 @@ async function handleSendMessage(event) {
   isSending = false;
 }
 
-function startNewConversation() { currentConversationId = null; chatHistory = []; agentEventCursor = 0; agentTimelineEvents = []; stopMobileAgentPolling(); document.getElementById('chat-messages').innerHTML = ''; renderWelcomeIfEmpty(); loadConversations(); showToast('New conversation started.', 'info'); }
+function startNewConversation() { currentConversationId = null; _persistConvId(); chatHistory = []; agentEventCursor = 0; agentTimelineEvents = []; stopMobileAgentPolling(); document.getElementById('chat-messages').innerHTML = ''; renderWelcomeIfEmpty(); loadConversations(); showToast('New conversation started.', 'info'); }
 
 function toggleConversationHistory() {
   const backdrop = document.getElementById('conversation-drawer');
@@ -497,7 +786,7 @@ async function loadConversations() {
     list.innerHTML = rows.map((r) => `<button class="w-full text-left p-3 border-b border-gray-100 hover:bg-gray-50 ${r.id === currentConversationId ? 'bg-gray-50' : ''}" onclick="openConversation('${r.id}')"><p class="text-xs font-black uppercase tracking-tight truncate">${escapeHtml(r.title || 'Conversation')}</p><p class="text-[10px] text-gray-500 uppercase tracking-widest mt-1">${Number(r.messageCount || 0)} msgs · ${timeAgo(r.updatedAt)}</p></button>`).join('');
   } catch (error) { list.innerHTML = '<div class="p-4 text-sm text-red-600">Failed to load conversations.</div>'; }
 }
-async function openConversation(id) { currentConversationId = id; agentEventCursor = 0; agentTimelineEvents = []; await refreshConversation(); await loadConversations(); toggleConversationHistory(); }
+async function openConversation(id) { currentConversationId = id; _persistConvId(); agentEventCursor = 0; agentTimelineEvents = []; await refreshConversation(); await loadConversations(); toggleConversationHistory(); }
 async function clearConversationHistory() {
   if (!window.confirm('Clear all AI conversations?')) return;
   try {
@@ -678,13 +967,25 @@ document.getElementById('agent-mode').addEventListener('change', (e) => {
     autoConfirmToggle.checked = true;
   }
 });
-document.getElementById('ai-provider').addEventListener('change', updateModelList);
+document.getElementById('ai-provider').addEventListener('change', () => { updateModelList(); applyProviderConstraints(); });
 document.getElementById('ai-kb-folder').addEventListener('change', handleKbFolderChange);
 document.getElementById('conversation-drawer').addEventListener('click', function(event) { if (event.target === this) toggleConversationHistory(); });
 document.getElementById('ai-modal').addEventListener('click', function(event) { if (event.target === this) closeModal(); });
 updateModelList();
+applyProviderConstraints();
 loadKbFolders();
 renderWelcomeIfEmpty();
+
+// Restore last conversation across page refresh.
+(async () => {
+  try {
+    const saved = localStorage.getItem(AI_CONVERSATION_STORAGE_KEY);
+    if (saved && typeof openConversation === 'function') {
+      currentConversationId = saved;
+      await refreshConversation();
+    }
+  } catch (_) {}
+})();
 </script>
 </body>
 </html>

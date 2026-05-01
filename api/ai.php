@@ -5,6 +5,8 @@
 
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../includes/AIHelper.php';
+require_once __DIR__ . '/../includes/OllamaAPI.php';
+require_once __DIR__ . '/../includes/GeminiAPI.php';
 
 ini_set('display_errors', 0);
 error_reporting(0);
@@ -32,6 +34,9 @@ function modelLooksLikeApiKey(?string $model, string $provider): bool {
         return true;
     }
     if ($provider === 'openrouter' && str_starts_with($trimmed, 'sk-or-')) {
+        return true;
+    }
+    if ($provider === 'gemini' && str_starts_with($trimmed, 'AIza')) {
         return true;
     }
     return false;
@@ -130,6 +135,12 @@ if (!Auth::check()) {
     errorResponse('Unauthorized', 401);
 }
 
+// Unlock session file so concurrent tabs (e.g. opening another page while a
+// chat is in flight) are not blocked by PHP's exclusive session file lock.
+// $_SESSION values remain readable in memory; we just release the lock.
+// Mirrors the pattern in api/ai-agent.php:28.
+session_write_close();
+
 $isPostRequest = requestMethod() === 'POST';
 
 // Handle GET request for check_requirements (read-only, no auth needed beyond login)
@@ -195,15 +206,17 @@ if (!$isPostRequest) {
 $body = getJsonBody();
 $action = $_GET['action'] ?? $body['action'] ?? null;
 
-// Skip CSRF validation for MCP tools
-$mcpTool = $_SERVER['HTTP_X_MCP_TOOL'] ?? '';
-if (empty($mcpTool)) {
+// Skip CSRF validation for authenticated MCP tools (validated via Auth::isMcp(), which
+// requires loopback origin + valid X-MCP-Api-Token or static MCP secret).
+// Previous behavior of trusting raw HTTP_X_MCP_TOOL header is unsafe — header alone
+// is attacker-controlled and bypasses CSRF entirely.
+if (!Auth::isMcp()) {
     $token = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if (!Auth::validateCsrf($token)) {
         errorResponse('Invalid CSRF token', 403);
     }
 }
-$provider = $body['provider'] ?? 'groq';
+$provider = $body['provider'] ?? '';
 $model = $body['model'] ?? null;
 
 // Resolve 'auto' model to the default or first enabled model for the provider
@@ -248,28 +261,30 @@ if (!$apiLimit['allowed']) {
 }
 
 // Resolve 'auto' model to the default or first enabled model for the provider
-if ($model === 'auto') {
-    $models = $db->load('models') ?? [];
+// Models are stored as ['groq' => [...], 'openrouter' => [...], 'ollama' => [...], 'gemini' => [...]]
+if ($model === 'auto' && !empty($provider)) {
+    $allModels = $db->load('models') ?? [];
+    $providerModels = $allModels[$provider] ?? [];
     $resolvedModel = null;
-    
+
     // First try to find a default model for this provider
-    foreach ($models as $m) {
-        if (($m['provider'] ?? '') === $provider && ($m['isDefault'] ?? false)) {
+    foreach ($providerModels as $m) {
+        if ($m['isDefault'] ?? false) {
             $resolvedModel = $m['modelId'];
             break;
         }
     }
-    
+
     // If no default, find the first enabled model
     if (!$resolvedModel) {
-        foreach ($models as $m) {
-            if (($m['provider'] ?? '') === $provider && ($m['enabled'] ?? true)) {
+        foreach ($providerModels as $m) {
+            if ($m['enabled'] ?? true) {
                 $resolvedModel = $m['modelId'];
                 break;
             }
         }
     }
-    
+
     if ($resolvedModel) {
         $model = $resolvedModel;
     } else {
@@ -279,21 +294,72 @@ if ($model === 'auto') {
 
 $config = $db->load('config', true);
 
-$groqKey = $config['groqApiKey'] ?? '';
+$groqKey       = $config['groqApiKey'] ?? '';
 $openrouterKey = $config['openrouterApiKey'] ?? '';
+$geminiKey     = $config['geminiApiKey'] ?? '';
+$ollamaUrl     = $config['ollamaUrl'] ?? 'http://localhost:11434';
 
-// Check API key
+// If provider not explicitly specified, use user's configured default
+if (empty($provider)) {
+    $provider = $config['aiProvider'] ?? 'groq';
+    // Auto-resolve model for the config-default provider if not set
+    if ($model === null) {
+        $allModels = $allModels ?? ($db->load('models') ?? []);
+        $providerModels = $allModels[$provider] ?? [];
+        $resolvedDefault = null;
+        foreach ($providerModels as $m) {
+            if ($m['isDefault'] ?? false) { $resolvedDefault = $m['modelId']; break; }
+        }
+        if (!$resolvedDefault) {
+            foreach ($providerModels as $m) {
+                if ($m['enabled'] ?? true) { $resolvedDefault = $m['modelId']; break; }
+            }
+        }
+        if ($resolvedDefault) $model = $resolvedDefault;
+    }
+}
+
+// Check API key / connectivity config
 if ($provider === 'groq' && empty($groqKey)) {
     errorResponse('Groq API key not configured. Please add it in Settings.');
 }
 if ($provider === 'openrouter' && empty($openrouterKey)) {
     errorResponse('OpenRouter API key not configured. Please add it in Settings.');
 }
+if ($provider === 'gemini' && empty($geminiKey)) {
+    errorResponse('Google Gemini API key not configured. Please add it in Settings.');
+}
+if ($provider === 'ollama') {
+    if (!canUseOllama()) {
+        errorResponse(
+            'Ollama is not available in online mode (shared hosting cannot reach local Ollama). Please use Groq, OpenRouter, or Gemini instead. Configure your preferred provider in Model Settings.',
+            503,
+            'OLLAMA_UNAVAILABLE_ONLINE'
+        );
+    }
+    // Also check if ollamaUrl is localhost - if so, warn but allow
+    if (strpos($ollamaUrl, 'localhost') !== false || strpos($ollamaUrl, '127.0.0.1') !== false) {
+        // This is expected for local, no issue
+    }
+}
 
 // Initialize API client
-$api = $provider === 'groq'
-    ? new GroqAPI($groqKey)
-    : new OpenRouterAPI($openrouterKey);
+switch ($provider) {
+    case 'groq':
+        $api = new GroqAPI($groqKey);
+        break;
+    case 'openrouter':
+        $api = new OpenRouterAPI($openrouterKey);
+        break;
+    case 'gemini':
+        $api = new GeminiAPI($geminiKey);
+        break;
+    case 'ollama':
+        $api = new OllamaAPI($ollamaUrl);
+        break;
+    default:
+        errorResponse("Unknown AI provider: {$provider}", 400, ERROR_VALIDATION);
+}
 
 try {
     switch ($action) {
@@ -400,6 +466,23 @@ try {
                 errorResponse('Messages are required', 400, ERROR_VALIDATION);
             }
 
+            // Defense-in-depth: trim chatHistory for chat-only providers (Groq).
+            // Some Groq models (gpt-oss-120b) have only 8000 TPM on free tier.
+            // Even if the frontend forgot to trim, we cap server-side here.
+            $isChatOnlyProvider = (strtolower($provider) === 'groq');
+            if ($isChatOnlyProvider) {
+                $maxChars = 24000; // ~6000 tokens, well under 8000 TPM
+                $totalChars = 0;
+                foreach ($messages as $m) { $totalChars += strlen((string)($m['content'] ?? '')); }
+                while (count($messages) > 1 && $totalChars > $maxChars) {
+                    $removed = array_shift($messages);
+                    $totalChars -= strlen((string)($removed['content'] ?? ''));
+                }
+                // Force-reject KB folder for chat-only providers — they cannot
+                // afford the extra context.
+                $body['kbFolderId'] = '';
+            }
+
             try {
                 $kbFolderId = trim((string)($body['kbFolderId'] ?? ''));
                 $currentUserId = Auth::userId() ?? '';
@@ -415,12 +498,44 @@ try {
 
                 $result = $api->chatCompletion($messages, $model);
                 if (isset($result['error'])) {
-                    errorResponse('AI Error: ' . ($result['error']['message'] ?? 'Unknown error'), 500, 'AI_ERROR');
+                    $errMsg = (string)($result['error']['message'] ?? 'Unknown error');
+                    // Groq TPM / "Request too large" → return structured switch hint
+                    // so the UI can show the banner instead of a raw 500.
+                    if ($isChatOnlyProvider && preg_match('/request too large|tokens per minute|\bTPM\b/i', $errMsg)) {
+                        $suggested = [];
+                        if (!empty($openrouterKey)) $suggested[] = 'openrouter';
+                        if (!empty($geminiKey))     $suggested[] = 'gemini';
+                        successResponse([
+                            'switchProviderRecommended' => true,
+                            'reason' => 'context_overflow',
+                            'suggestedProviders' => $suggested,
+                            'message' => 'Groq hit its per-minute token limit on this request. Switch to OpenRouter or Gemini above to continue.'
+                        ]);
+                        break;
+                    }
+                    errorResponse('AI Error: ' . $errMsg, 500, 'AI_ERROR');
                 }
                 $content = $result['choices'][0]['message']['content'] ?? '';
-                successResponse(['response' => $content]);
+                successResponse([
+                    'response' => $content,
+                    'provider' => $provider,
+                    'model'    => $model,
+                ]);
             } catch (Exception $e) {
-                errorResponse('AI request failed: ' . $e->getMessage(), 500, 'AI_ERROR');
+                $errMsg = $e->getMessage();
+                if ($isChatOnlyProvider && preg_match('/request too large|tokens per minute|\bTPM\b/i', $errMsg)) {
+                    $suggested = [];
+                    if (!empty($openrouterKey)) $suggested[] = 'openrouter';
+                    if (!empty($geminiKey))     $suggested[] = 'gemini';
+                    successResponse([
+                        'switchProviderRecommended' => true,
+                        'reason' => 'context_overflow',
+                        'suggestedProviders' => $suggested,
+                        'message' => 'Groq hit its per-minute token limit on this request. Switch to OpenRouter or Gemini above to continue.'
+                    ]);
+                    break;
+                }
+                errorResponse('AI request failed: ' . $errMsg, 500, 'AI_ERROR');
             }
             break;
 
@@ -473,14 +588,18 @@ try {
                 errorResponse('Description is required for inventory generation', 400, ERROR_VALIDATION);
             }
 
+            // Sanitize user input before injecting into prompt template (prevents prompt injection)
+            $safeDescription = AIHelper::sanitizeUserInputForPrompt($description, 2000);
+            $safeCategory    = AIHelper::sanitizeUserInputForPrompt($category, 100);
+
             $categoryNote = '';
-            if ($category === 'Groceries') {
+            if ($safeCategory === 'Groceries') {
                 $categoryNote = ' For groceries, include typical household food items, produce, dairy, meat, pantry staples, beverages, etc.';
             }
 
             $prompt = <<<PROMPT
-You are an inventory management expert. Generate a list of inventory items based on this description: "{$description}".
-Category: {$category}{$categoryNote}
+You are an inventory management expert. Generate a list of inventory items based on this description: "{$safeDescription}".
+Category: {$safeCategory}{$categoryNote}
 
 Return ONLY valid JSON in this exact format:
 {
@@ -488,7 +607,7 @@ Return ONLY valid JSON in this exact format:
         {
             "name": "Product name",
             "description": "Brief description",
-            "category": "{$category}",
+            "category": "{$safeCategory}",
             "sku": "Auto-generate SKU (e.g., CAT-001)",
             "cost": 0.00,
             "price": 0.00,
@@ -504,9 +623,12 @@ PROMPT;
             try {
                 $result = $api->complete($prompt, $model);
 
-                // Extract JSON from response
-                preg_match('/\{[\s\S]*\}', $result, $matches);
-                $parsed = json_decode($matches[0] ?? '{}', true);
+                // Extract JSON from response (regex below was missing closing delimiter '/'.
+                // Use a properly delimited greedy match between the first '{' and last '}'.)
+                $parsed = null;
+                if (preg_match('/\{[\s\S]*\}/', $result, $matches)) {
+                    $parsed = json_decode($matches[0], true);
+                }
 
                 if (!$parsed || !isset($parsed['items'])) {
                     // Fallback to simple parsing
@@ -515,7 +637,8 @@ PROMPT;
 
                 successResponse(['items' => $parsed['items'] ?? []]);
             } catch (Exception $e) {
-                errorResponse('Failed to generate inventory: ' . $e->getMessage(), 500, 'AI_ERROR');
+                error_log('Failed to generate inventory: ' . $e->getMessage());
+                errorResponse('Failed to generate inventory. Please try again.', 500, 'AI_ERROR');
             }
             break;
 

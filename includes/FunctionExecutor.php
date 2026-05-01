@@ -383,6 +383,20 @@ class FunctionExecutor {
                 return $this->listInventory($parameters);
             case 'set_pomodoro_timer':
                 return $this->setPomodoroTimer($parameters);
+            case 'list_transactions':
+                return $this->listTransactions($parameters);
+            case 'list_invoices':
+                return $this->listInvoices($parameters);
+            case 'log_water':
+                return $this->logWater($parameters);
+            case 'get_water_status':
+                return $this->getWaterStatus($parameters);
+            case 'update_subtask':
+                return $this->updateSubtask($parameters);
+            case 'create_kb_note':
+                return $this->createKbNote($parameters);
+            case 'list_notes':
+                return $this->listNotes($parameters);
             default:
                 throw new ValidationException("Unknown function: {$functionName}");
         }
@@ -1857,6 +1871,214 @@ class FunctionExecutor {
                 'startedAt' => gmdate('c')
             ],
             'message' => "Pomodoro timer started: {$sessions} session(s) of {$workMinutes}min work + {$breakMinutes}min break"
+        ];
+    }
+
+    private function listTransactions(array $params): array {
+        $transactions = $this->db->load('finance') ?? [];
+        if (!empty($params['type'])) {
+            $transactions = array_filter($transactions, fn($t) => ($t['type'] ?? '') === $params['type']);
+        }
+        if (!empty($params['category'])) {
+            $transactions = array_filter($transactions, fn($t) =>
+                strtolower($t['category'] ?? '') === strtolower($params['category']));
+        }
+        $transactions = array_values($transactions);
+        usort($transactions, fn($a, $b) => strcmp($b['date'] ?? '', $a['date'] ?? ''));
+        $limit = min((int)($params['limit'] ?? 50), 200);
+        $transactions = array_slice($transactions, 0, $limit);
+        $total = array_sum(array_map(fn($t) => (float)($t['amount'] ?? 0), $transactions));
+        return [
+            'success' => true,
+            'transactions' => $transactions,
+            'count' => count($transactions),
+            'total' => round($total, 2),
+            'message' => 'Found ' . count($transactions) . ' transactions totalling ' . round($total, 2)
+        ];
+    }
+
+    private function listInvoices(array $params): array {
+        $invoices = $this->db->load('invoices') ?? [];
+        if (!empty($params['status'])) {
+            $invoices = array_filter($invoices, fn($i) => ($i['status'] ?? '') === $params['status']);
+        }
+        $invoices = array_values($invoices);
+        usort($invoices, fn($a, $b) => strcmp($b['createdAt'] ?? '', $a['createdAt'] ?? ''));
+        $limit = min((int)($params['limit'] ?? 50), 200);
+        $invoices = array_slice($invoices, 0, $limit);
+        return [
+            'success' => true,
+            'invoices' => array_map(fn($i) => [
+                'id'            => $i['id'] ?? '',
+                'invoiceNumber' => $i['invoiceNumber'] ?? '',
+                'clientId'      => $i['clientId'] ?? '',
+                'status'        => $i['status'] ?? 'draft',
+                'total'         => $i['total'] ?? 0,
+                'dueDate'       => $i['dueDate'] ?? '',
+                'createdAt'     => $i['createdAt'] ?? ''
+            ], $invoices),
+            'count' => count($invoices),
+            'message' => 'Found ' . count($invoices) . ' invoices'
+        ];
+    }
+
+    private function logWater(array $params): array {
+        $tracker = $this->db->load('water_tracker') ?? [];
+        $date = date('Y-m-d');
+        $idx = -1;
+        foreach ($tracker as $i => $entry) {
+            if (($entry['date'] ?? '') === $date) { $idx = $i; break; }
+        }
+        if ($idx === -1) {
+            $tracker[] = [
+                'id' => $this->db->generateId(), 'date' => $date,
+                'glasses' => 0, 'goal' => 8,
+                'createdAt' => date('c'), 'updatedAt' => date('c')
+            ];
+            $idx = count($tracker) - 1;
+        }
+        if (isset($params['total'])) {
+            $tracker[$idx]['glasses'] = max(0, (int)$params['total']);
+        } else {
+            $tracker[$idx]['glasses'] = max(0, ($tracker[$idx]['glasses'] ?? 0) + (int)($params['glasses'] ?? 1));
+        }
+        $tracker[$idx]['updatedAt'] = date('c');
+        $this->db->save('water_tracker', $tracker);
+        $g = $tracker[$idx]['glasses'];
+        $goal = $tracker[$idx]['goal'] ?? 8;
+        return [
+            'success' => true,
+            'glasses' => $g,
+            'goal' => $goal,
+            'message' => "Water logged: {$g}/{$goal} glasses today"
+        ];
+    }
+
+    private function getWaterStatus(array $params): array {
+        $tracker = $this->db->load('water_tracker') ?? [];
+        $date = date('Y-m-d');
+        $entry = null;
+        foreach ($tracker as $e) {
+            if (($e['date'] ?? '') === $date) { $entry = $e; break; }
+        }
+        $entry = $entry ?? ['glasses' => 0, 'goal' => 8, 'date' => $date];
+        $history = array_values(array_filter($tracker, fn($e) => ($e['date'] ?? '') !== $date));
+        usort($history, fn($a, $b) => strcmp($b['date'] ?? '', $a['date'] ?? ''));
+        $history = array_slice($history, 0, 7);
+        return [
+            'success' => true,
+            'today' => $entry,
+            'history' => $history,
+            'message' => "Today: {$entry['glasses']}/{$entry['goal']} glasses of water"
+        ];
+    }
+
+    private function updateSubtask(array $params): array {
+        if (empty($params['taskId'])) {
+            throw new ValidationException('taskId is required');
+        }
+        if (empty($params['subtaskId']) && empty($params['subtaskTitle'])) {
+            throw new ValidationException('subtaskId or subtaskTitle is required');
+        }
+        $projects = $this->db->load('projects') ?? [];
+        $taskId = $params['taskId'];
+        $subtaskId = $params['subtaskId'] ?? null;
+        $subtaskTitle = strtolower(trim($params['subtaskTitle'] ?? ''));
+
+        foreach ($projects as $pi => $project) {
+            foreach ($project['tasks'] ?? [] as $ti => $task) {
+                if ($task['id'] !== $taskId) continue;
+                foreach ($task['subtasks'] ?? [] as $si => $subtask) {
+                    $matchById    = $subtaskId && (($subtask['id'] ?? '') === $subtaskId || (string)$si === $subtaskId);
+                    $matchByTitle = !$subtaskId && $subtaskTitle && strtolower($subtask['title'] ?? '') === $subtaskTitle;
+                    if (!$matchById && !$matchByTitle) continue;
+
+                    if (isset($params['completed'])) {
+                        $projects[$pi]['tasks'][$ti]['subtasks'][$si]['completed'] = (bool)$params['completed'];
+                    }
+                    if (!empty($params['title'])) {
+                        $projects[$pi]['tasks'][$ti]['subtasks'][$si]['title'] = $params['title'];
+                    }
+                    if (isset($params['estimatedMinutes'])) {
+                        $projects[$pi]['tasks'][$ti]['subtasks'][$si]['estimatedMinutes'] = (int)$params['estimatedMinutes'];
+                    }
+                    $projects[$pi]['tasks'][$ti]['updatedAt'] = date('c');
+                    $this->db->save('projects', $projects);
+                    $updated = $projects[$pi]['tasks'][$ti]['subtasks'][$si];
+                    $status = ($updated['completed'] ?? false) ? 'completed' : 'updated';
+                    return ['success' => true, 'subtask' => $updated,
+                        'message' => "Subtask '{$updated['title']}' {$status}"];
+                }
+                throw new ValidationException("Subtask not found in task");
+            }
+        }
+        throw new ValidationException("Task not found: {$taskId}");
+    }
+
+    private function createKbNote(array $params): array {
+        $kbData = $this->db->load('knowledge-base') ?? ['folders' => [], 'files' => []];
+        if (!isset($kbData['files'])) $kbData['files'] = [];
+        if (!isset($kbData['folders'])) $kbData['folders'] = [];
+
+        $folderId = $params['folderId'] ?? null;
+        if (!$folderId) {
+            foreach ($kbData['folders'] as $f) {
+                if (strtolower($f['name'] ?? '') === 'notes') { $folderId = $f['id']; break; }
+            }
+            if (!$folderId) {
+                $newFolder = ['id' => $this->db->generateId(), 'name' => 'Notes',
+                    'description' => 'AI-created notes', 'createdAt' => date('c')];
+                $kbData['folders'][] = $newFolder;
+                $folderId = $newFolder['id'];
+            }
+        }
+
+        $file = [
+            'id'        => $this->db->generateId(),
+            'folderId'  => $folderId,
+            'name'      => $params['title'],
+            'type'      => 'text',
+            'content'   => base64_encode($params['content']),
+            'createdAt' => date('c'),
+            'updatedAt' => date('c')
+        ];
+        $kbData['files'][] = $file;
+        $this->db->save('knowledge-base', $kbData);
+        return ['success' => true, 'file' => $file,
+            'message' => "KB note '{$file['name']}' created"];
+    }
+
+    private function listNotes(array $params): array {
+        $notes = $this->db->load('notes') ?? [];
+        $query = strtolower(trim($params['query'] ?? ''));
+        $tag   = strtolower(trim($params['tag'] ?? ''));
+
+        if ($query) {
+            $notes = array_filter($notes, fn($n) =>
+                str_contains(strtolower($n['title'] ?? ''), $query) ||
+                str_contains(strtolower($n['content'] ?? ''), $query));
+        }
+        if ($tag) {
+            $notes = array_filter($notes, fn($n) =>
+                in_array($tag, array_map('strtolower', $n['tags'] ?? []), true));
+        }
+
+        $notes = array_values($notes);
+        usort($notes, fn($a, $b) => strcmp($b['updatedAt'] ?? '', $a['updatedAt'] ?? ''));
+        $limit = min((int)($params['limit'] ?? 30), 100);
+        $notes = array_slice($notes, 0, $limit);
+
+        return [
+            'success' => true,
+            'notes' => array_map(fn($n) => [
+                'id'        => $n['id'],
+                'title'     => $n['title'],
+                'tags'      => $n['tags'] ?? [],
+                'isPinned'  => $n['isPinned'] ?? false,
+                'updatedAt' => $n['updatedAt'] ?? ''
+            ], $notes),
+            'count' => count($notes),
+            'message' => 'Found ' . count($notes) . ' notes'
         ];
     }
 }

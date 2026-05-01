@@ -6,7 +6,7 @@ class TasksAPI extends BaseAPI
 {
     protected function getAllowedFields(): array
     {
-        return ['title', 'description', 'status', 'priority', 'startDate', 'dueDate', 'estimatedMinutes', 'actualMinutes', 'subtasks', 'timeEntries', 'timerState', 'recurrence', 'parentTaskId', 'linkedHabitId', 'linkedInventoryIds', 'createdAt', 'updatedAt', 'completedAt', 'projectId'];
+        return ['title', 'description', 'status', 'priority', 'startDate', 'dueDate', 'estimatedMinutes', 'actualMinutes', 'subtasks', 'timeEntries', 'timerState', 'recurrence', 'parentTaskId', 'linkedHabitId', 'linkedInventoryIds', 'createdAt', 'updatedAt', 'completedAt', 'projectId', 'color'];
     }
 
     public function findAll(array $filters = []): array

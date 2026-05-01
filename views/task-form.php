@@ -137,6 +137,40 @@ $title = $id ? 'Edit Task' : 'New Task';
                     </div>
                 </div>
 
+                <!-- Color (optional) — used as left-border accent on the task row and
+                     as the icon tint on browser notifications for this task. -->
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-bold text-gray-500 mb-2 uppercase tracking-widest">Color (Optional)</label>
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <?php
+                            $taskColor = strtolower(trim($task['color'] ?? ''));
+                            $palette = [
+                                ''        => 'None',
+                                '#2563eb' => 'Blue',
+                                '#16a34a' => 'Green',
+                                '#dc2626' => 'Red',
+                                '#f59e0b' => 'Amber',
+                                '#7c3aed' => 'Violet',
+                                '#0ea5e9' => 'Sky',
+                                '#db2777' => 'Pink',
+                                '#374151' => 'Gray',
+                            ];
+                        ?>
+                        <?php foreach ($palette as $hex => $label): ?>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="color" value="<?php echo e($hex); ?>" class="peer hidden task-color-input"
+                                       <?php echo $taskColor === strtolower($hex) ? 'checked' : ''; ?>>
+                                <span class="inline-flex items-center justify-center w-9 h-9 rounded-full border-2 border-gray-200 peer-checked:border-black transition"
+                                      <?php if ($hex): ?>style="background: <?php echo e($hex); ?>;"<?php else: ?>style="background: repeating-linear-gradient(45deg,#fff,#fff 4px,#e5e7eb 4px,#e5e7eb 8px);"<?php endif; ?>
+                                      title="<?php echo e($label); ?>"></span>
+                            </label>
+                        <?php endforeach; ?>
+                        <input type="text" name="colorCustom" value="<?php echo e(!array_key_exists($taskColor, $palette) ? $taskColor : ''); ?>"
+                               placeholder="#hex" maxlength="7"
+                               class="ml-2 w-24 px-3 py-2 border-2 border-gray-100 rounded-xl focus:border-black outline-none text-sm font-mono">
+                    </div>
+                </div>
+
                 <!-- Recurrence -->
                 <div class="md:col-span-2 p-4 bg-gray-50 rounded-2xl border border-gray-200">
                     <div class="flex items-center justify-between mb-3">
@@ -498,7 +532,17 @@ document.getElementById('task-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     const data = Object.fromEntries(formData.entries());
-    
+
+    // Color: custom hex (when valid) wins over radio swatch. Empty = no color.
+    const colorCustom = String(data.colorCustom || '').trim();
+    if (colorCustom && /^#?[0-9a-fA-F]{6}$/.test(colorCustom)) {
+        data.color = colorCustom.startsWith('#') ? colorCustom : '#' + colorCustom;
+    }
+    if (data.color === '') {
+        delete data.color; // omit so backend can drop the field cleanly
+    }
+    delete data.colorCustom;
+
     // Manual subtask handling
     const titles = formData.getAll('subtask_titles[]');
     const minutes = formData.getAll('subtask_minutes[]');

@@ -415,7 +415,12 @@ async function requestNotificationPermission() {
 function sendPomodoroNotification(title, body) {
     if ('Notification' in window && Notification.permission === 'granted') {
         try {
-            new Notification(title, { body: body || '' });
+            const opts = { body: body || '', tag: 'pomodoro' };
+            if (window.buildNotificationIcon) {
+                const icon = window.buildNotificationIcon('pomodoro');
+                if (icon) opts.icon = icon;
+            }
+            new Notification(title, opts);
             return;
         } catch (e) {
             console.warn('Notification failed:', e);
@@ -885,8 +890,13 @@ function setupMusicPlayer() {
         deleteBtn.disabled = !canDelete;
     }
 
-    autoplayToggle.checked = localStorage.getItem(MUSIC_AUTOPLAY_KEY) !== '0';
-    loopToggle.checked = localStorage.getItem(MUSIC_LOOP_KEY) === '1';
+    // Defaults: Autoplay-while-running ON, Loop ON. Distinguish "user explicitly
+    // turned this OFF" (stored '0') from "never set" (null) — only flip defaults
+    // for new users so an existing preference of OFF is respected.
+    const autoplayStored = localStorage.getItem(MUSIC_AUTOPLAY_KEY);
+    const loopStored = localStorage.getItem(MUSIC_LOOP_KEY);
+    autoplayToggle.checked = autoplayStored === null ? true : autoplayStored !== '0';
+    loopToggle.checked     = loopStored === null     ? true : loopStored !== '0';
     volumeSlider.value = localStorage.getItem(MUSIC_VOLUME_KEY) || '0.6';
     audio.volume = parseFloat(volumeSlider.value || '0.6');
     audio.loop = loopToggle.checked;
@@ -926,7 +936,14 @@ function setupMusicPlayer() {
         });
         localStorage.setItem('pomodoroMusicTracksCache', JSON.stringify(trackCache));
         localStorage.setItem('pomodoroMusicTrackOrder', JSON.stringify(trackOrder));
-        const savedId = localStorage.getItem(MUSIC_SELECTED_KEY) || '';
+        const storedId = localStorage.getItem(MUSIC_SELECTED_KEY);
+        let savedId = storedId || '';
+        // Auto-pick first track when user has never selected one. Persist so the
+        // overlay timer Start path (in app.js) sees a populated audio.src too.
+        if (!savedId && trackOrder.length > 0) {
+            savedId = trackOrder[0];
+            localStorage.setItem(MUSIC_SELECTED_KEY, savedId);
+        }
         if (savedId) {
             select.value = savedId;
             if (select.value) {

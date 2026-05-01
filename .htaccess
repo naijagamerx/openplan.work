@@ -1,0 +1,27 @@
+# OpenPlan / LazyMan Tools — root .htaccess
+# Goal: deny direct HTTP access to sensitive files at the project root.
+# Apache 2.4 (Hostinger). All app traffic enters through index.php (or mobile-logout.php / mobile/index.php).
+
+# 1. Block all dotfiles (.env, .env.local, .git, .htaccess itself, etc.)
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# 2. Block sensitive file extensions and dependency manifests at the root
+<FilesMatch "\.(zip|tar|tar\.gz|tgz|gz|bz2|7z|rar|lock|log|sql|sqlite|db|bak|backup|swp|swo|orig|ini|cfg|conf|config|key|pem|crt|cer|p12|pfx)$">
+    Require all denied
+</FilesMatch>
+
+# 3. Block specific admin / utility / metadata files
+<FilesMatch "^(composer\.(json|lock)|package(-lock)?\.json|migrate\.php|setup_models\.php|manifest\.php|release-manifest\.json|verify_manifest\.php|README(\.md)?|FILE_MANIFEST(\.md)?|RESTORATION_REPORT(\.md)?|projectstatus(\.md)?|test_ftp.*|user-manual.*\.png|insert_timer\.py)$">
+    Require all denied
+</FilesMatch>
+
+# 4. Block direct access to internal directories that shouldn't be served
+RedirectMatch 403 ^/(includes|data|cron|datass|migration_backups|release-artifacts|vendor|tests|test|scripts)(/|$)
+
+# 5. Standard hardening: disable directory listing
+Options -Indexes
+
+# 6. Hide PHP version
+ServerSignature Off

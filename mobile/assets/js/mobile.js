@@ -7,6 +7,41 @@
  * @version 1.0.0
  */
 
+// Notification icon builder for mobile views. Same shape as the desktop helper
+// in assets/js/app.js — produces a colored circle + glyph PNG data URL so each
+// notification source is visually distinct in the OS notification tray.
+window.NOTIFICATION_TYPE_COLORS_MOBILE = {
+    task: '#2563eb', habit: '#16a34a', pomodoro: '#dc2626',
+    water: '#0ea5e9', reminder: '#f59e0b', ai: '#7c3aed', general: '#374151'
+};
+window.NOTIFICATION_TYPE_GLYPHS_MOBILE = {
+    task: '✓', habit: '↻', pomodoro: '⏱',
+    water: '☀', reminder: '⏰', ai: '✨', general: '•'
+};
+window.buildMobileNotificationIcon = function(type, color) {
+    try {
+        const t = String(type || 'general').toLowerCase();
+        const bg = (color && /^#?[0-9a-fA-F]{3,8}$/.test(color))
+            ? (color.startsWith('#') ? color : '#' + color)
+            : (window.NOTIFICATION_TYPE_COLORS_MOBILE[t] || window.NOTIFICATION_TYPE_COLORS_MOBILE.general);
+        const glyph = window.NOTIFICATION_TYPE_GLYPHS_MOBILE[t] || window.NOTIFICATION_TYPE_GLYPHS_MOBILE.general;
+        const SIZE = 128;
+        const canvas = document.createElement('canvas');
+        canvas.width = SIZE; canvas.height = SIZE;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = bg;
+        ctx.beginPath();
+        ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 76px system-ui, -apple-system, "Segoe UI Emoji", Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(glyph, SIZE / 2, SIZE / 2 + 4);
+        return canvas.toDataURL('image/png');
+    } catch (_) { return ''; }
+};
+
 // Ensure mobile shared stylesheet and saved theme are applied on every page.
 (function bootstrapMobileTheme() {
     try {
@@ -299,7 +334,7 @@ const Mobile = (function() {
                 container.className = 'fixed inset-0 z-50 flex items-end justify-center';
                 container.innerHTML = `
                     <div class="absolute inset-0 bg-black/50" onclick="Mobile.ui.closeModal()"></div>
-                    <div id="mobile-modal-content" class="relative bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 rounded-t-3xl w-full max-h-[90vh] overflow-y-auto transform transition-transform duration-300 translate-y-0"></div>
+                    <div id="mobile-modal-content" class="relative bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 rounded-t-3xl w-full max-h-[90vh] overflow-y-auto transform transition-transform duration-300 translate-y-0" style="padding-bottom: max(1rem, env(safe-area-inset-bottom))"></div>
                 `;
                 document.body.appendChild(container);
             }
@@ -621,10 +656,7 @@ const Mobile = (function() {
     // ============================================
 
     const habits = {
-        RANDOM_REMINDER_STORAGE_KEY: 'lazyman_mobile_habit_random_reminders_v1',
-        RANDOM_REMINDER_COUNT: 2,
-        RANDOM_WINDOW_START_MINUTE: 9 * 60,
-        RANDOM_WINDOW_END_MINUTE: 21 * 60,
+        SENT_KEY: 'lazyman_mobile_habit_reminders_sent_v2',
         async requestNotificationPermission() {
             if (!('Notification' in window) || Notification.permission !== 'default') {
                 return;
@@ -635,10 +667,18 @@ const Mobile = (function() {
                 console.warn('Mobile notification permission request failed:', error);
             }
         },
-        sendReminder(title, body, tag) {
+        sendReminder(title, body, tag, opts) {
             if ('Notification' in window && Notification.permission === 'granted') {
                 try {
-                    new Notification(title, { body, tag });
+                    const o = { body, tag };
+                    // opts: { type?: 'habit'|'task'|..., color?: '#RRGGBB' }
+                    const type = (opts && opts.type) || 'habit';
+                    const color = opts && opts.color;
+                    if (window.buildMobileNotificationIcon) {
+                        const icon = window.buildMobileNotificationIcon(type, color);
+                        if (icon) o.icon = icon;
+                    }
+                    new Notification(title, o);
                 } catch (error) {
                     console.warn('Mobile notification send failed:', error);
                 }
@@ -652,74 +692,75 @@ const Mobile = (function() {
             const now = new Date();
             return (now.getHours() * 60) + now.getMinutes();
         },
-        loadState() {
+        /** Convert "HH:MM" string to minutes since midnight */
+        reminderTimeToMinutes(timeStr) {
+            if (!timeStr || typeof timeStr !== 'string') return null;
+            const parts = timeStr.split(':');
+            if (parts.length < 2) return null;
+            const h = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10);
+            if (isNaN(h) || isNaN(m)) return null;
+            return h * 60 + m;
+        },
+        loadSentState() {
             try {
-                const raw = localStorage.getItem(this.RANDOM_REMINDER_STORAGE_KEY);
-                return raw ? JSON.parse(raw) : null;
-            } catch (error) {
-                return null;
+                const raw = localStorage.getItem(this.SENT_KEY);
+                return raw ? JSON.parse(raw) : {};
+            } catch (e) {
+                return {};
             }
         },
-        saveState(state) {
+        saveSentState(state) {
             try {
-                localStorage.setItem(this.RANDOM_REMINDER_STORAGE_KEY, JSON.stringify(state));
-            } catch (error) {
+                localStorage.setItem(this.SENT_KEY, JSON.stringify(state));
+            } catch (e) {
                 // Ignore storage errors.
             }
-        },
-        generateSlots() {
-            const slots = new Set();
-            const range = Math.max(1, this.RANDOM_WINDOW_END_MINUTE - this.RANDOM_WINDOW_START_MINUTE);
-            while (slots.size < this.RANDOM_REMINDER_COUNT) {
-                const slot = this.RANDOM_WINDOW_START_MINUTE + Math.floor(Math.random() * range);
-                slots.add(slot);
-            }
-            return Array.from(slots).sort((a, b) => a - b);
-        },
-        ensureState(todayKey) {
-            const state = this.loadState();
-            if (state && state.date === todayKey && Array.isArray(state.slots) && state.slots.length) {
-                return state;
-            }
-            const next = {
-                date: todayKey,
-                slots: this.generateSlots(),
-                sent: {}
-            };
-            this.saveState(next);
-            return next;
         },
         async checkReminders() {
             try {
                 const response = await App.api.get('api/habits.php');
                 const habitsData = Array.isArray(response.data) ? response.data : [];
-                const pendingDailyHabits = habitsData.filter((habit) => {
-                    const isDaily = String(habit.frequency || '').toLowerCase() === 'daily';
+
+                // Only habits that are active, not completed today, and have a reminderTime set
+                const habitsWithReminders = habitsData.filter((habit) => {
                     const isActive = habit.isActive !== false;
-                    return isDaily && isActive && !habit.todayCompleted;
+                    const notDone = !habit.todayCompleted;
+                    const hasTime = habit.reminderTime && typeof habit.reminderTime === 'string' && habit.reminderTime.trim() !== '';
+                    return isActive && notDone && hasTime;
                 });
 
-                if (!pendingDailyHabits.length) {
+                if (!habitsWithReminders.length) {
                     return;
                 }
 
                 const todayKey = this.getTodayDateKey();
                 const minuteOfDay = this.getCurrentMinuteOfDay();
-                const state = this.ensureState(todayKey);
+                const sentState = this.loadSentState();
+                let stateChanged = false;
 
-                for (const slot of state.slots) {
-                    const slotKey = String(slot);
-                    if (minuteOfDay < slot || state.sent[slotKey]) {
-                        continue;
-                    }
-                    const pickedHabit = pendingDailyHabits[Math.floor(Math.random() * pendingDailyHabits.length)];
-                    const title = `Habit Reminder: ${pickedHabit.name}`;
-                    const body = `Have you done "${pickedHabit.name}" today?`;
-                    this.sendReminder(title, body, `mobile-habit-${pickedHabit.id}-${todayKey}-${slotKey}`);
-                    state.sent[slotKey] = true;
+                for (const habit of habitsWithReminders) {
+                    const reminderMinute = this.reminderTimeToMinutes(habit.reminderTime);
+                    if (reminderMinute === null) continue;
+
+                    // Fire within ±1 minute of the configured time
+                    const diff = minuteOfDay - reminderMinute;
+                    if (diff < 0 || diff > 1) continue;
+
+                    const sentKey = `${habit.id}_${todayKey}`;
+                    if (sentState[sentKey]) continue;
+
+                    const title = `Habit Reminder: ${habit.name}`;
+                    const body = `Time to "${habit.name}"`;
+                    this.sendReminder(title, body, `mobile-habit-${habit.id}-${todayKey}`);
+
+                    sentState[sentKey] = true;
+                    stateChanged = true;
                 }
 
-                this.saveState(state);
+                if (stateChanged) {
+                    this.saveSentState(sentState);
+                }
             } catch (error) {
                 console.warn('Mobile habit reminder check failed:', error);
             }
@@ -1174,6 +1215,121 @@ const Mobile = (function() {
             if (this.intervalId === null) {
                 this.intervalId = setInterval(() => this.render(), 1000);
             }
+        }
+    };
+
+    // ============================================
+    // Floating Timer Indicator Module
+    // Shows a persistent bar at bottom when a task timer is running
+    // ============================================
+    const floatingTimer = {
+        _el: null,
+        _interval: null,
+
+        formatTimerDisplay(seconds) {
+            const abs = Math.abs(seconds);
+            const h = Math.floor(abs / 3600);
+            const m = Math.floor((abs % 3600) / 60);
+            const s = abs % 60;
+            const prefix = seconds < 0 ? '-' : '';
+            return prefix + String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+        },
+
+        getElapsed(state) {
+            if (!state.startTime) return 0;
+            let extraPause = 0;
+            if (state.paused && state.pauseBegin) {
+                extraPause = Date.now() - state.pauseBegin;
+            }
+            return Math.floor((Date.now() - state.startTime - (state.pausedTime || 0) - extraPause) / 1000);
+        },
+
+        create() {
+            const el = document.createElement('div');
+            el.id = 'mobile-floating-timer';
+            el.className = 'fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-black text-white rounded-full shadow-2xl flex items-center gap-2 px-4 py-2 cursor-pointer active:scale-95 transition-transform';
+            el.innerHTML = `
+                <svg class="w-4 h-4 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z"/>
+                </svg>
+                <div class="flex flex-col leading-tight">
+                    <span id="ft-task-title" class="text-[9px] font-bold uppercase tracking-widest opacity-70 truncate max-w-[140px]"></span>
+                    <span id="ft-timer-display" class="text-xs font-bold tabular-nums"></span>
+                </div>
+            `;
+            document.body.appendChild(el);
+            this._el = el;
+        },
+
+        update(state) {
+            if (!this._el) return;
+            const title = this._el.querySelector('#ft-task-title');
+            const display = this._el.querySelector('#ft-timer-display');
+            if (title) title.textContent = state.taskTitle || 'Task';
+            if (!display) return;
+
+            const elapsed = this.getElapsed(state);
+            if (state.estimatedMinutes > 0) {
+                const remaining = (state.estimatedMinutes * 60) - elapsed;
+                display.textContent = this.formatTimerDisplay(remaining);
+                if (remaining <= 0) {
+                    display.classList.add('text-red-400');
+                    display.classList.remove('text-white');
+                } else {
+                    display.classList.remove('text-red-400');
+                    display.classList.add('text-white');
+                }
+            } else {
+                display.textContent = this.formatTimerDisplay(elapsed);
+            }
+
+            // Navigate to view-task page on tap
+            this._el.onclick = () => {
+                const params = new URLSearchParams(window.location.search);
+                params.set('page', 'view-task');
+                params.set('id', state.taskId);
+                params.set('projectId', state.projectId);
+                window.location.href = '?' + params.toString();
+            };
+        },
+
+        show(state) {
+            if (!this._el) this.create();
+            this.update(state);
+            this._el.style.display = 'flex';
+
+            // Start 1-second update interval
+            if (this._interval) clearInterval(this._interval);
+            const self = this;
+            this._interval = setInterval(() => {
+                try {
+                    const raw = localStorage.getItem('mobileTaskTimer');
+                    if (!raw) { self.hide(); return; }
+                    const s = JSON.parse(raw);
+                    if (!s.running || s.taskId !== state.taskId) { self.hide(); return; }
+                    self.update(s);
+                } catch (e) { self.hide(); }
+            }, 1000);
+        },
+
+        hide() {
+            if (this._interval) { clearInterval(this._interval); this._interval = null; }
+            if (this._el) this._el.style.display = 'none';
+        },
+
+        init() {
+            try {
+                const raw = localStorage.getItem('mobileTaskTimer');
+                if (!raw) return;
+                const state = JSON.parse(raw);
+                if (!state.running) return;
+
+                // Don't show on view-task page (has its own timer)
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('page') === 'view-task' && params.get('id') === state.taskId) return;
+
+                this.show(state);
+            } catch (e) {}
         }
     };
 
@@ -1636,6 +1792,7 @@ const Mobile = (function() {
             ui.flushQueuedToast();
             habits.init();
             pomodoroOverlay.init();
+            floatingTimer.init();
 
             // Handle resize
             window.addEventListener('resize', () => {
@@ -1659,6 +1816,7 @@ const Mobile = (function() {
         search,
         gestures,
         pomodoroOverlay,
+        floatingTimer,
 
         // State
         get initialized() {

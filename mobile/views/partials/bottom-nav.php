@@ -50,7 +50,7 @@ $currentPage = $activePage ?? $_GET['page'] ?? 'dashboard';
         <?php
         $isMenu = !empty($item['isMenu']);
         $isActive = (!$isMenu) && ($currentPage === $item['page']);
-        $textClass = $isActive ? 'text-black dark:text-white' : 'text-gray-400 dark:text-zinc-500';
+        $textClass = $isActive ? 'text-black dark:text-white' : 'text-black dark:text-white';
         $elClass = "flex flex-col items-center gap-1 {$textClass} transition-colors touch-target";
         ?>
         <?php if ($isMenu): ?>

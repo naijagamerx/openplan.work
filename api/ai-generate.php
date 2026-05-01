@@ -33,18 +33,21 @@ if (requestMethod() !== 'POST') {
 }
 
 $body = getJsonBody();
-$provider = $body['provider'] ?? 'groq';
+$config = $db->load('config', true);
+$provider = $body['provider'] ?? $config['aiProvider'] ?? 'groq';
 $model = $body['model'] ?? '';
 
 // Fallback to default model if none provided
 if (empty($model)) {
     $models = $db->load('models', true);
-    if (!empty($models[$provider])) {
-        foreach ($models[$provider] as $m) {
-            if ($m['isDefault']) {
-                $model = $m['modelId'];
-                break;
+    // Try the requested provider first, then fall back to first provider with a model
+    $providerOrder = array_unique([$provider, 'groq', 'openrouter', 'gemini', 'ollama']);
+    foreach ($providerOrder as $p) {
+        if (!empty($models[$p])) {
+            foreach ($models[$p] as $m) {
+                if ($m['isDefault'] ?? false) { $model = $m['modelId']; $provider = $p; break 2; }
             }
+            if (empty($model)) { $model = $models[$p][0]['modelId'] ?? ''; $provider = $p; if ($model) break; }
         }
     }
 }

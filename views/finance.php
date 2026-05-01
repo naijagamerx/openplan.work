@@ -3,6 +3,9 @@
 $db = new Database(getMasterPassword(), Auth::userId());
 $invoices = $db->load('invoices');
 $finance = $db->load('finance');
+$config = $db->load('config') ?? [];
+$currency = (string)($config['currency'] ?? 'USD');
+$currencySymbol = getCurrencySymbol($currency);
 
 // Calculate stats - Revenue includes paid invoices AND income transactions
 $invoiceRevenue = array_sum(array_map(function($i) { return $i['status'] === 'paid' ? $i['total'] : 0; }, $invoices));
@@ -58,7 +61,7 @@ $clients = $db->load('clients');
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-1">Total Revenue</p>
-                    <p class="text-3xl font-black text-green-600"><?php echo formatCurrency($totalRevenue); ?></p>
+                    <p class="text-3xl font-black text-green-600"><?php echo formatCurrency($totalRevenue, $currency); ?></p>
                 </div>
                 <div class="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center">
                     <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"></path></svg>
@@ -69,7 +72,7 @@ $clients = $db->load('clients');
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-1">Total Expenses</p>
-                    <p class="text-3xl font-black text-red-600"><?php echo formatCurrency($totalExpenses); ?></p>
+                    <p class="text-3xl font-black text-red-600"><?php echo formatCurrency($totalExpenses, $currency); ?></p>
                 </div>
                 <div class="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center">
                     <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6"></path></svg>
@@ -81,7 +84,7 @@ $clients = $db->load('clients');
                 <div>
                     <p class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-1">Net Profit</p>
                     <p class="text-3xl font-black <?php echo $profit >= 0 ? 'text-gray-900' : 'text-red-600'; ?>">
-                        <?php echo formatCurrency($profit); ?>
+                        <?php echo formatCurrency($profit, $currency); ?>
                     </p>
                 </div>
                 <div class="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center">
@@ -159,7 +162,7 @@ $clients = $db->load('clients');
                         </div>
                         <div class="flex items-center gap-6">
                             <p class="text-sm font-black <?php echo $isIncome ? 'text-green-600' : 'text-red-600'; ?>">
-                                <?php echo $isIncome ? '+' : '-'; ?><?php echo formatCurrency($expense['amount'] ?? 0); ?>
+                                <?php echo $isIncome ? '+' : '-'; ?><?php echo formatCurrency($expense['amount'] ?? 0, $currency); ?>
                             </p>
                             <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <a href="?page=transaction-form&id=<?php echo e($expense['id']); ?>"
@@ -184,6 +187,8 @@ $clients = $db->load('clients');
 <script>
 // Finance data for pagination
 const allFinanceData = <?php echo json_encode($finance); ?>;
+const APP_CURRENCY = <?php echo json_encode($currency); ?>;
+const APP_CURRENCY_SYMBOL = <?php echo json_encode($currencySymbol); ?>;
 let filteredFinanceData = [...allFinanceData];
 let currentPage = 1;
 const itemsPerPage = 15;
@@ -308,7 +313,7 @@ function renderFinanceTable(page) {
                 </div>
                 <div class="flex items-center gap-6">
                     <p class="text-sm font-black ${amountClass}">
-                        ${sign}${formatCurrency(expense.amount ?? 0)}
+                        ${sign}${formatCurrency(expense.amount ?? 0, APP_CURRENCY)}
                     </p>
                     <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <a href="?page=transaction-form&id=${expense.id}"

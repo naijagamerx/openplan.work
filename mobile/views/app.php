@@ -41,6 +41,7 @@ $allTasks = [];
 foreach ($projects as $project) {
     if (!empty($project['tasks']) && is_array($project['tasks'])) {
         foreach ($project['tasks'] as $task) {
+            $task['projectId'] = $project['id'];
             $allTasks[] = $task;
         }
     }
@@ -57,7 +58,7 @@ $siteName = getSiteName() ?? 'LazyMan';
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
-<title>App - <?= htmlspecialchars($siteName) ?></title>
+<title>Quick Access - <?= htmlspecialchars($siteName) ?></title>
 
 <link rel="icon" type="image/svg+xml" href="<?= APP_URL ?>/assets/favicons/favicon.svg">
     <link rel="icon" type="image/png" sizes="32x32" href="<?= APP_URL ?>/assets/favicons/favicon-32x32.png"/>
@@ -107,7 +108,7 @@ $siteName = getSiteName() ?? 'LazyMan';
 <div class="relative w-full max-w-[420px] min-h-screen bg-white shadow-2xl flex flex-col overflow-hidden">
 
 <?php
-$title = 'App';
+$title = 'Quick Access';
 $leftAction = 'menu';
 $rightAction = 'add';
 $rightTarget = 'openQuickCreate()';
@@ -116,7 +117,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 
 <main class="flex-1 overflow-y-auto no-scrollbar px-4 pt-5 pb-32 space-y-4">
     <section class="bg-black text-white rounded-2xl p-5">
-        <p class="text-[10px] uppercase tracking-[0.2em] opacity-70 mb-2">Mobile App Hub</p>
+        <p class="text-[10px] uppercase tracking-[0.2em] opacity-70 mb-2">Quick Access Hub</p>
         <h2 class="text-xl font-bold tracking-tight">Everything in one place</h2>
         <p class="text-xs mt-2 opacity-80">Launch modules fast and create items without leaving mobile flow.</p>
     </section>

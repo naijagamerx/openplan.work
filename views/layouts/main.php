@@ -22,12 +22,22 @@ if (!defined('ASSETS_PATH')) {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&display=swap" rel="stylesheet">
 
-    <!-- Favicon - PNG first for better compatibility, SVG as alternative -->
-    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicons/favicon-32x32.png?v=<?php echo file_exists(ASSETS_PATH . '/favicons/favicon-32x32.png') ? filemtime(ASSETS_PATH . '/favicons/favicon-32x32.png') : ''; ?>">
-    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicons/favicon-16x16.png?v=<?php echo file_exists(ASSETS_PATH . '/favicons/favicon-16x16.png') ? filemtime(ASSETS_PATH . '/favicons/favicon-16x16.png') : ''; ?>">
-    <link rel="icon" type="image/svg+xml" href="assets/favicons/favicon.svg?v=<?php echo file_exists(ASSETS_PATH . '/favicons/favicon.svg') ? filemtime(ASSETS_PATH . '/favicons/favicon.svg') : ''; ?>">
-    <link rel="shortcut icon" href="assets/favicons/favicon.ico?v=<?php echo file_exists(ASSETS_PATH . '/favicons/favicon.ico') ? filemtime(ASSETS_PATH . '/favicons/favicon.ico') : ''; ?>">
-    <link rel="apple-touch-icon" sizes="180x180" href="assets/favicons/apple-touch-icon.png?v=<?php echo file_exists(ASSETS_PATH . '/favicons/apple-touch-icon.png') ? filemtime(ASSETS_PATH . '/favicons/apple-touch-icon.png') : ''; ?>">
+    <!-- Favicon - only emit tags for files that actually exist (avoids 404s) -->
+    <?php if (file_exists(ASSETS_PATH . '/favicons/favicon-32x32.png')): ?>
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicons/favicon-32x32.png?v=<?php echo filemtime(ASSETS_PATH . '/favicons/favicon-32x32.png'); ?>">
+    <?php endif; ?>
+    <?php if (file_exists(ASSETS_PATH . '/favicons/favicon-16x16.png')): ?>
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicons/favicon-16x16.png?v=<?php echo filemtime(ASSETS_PATH . '/favicons/favicon-16x16.png'); ?>">
+    <?php endif; ?>
+    <?php if (file_exists(ASSETS_PATH . '/favicons/favicon.svg')): ?>
+    <link rel="icon" type="image/svg+xml" href="assets/favicons/favicon.svg?v=<?php echo filemtime(ASSETS_PATH . '/favicons/favicon.svg'); ?>">
+    <?php endif; ?>
+    <?php if (file_exists(ASSETS_PATH . '/favicons/favicon.ico')): ?>
+    <link rel="shortcut icon" href="assets/favicons/favicon.ico?v=<?php echo filemtime(ASSETS_PATH . '/favicons/favicon.ico'); ?>">
+    <?php endif; ?>
+    <?php if (file_exists(ASSETS_PATH . '/favicons/apple-touch-icon.png')): ?>
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/favicons/apple-touch-icon.png?v=<?php echo filemtime(ASSETS_PATH . '/favicons/apple-touch-icon.png'); ?>">
+    <?php endif; ?>
     <link rel="manifest" href="manifest.php">
     <meta name="theme-color" content="#000000">
 
@@ -61,7 +71,13 @@ if (!defined('ASSETS_PATH')) {
     <script src="assets/js/app.js?v=<?php echo filemtime(dirname(__DIR__, 2) . '/assets/js/app.js'); ?>"></script>
 
     <!-- Habit Timer Manager -->
-    <script src="assets/js/habit-timer-manager.js?v=<?php echo filemtime(dirname(__DIR__, 2) . '/assets/js/habit-timer-manager.js'); ?>"></script>
+    <script src="assets/js/habit-timer-manager.js?v=<?php echo file_exists(dirname(__DIR__, 2) . '/assets/js/habit-timer-manager.js') ? filemtime(dirname(__DIR__, 2) . '/assets/js/habit-timer-manager.js') : '1'; ?>"></script>
+
+    <!-- Markdown + diagram rendering for AI assistant -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script>if(typeof mermaid!=='undefined'){mermaid.initialize({startOnLoad:false,theme:'default',flowchart:{useMaxWidth:true,htmlLabels:true},securityLevel:'loose'});}</script>
 </head>
 <body class="min-h-screen bg-gray-50 font-sans overflow-x-hidden">
     <!-- Mobile Sidebar Overlay -->
@@ -89,12 +105,12 @@ if (!defined('ASSETS_PATH')) {
 
     <div id="pomodoro-music-overlay" class="fixed bottom-4 right-4 z-[45] hidden">
         <div class="bg-white/95 backdrop-blur border border-gray-200 rounded-xl shadow-lg p-3 min-w-[280px] max-w-[360px]">
-            <div class="flex items-center justify-between gap-3">
+            <div id="pomodoro-overlay-drag-handle" class="flex items-center justify-between gap-3 select-none cursor-grab" style="touch-action: none;" title="Drag to move">
                 <div class="min-w-0">
                     <p class="text-[11px] uppercase tracking-wider font-semibold text-gray-500">Pomodoro Music</p>
                     <p id="pomodoro-overlay-track" class="text-sm font-medium text-gray-900 truncate">No track selected</p>
                 </div>
-                <a href="?page=pomodoro" class="text-xs font-semibold text-gray-600 hover:text-black transition">Open</a>
+                <a href="?page=pomodoro" class="text-xs font-semibold text-gray-600 hover:text-black transition" onclick="event.stopPropagation()">Open</a>
             </div>
             <div class="mt-2 flex items-center justify-between gap-3">
                 <p id="pomodoro-overlay-status" class="text-xs text-gray-500">Ready</p>

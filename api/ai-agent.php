@@ -75,7 +75,8 @@ try {
                     $body['model'] ?? null,
                     $body['kbFolderId'] ?? null,
                     $body['contextLevel'] ?? 'medium',
-                    $body['outputLength'] ?? 'normal'
+                    $body['outputLength'] ?? 'normal',
+                    !empty($body['smartMode'])
                 );
                 successResponse($result);
             } catch (Exception $e) {

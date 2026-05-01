@@ -64,6 +64,13 @@ switch ($action) {
             if (isset($body['openrouterApiKey']) && !str_contains($body['openrouterApiKey'], '...')) {
                 $config['openrouterApiKey'] = trim($body['openrouterApiKey']);
             }
+            if (isset($body['geminiApiKey']) && !str_contains($body['geminiApiKey'], '...')) {
+                $config['geminiApiKey'] = trim($body['geminiApiKey']);
+            }
+            if (isset($body['ollamaUrl'])) {
+                $url = trim($body['ollamaUrl']);
+                $config['ollamaUrl'] = $url !== '' ? $url : 'http://localhost:11434';
+            }
         } elseif ($section === 'notifications') {
             $config['notificationsEnabled'] = filter_var($body['notificationsEnabled'] ?? $config['notificationsEnabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
             $config['waterReminderInterval'] = intval($body['waterReminderInterval'] ?? $config['waterReminderInterval'] ?? 60);

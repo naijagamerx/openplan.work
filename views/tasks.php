@@ -287,61 +287,59 @@ $topTasks = array_slice($taskMinutes, 0, 5, true);
     <!-- List View -->
     <div id="list-view" class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
         <div class="p-5 bg-gray-50/50 border-b border-gray-200">
-            <div class="flex flex-wrap items-center justify-between gap-4">
-                <div class="flex flex-wrap items-center gap-4">
-                    <div class="relative">
-                        <input id="filter-search"
-                               type="text"
-                               placeholder="Search task, project, subtask..."
-                               class="w-64 pl-10 pr-4 py-2 border-2 border-gray-100 rounded-xl text-xs font-semibold tracking-wide outline-none focus:border-black transition-colors">
-                        <svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z"></path>
-                        </svg>
-                    </div>
-                    <select id="filter-project" class="px-4 py-2 border-2 border-gray-100 rounded-xl text-xs font-bold uppercase tracking-widest outline-none focus:border-black transition-colors">
-                        <option value="">All Projects</option>
-                        <?php foreach ($projects as $project): ?>
-                            <option value="<?php echo e($project['id']); ?>"><?php echo e($project['name']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <select id="filter-status" class="px-4 py-2 border-2 border-gray-100 rounded-xl text-xs font-bold uppercase tracking-widest outline-none focus:border-black transition-colors">
-                        <option value="">All Status</option>
-                        <option value="backlog">Backlog</option>
-                        <option value="todo">To Do</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="review">Review</option>
-                        <option value="done">Done</option>
-                    </select>
-                    <select id="filter-priority" class="px-4 py-2 border-2 border-gray-100 rounded-xl text-xs font-bold uppercase tracking-widest outline-none focus:border-black transition-colors">
-                        <option value="">All Priority</option>
-                        <option value="urgent">Urgent</option>
-                        <option value="high">High</option>
-                        <option value="medium">Medium</option>
-                        <option value="low">Low</option>
-                    </select>
-                    <select id="filter-due" class="px-4 py-2 border-2 border-gray-100 rounded-xl text-xs font-bold uppercase tracking-widest outline-none focus:border-black transition-colors">
-                        <option value="">All Due Dates</option>
-                        <option value="overdue">Overdue</option>
-                        <option value="today">Due Today</option>
-                        <option value="week">Due This Week</option>
-                        <option value="none">No Due Date</option>
-                    </select>
-                    <select id="sort-by" class="px-4 py-2 border-2 border-gray-100 rounded-xl text-xs font-bold uppercase tracking-widest outline-none focus:border-black transition-colors">
-                        <option value="default">Sort: Default</option>
-                        <option value="title">Sort: Title</option>
-                        <option value="dueDate">Sort: Due Date</option>
-                        <option value="priority">Sort: Priority</option>
-                        <option value="estimated">Sort: Estimate</option>
-                        <option value="actual">Sort: Actual</option>
-                    </select>
-                    <button id="sort-direction"
-                            type="button"
-                            data-direction="asc"
-                            class="px-3 py-2 border-2 border-gray-100 rounded-xl text-xs font-black uppercase tracking-widest text-gray-600 hover:border-black hover:text-black transition-colors">
-                        Asc
-                    </button>
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="relative">
+                    <input id="filter-search"
+                           type="text"
+                           placeholder="Search task, project, subtask..."
+                           class="w-48 min-w-[140px] pl-10 pr-4 py-2 border-2 border-gray-100 rounded-xl text-xs font-semibold tracking-wide outline-none focus:border-black transition-colors">
+                    <svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z"></path>
+                    </svg>
                 </div>
-                <div class="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest text-gray-400">
+                <select id="filter-project" class="px-4 py-2 border-2 border-gray-100 rounded-xl text-xs font-bold uppercase tracking-widest outline-none focus:border-black transition-colors">
+                    <option value="">All Projects</option>
+                    <?php foreach ($projects as $project): ?>
+                        <option value="<?php echo e($project['id']); ?>"><?php echo e($project['name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <select id="filter-status" class="px-4 py-2 border-2 border-gray-100 rounded-xl text-xs font-bold uppercase tracking-widest outline-none focus:border-black transition-colors">
+                    <option value="">All Status</option>
+                    <option value="backlog">Backlog</option>
+                    <option value="todo">To Do</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="review">Review</option>
+                    <option value="done">Done</option>
+                </select>
+                <select id="filter-priority" class="px-4 py-2 border-2 border-gray-100 rounded-xl text-xs font-bold uppercase tracking-widest outline-none focus:border-black transition-colors">
+                    <option value="">All Priority</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                </select>
+                <select id="filter-due" class="px-4 py-2 border-2 border-gray-100 rounded-xl text-xs font-bold uppercase tracking-widest outline-none focus:border-black transition-colors">
+                    <option value="">All Due Dates</option>
+                    <option value="overdue">Overdue</option>
+                    <option value="today">Due Today</option>
+                    <option value="week">Due This Week</option>
+                    <option value="none">No Due Date</option>
+                </select>
+                <select id="sort-by" class="px-4 py-2 border-2 border-gray-100 rounded-xl text-xs font-bold uppercase tracking-widest outline-none focus:border-black transition-colors">
+                    <option value="default">Sort: Default</option>
+                    <option value="title">Sort: Title</option>
+                    <option value="dueDate">Sort: Due Date</option>
+                    <option value="priority">Sort: Priority</option>
+                    <option value="estimated">Sort: Estimate</option>
+                    <option value="actual">Sort: Actual</option>
+                </select>
+                <button id="sort-direction"
+                        type="button"
+                        data-direction="asc"
+                        class="px-3 py-2 border-2 border-gray-100 rounded-xl text-xs font-black uppercase tracking-widest text-gray-600 hover:border-black hover:text-black transition-colors">
+                    Asc
+                </button>
+                <div class="ml-auto flex items-center gap-3 text-[11px] font-black uppercase tracking-widest text-gray-400">
                     <span class="px-3 py-1 rounded-full border border-gray-200 bg-white">Total: <span id="task-count-total"><?php echo count($allTasks); ?></span></span>
                     <span class="px-3 py-1 rounded-full border border-gray-200 bg-white">Showing: <span id="task-count-visible"><?php echo count($allTasks); ?></span></span>
                     <a href="api/export.php?action=export_csv&collection=tasks" class="px-3 py-1 rounded-full border border-gray-200 bg-white text-gray-600 hover:text-black hover:border-black transition">Export CSV</a>
@@ -375,7 +373,8 @@ $topTasks = array_slice($taskMinutes, 0, 5, true);
             <div class="col-span-2">Project</div>
             <div class="col-span-1">Status</div>
             <div class="col-span-1">Priority</div>
-            <div class="col-span-3">Time Tracking</div>
+            <div class="col-span-2">Due Date</div>
+            <div class="col-span-1">Time</div>
             <div class="col-span-1 text-right">Actions</div>
         </div>
         <div class="divide-y divide-gray-100">
@@ -396,9 +395,11 @@ $topTasks = array_slice($taskMinutes, 0, 5, true);
                          data-title="<?php echo e($task['title'] ?? ''); ?>"
                          data-description="<?php echo e($task['description'] ?? ''); ?>"
                          data-project-name="<?php echo e($task['projectName'] ?? ''); ?>"
+                         data-color="<?php echo e($task['color'] ?? ''); ?>"
                          data-subtasks="<?php echo e(implode(' ', array_map(fn($subtask) => $subtask['title'] ?? '', $task['subtasks'] ?? []))); ?>"
                          data-timer-state="<?php echo e(json_encode($task['timerState'] ?? null)); ?>"
-                         data-task-number="<?php echo e($task['taskNumber'] ?? ''); ?>">
+                         data-task-number="<?php echo e($task['taskNumber'] ?? ''); ?>"
+                         <?php if (!empty($task['color'])): ?>style="border-left: 4px solid <?php echo e($task['color']); ?>;"<?php endif; ?>>
                         <div class="md:col-span-1 hidden md:flex items-start justify-center">
                             <input type="checkbox"
                                    class="bulk-select-checkbox mt-1 w-4 h-4 rounded border-2 border-gray-300 text-black focus:ring-black cursor-pointer"
@@ -472,30 +473,26 @@ $topTasks = array_slice($taskMinutes, 0, 5, true);
                                 }
                             }
                         ?>
-                        <div class="md:col-span-3 flex items-center gap-2 flex-wrap">
-                            <!-- Status Badges (Overdue/Due Soon/Not Started) -->
-                            <div class="deadline-badge-container" data-task-id="<?php echo e($task['id']); ?>">
+                        <!-- Due Date column: deadline badge + active timer -->
+                        <div class="md:col-span-2 flex items-center gap-2 min-w-0">
+                            <div class="deadline-badge-container min-w-0 overflow-hidden" data-task-id="<?php echo e($task['id']); ?>">
                                 <!-- Badges will be inserted here by JavaScript -->
                             </div>
-
-                            <!-- Timer Display (Hidden by default, shown when timer running) -->
                             <div class="timer-display-container hidden" data-task-timer-display="<?php echo e($task['id']); ?>">
                                 <span class="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-mono font-bold rounded-full" data-task-timer-remaining="<?php echo e($task['id']); ?>">00:00</span>
                             </div>
+                        </div>
 
-                            <!-- Estimated Time (always visible) -->
-                            <div class="flex items-center gap-1.5 text-xs text-gray-600">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <!-- Time column: estimated + spent, stacked -->
+                        <div class="md:col-span-1 flex flex-col gap-0.5 justify-center">
+                            <div class="flex items-center gap-1 text-gray-600">
+                                <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                 </svg>
-                                <span><?php echo (int)($task['estimatedMinutes'] ?? 0); ?>m</span>
+                                <span class="text-[11px] font-medium"><?php echo (int)($task['estimatedMinutes'] ?? 0); ?>m</span>
                             </div>
-
-                            <!-- Time Spent Badge -->
                             <?php if (!empty($task['actualMinutes'])): ?>
-                            <span class="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-medium rounded-full">
-                                <?php echo (int)$task['actualMinutes']; ?>m spent
-                            </span>
+                            <span class="text-[10px] text-blue-600 font-medium"><?php echo (int)$task['actualMinutes']; ?>m spent</span>
                             <?php endif; ?>
                         </div>
                         <div class="md:col-span-1 flex items-center justify-end">
@@ -708,14 +705,21 @@ function requestTaskNotificationPermission() {
     }
 }
 
-function sendTaskTimerNotification(title, body) {
+function sendTaskTimerNotification(title, body, taskColor) {
     if ('Notification' in window && Notification.permission === 'granted') {
         try {
-            new Notification(title, {
+            const opts = {
                 body: body,
                 tag: 'task-timer',
                 silent: false
-            });
+            };
+            if (window.buildNotificationIcon) {
+                // taskColor (optional) wins over the default 'task' blue so a user-coloured
+                // task lights its notification icon in that color.
+                const icon = window.buildNotificationIcon('task', taskColor);
+                if (icon) opts.icon = icon;
+            }
+            new Notification(title, opts);
         } catch (error) {
             console.warn('Notification failed:', error);
         }
@@ -1043,7 +1047,8 @@ async function stopTaskTimer(taskId, autoComplete = false, silent = false) {
         if (autoComplete) {
             const row = getTaskRow(taskId);
             const title = row?.querySelector('p.font-bold')?.textContent?.trim() || 'Task timer';
-            sendTaskTimerNotification('Task time complete', `${title} reached its estimated time.`);
+            const taskColor = row?.dataset?.color || undefined;
+            sendTaskTimerNotification('Task time complete', `${title} reached its estimated time.`, taskColor);
         } else if (!silent) {
             showToast('Timer stopped and logged', 'success');
         }
@@ -1597,13 +1602,18 @@ async function generateKanban() {
     btn.innerHTML = '<svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating...';
 
     try {
-        // Get model info
+        // Get model info — use the first available provider/model from any configured provider
         const modelsResponse = await api.get('api/models.php');
         const models = modelsResponse.data || {};
-        const groqModels = models?.groq || [];
-        const defaultModel = groqModels.find(m => m.isDefault) || groqModels[0];
-        const model = defaultModel?.modelId;
-        if (!model) {
+        let defaultProvider = null, defaultModel = null;
+        for (const prov of ['groq', 'openrouter', 'gemini', 'ollama']) {
+            const provModels = models[prov] || [];
+            if (!provModels.length) continue;
+            const def = provModels.find(m => m.isDefault);
+            if (def) { defaultProvider = prov; defaultModel = def; break; }
+            if (!defaultModel) { defaultProvider = prov; defaultModel = provModels[0]; }
+        }
+        if (!defaultModel) {
             showToast('No AI model configured. Please set up a model in Model Settings.', 'error');
             btn.disabled = false;
             btn.innerHTML = originalText;
@@ -1612,8 +1622,8 @@ async function generateKanban() {
 
         const response = await api.post('api/ai.php?action=generate_tasks', {
             description: description,
-            provider: 'groq',
-            model: model,
+            provider: defaultProvider,
+            model: defaultModel.modelId,
             csrf_token: CSRF_TOKEN
         });
 

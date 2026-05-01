@@ -11,6 +11,22 @@ function e(?string $string): string {
 }
 
 /**
+ * Check if Ollama can be used (local mode)
+ * Returns true only if running on localhost/127.0.0.1 - Ollama cannot
+ * work for AI chat on shared hosting because the server cannot reach local PC.
+ */
+function canUseOllama(): bool {
+    $host = $_SERVER['HTTP_HOST'] ?? '';
+    // localhost, 127.0.0.1, or IP addresses indicate local mode
+    $isLocal = preg_match('/^(localhost|127\.\d+\.\d+\.\d+)(:\d+)?$/', $host) === 1;
+    // Also check for .local domains or MAMP local addresses
+    if (!$isLocal) {
+        $isLocal = strpos($host, '.local') !== false;
+    }
+    return $isLocal;
+}
+
+/**
  * JSON response
  */
 function jsonResponse(array $data, int $statusCode = 200): void {

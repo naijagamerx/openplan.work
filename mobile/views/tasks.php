@@ -242,7 +242,15 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                 <div class="flex-1">
                     <div class="flex items-center justify-between">
                         <h2 class="text-sm font-bold uppercase tracking-tight <?= $titleClass ?>"><?= $taskTitle ?></h2>
-                        <div class="flex items-center gap-1">
+                        <div class="flex items-center gap-2">
+                            <a href="?page=view-task&id=<?= urlencode($taskId) ?>&projectId=<?= urlencode($projectId) ?>&autostart=1"
+                               onclick="event.stopPropagation()"
+                               class="text-gray-300 hover:text-black dark:hover:text-white transition-colors touch-target flex-shrink-0"
+                               title="Start Timer">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z"/>
+                                </svg>
+                            </a>
                             <span class="text-[9px] font-bold uppercase tracking-tighter <?= $priorityColor['badge'] ?>"><?= htmlspecialchars(ucfirst($priority)) ?></span>
                             <div class="size-2 rounded-full <?= $priorityColor['dot'] ?>"></div>
                         </div>

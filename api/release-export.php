@@ -92,6 +92,8 @@ if ($method === 'POST') {
             $cleanEnv = preg_replace('/^DB_PASSWORD=.*$/m', 'DB_PASSWORD=', $cleanEnv);
             $cleanEnv = preg_replace('/^GROQ_API_KEY=.*$/m', 'GROQ_API_KEY=', $cleanEnv);
             $cleanEnv = preg_replace('/^OPENROUTER_API_KEY=.*$/m', 'OPENROUTER_API_KEY=', $cleanEnv);
+            $cleanEnv = preg_replace('/^SMTP_PASSWORD=.*$/m', 'SMTP_PASSWORD=', $cleanEnv);
+            $cleanEnv = preg_replace('/^CRON_KEY=.*$/m', 'CRON_KEY=', $cleanEnv);
             
             // Write cleaned .env to staging
             file_put_contents($stagingPath . '/.env', $cleanEnv);

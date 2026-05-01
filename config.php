@@ -193,6 +193,8 @@ define('INVENTORY_LOW_STOCK_ENABLED', true);        // Enable inventory low stoc
 define('CRON_RATE_LIMIT_ENABLED', true);            // Enable rate limiting for external cron requests
 define('CRON_RATE_LIMIT_REQUESTS', 60);             // Max external cron requests per hour
 define('CRON_RATE_LIMIT_WINDOW', 3600);             // Rate limit window in seconds
+define('AI_CRON_ENABLED', filter_var(getenv('AI_CRON_ENABLED') ?: 'true', FILTER_VALIDATE_BOOLEAN));
+define('AI_CRON_PROVIDER_ORDER', ['groq', 'openrouter', 'gemini', 'ollama']);
 
 // Timezone
 date_default_timezone_set('UTC');

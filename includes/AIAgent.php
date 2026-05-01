@@ -14,6 +14,20 @@ class AIAgent {
     private ?FunctionExecutor $executor;
     private RateLimiter $rateLimiter;
 
+    /**
+     * Maximum reasoning loops per chat() invocation. Each loop = one round-trip
+     * to the AI provider plus zero-or-more tool executions. Higher = more agency
+     * but more tokens spent and more chance to hit shared-host wall clock.
+     */
+    public const AGENT_MAX_LOOPS = 4;
+
+    /**
+     * Wall-clock budget (seconds) before we break out of the loop early to avoid
+     * 504 gateway timeouts on shared hosting. PHP max_execution_time is set higher
+     * (300s in api/ai-agent.php), but reverse proxies typically cut at 60s.
+     */
+    public const AGENT_WALLCLOCK_BUDGET_SEC = 45;
+
     const AGENT_SYSTEM_PROMPT = <<<'PROMPT'
 You are an intelligent assistant for LazyMan Tools, a comprehensive task and business management system.
 
@@ -40,6 +54,17 @@ You can perform these actions by calling functions:
    - Not sure about exact amounts? Make a reasonable split
 4. **EXECUTE FIRST, SUMMARIZE AFTER** - Complete all actions, then give a brief summary
 5. **CONTINUE ON ERRORS** - If one action fails, continue with the others
+6. **NEVER ASK "WHICH ONES?" FOR LISTING REQUESTS** - When user says "all tasks", "all projects", "show me everything", "write them in a table", or any phrase using "all" or "every" for data we have already fetched or can fetch:
+   - Call `list_tasks` for all tasks — immediately, no questions
+   - Call `list_projects` for all projects — immediately, no questions
+   - Call `list_clients` for all clients — immediately, no questions
+   - NEVER respond with "could you specify which tasks?" or "which project?" when the user said "all"
+7. **ONE TOOL CALL PER DATA TYPE** - When answering questions about tasks/projects/clients, call the appropriate list function ONCE and use the results. Do NOT call the same function multiple times in one response. Fetch all data at once.
+8. **ALWAYS USE TABLES FOR LISTS** - When showing task lists, project lists, or client lists, ALWAYS format as a markdown table. Do NOT use bullet points or plain text lists. Example:
+   | Task | Project | Status | Priority | Est |
+   |------|---------|--------|----------|-----|
+   | Fix login | Task Manager | In Progress | High | 60m |
+   Use real data only — never invent values.
 
 ## How To Handle Multi-Part Requests
 When user asks for multiple things like "create client, project, tasks, invoice, habit, note":
@@ -68,6 +93,12 @@ DO NOT STOP BETWEEN STEPS. Execute ALL functions in one response.
 - For task-list responses, mirror task page structure: task title, project, status, priority, estimate, then subtasks.
 - For habits, if a delete is requested and no habitId is provided, call list_habits first to get the ID, then call delete_habit.
 
+## Error Handling
+- If you encounter rate limit errors (429), model errors, or API errors, do NOT show raw error messages to the user.
+- Instead, say something like: "That model is busy. Let me try a different approach..." and retry with different parameters or model.
+- Never expose internal error codes or technical details in your response.
+
+
 ## Response Format (CLEAN OUTPUT ONLY)
 After executing all actions, respond with a simple summary like:
 
@@ -87,7 +118,7 @@ PROMPT;
      *
      * @param Database $db Database instance
      * @param array $config Application configuration
-     * @param string $provider AI provider ('groq' or 'openrouter')
+     * @param string $provider AI provider ('groq', 'openrouter', 'gemini', or 'ollama')
      */
     public function __construct(Database $db, array $config = [], string $provider = 'groq') {
         $this->db = $db;
@@ -96,6 +127,42 @@ PROMPT;
         $this->memory = null;
         $this->executor = null;
         $this->rateLimiter = new RateLimiter($db);
+    }
+
+    /**
+     * Providers that are restricted to chat / summarization only.
+     * Tool calls MUST NOT be sent to these providers regardless of stored model
+     * capability. Keeps fast/cheap chat models out of the tool-execution path.
+     */
+    public static function isChatOnlyProvider(string $provider): bool {
+        return strtolower(trim($provider)) === 'groq';
+    }
+
+    /**
+     * Heuristic: does the user message read like a request for an action
+     * (create/update/delete/send/log/etc.) rather than a question or summary?
+     * Used to (a) prefer function-capable models in auto mode and
+     * (b) inject a deflection system prompt when the resolved provider is chat-only.
+     */
+    private function looksLikeActionRequest(string $message): bool {
+        $text = strtolower(trim($message));
+        if ($text === '') return false;
+        $needles = [
+            'create', 'add ', 'make ', 'new ', 'build ',
+            'update', 'edit ', 'change ', 'modify', 'rename',
+            'delete', 'remove', 'archive', 'cancel',
+            'complete', 'mark done', 'mark as done', 'finish ', 'close ',
+            'send ', 'email ', 'invoice', 'bill ',
+            'schedule', 'book ', 'plan ',
+            'log ', 'record ', 'track ',
+            'start timer', 'stop timer', 'pomodoro',
+            'export', 'import',
+            'set goal', 'log water'
+        ];
+        foreach ($needles as $n) {
+            if (strpos($text, $n) !== false) return true;
+        }
+        return false;
     }
 
     /**
@@ -117,7 +184,8 @@ PROMPT;
         ?string $forceModel = null,
         ?string $kbFolderId = null,
         string $contextLevel = 'medium',
-        string $outputLength = 'normal'
+        string $outputLength = 'normal',
+        bool $smartMode = false
     ): array {
         // Rate limit check
         $userId = Auth::userId() ?? '';
@@ -165,6 +233,16 @@ PROMPT;
                 'role' => 'system',
                 'content' => 'The user request is a ONE-TIME reminder. Use create_task with dueDate and do not create or delete habits unless explicitly requested.'
             ]]);
+        }
+
+        // Hard-block KB injection for chat-only providers regardless of what the
+        // frontend sent. Groq has tight TPM limits and the KB context can blow
+        // it on a single message; also chat-only providers cannot tool-call into
+        // the KB so the inline content is the only signal anyway, and we are
+        // intentionally keeping that channel closed for them.
+        $resolvedProviderForKb = $forceProvider ?? $this->provider;
+        if (self::isChatOnlyProvider($resolvedProviderForKb)) {
+            $kbFolderId = null;
         }
 
         // Inject Knowledge Base Context if provided
@@ -231,38 +309,97 @@ PROMPT;
         $provider = $forceProvider ?? $this->provider;
         $ai = $this->getAIProvider($provider);
 
+        // Chat-only provider deflection: if Groq is the resolved provider AND the
+        // user's message looks like an action request, prepend a system instruction
+        // telling the model to politely decline and suggest switching to OpenRouter
+        // or Gemini. The deflection text is generated by the LLM (natural phrasing)
+        // but the *rule* is enforced by code, not by hoping the LLM behaves.
+        if (self::isChatOnlyProvider($provider) && $this->looksLikeActionRequest($message)) {
+            array_splice($messages, 1, 0, [[
+                'role' => 'system',
+                'content' => 'You are running in chat-only mode. The user appears to be requesting an action (create/update/delete/send/log/etc.). You CANNOT execute actions in this mode. In one or two short sentences, tell the user to switch the provider selector to OpenRouter or Google Gemini to perform actions, then briefly answer any informational part of their question. Do not apologize repeatedly. Do not pretend to perform the action.'
+            ]]);
+        }
+
         // Get available functions
         $functions = AIFunctions::getAllFunctions();
 
         // Determine model(s) to use
-        $targetModel = $forceModel ?? $this->getModelForProvider($provider);
-        $modelList = [$targetModel];
-
-        // Auto-failover mode: load all enabled models for this provider
+        // Auto-failover mode: build list across ALL providers (cross-provider failover)
+        // This allows switching from Groq → Gemini → OpenRouter when needed.
+        // When the user message looks action-y we prefer function-capable models so
+        // chat-only providers (Groq) don't silently drop the request.
         if ($forceModel === 'auto') {
-            $modelList = $this->getEnabledModels($provider);
-            if (empty($modelList)) {
-                // Fallback to default if no list found (shouldn't happen if getModelForProvider works, but safety check)
-                try {
-                    $modelList = [$this->getModelForProvider($provider)];
-                } catch (Exception $e) {
-                    throw new APIException("No enabled models found for auto-failover.", 'NO_MODELS', 400);
-                }
+            $needsTools = $this->looksLikeActionRequest($message);
+            $capability = $needsTools ? 'function_calling' : null;
+            $modelCandidates = $this->getAllCapableModels($capability, $provider);
+            // Fallback: if user wanted an action but no function-capable model exists,
+            // fall back to any enabled model. The chat-only deflection prompt above
+            // will make Groq tell the user to switch providers.
+            if ($needsTools && empty($modelCandidates)) {
+                $modelCandidates = $this->getAllCapableModels(null, $provider);
+            }
+            if (empty($modelCandidates)) {
+                throw new APIException(
+                    "No enabled AI models found. Please configure at least one model in Model Settings.",
+                    'NO_MODELS',
+                    400
+                );
+            }
+        } else {
+            // User explicitly selected a model - use it with its provider.
+            // Capability defaults to 'both' but is overridden to 'chat' for chat-only
+            // providers so downstream tool dispatch knows to skip the functions array.
+            $targetModel = $forceModel ?? $this->getModelForProvider($provider);
+            $candidateCapability = self::isChatOnlyProvider($provider) ? 'chat' : 'both';
+            $modelCandidates = [['provider' => $provider, 'modelId' => $targetModel, 'capability' => $candidateCapability]];
+        }
+
+        // Pre-flight token-budget check (chat-only providers only).
+        // If the conversation + KB context is approaching the model's context window,
+        // emit a switch_provider_recommended event so the UI can suggest moving to
+        // OpenRouter or Gemini. This is computed in PHP — never asks the LLM.
+        $primaryCandidate = $modelCandidates[0] ?? null;
+        if ($primaryCandidate && self::isChatOnlyProvider($primaryCandidate['provider'])) {
+            $window = $this->getModelContextWindow($primaryCandidate['provider'], $primaryCandidate['modelId']);
+            $estimated = $this->estimateTokens($messages, $message);
+            if ($window > 0 && $estimated > (int)floor(0.8 * $window)) {
+                $this->emitEvent('switch_provider_recommended', [
+                    'reason' => 'context_near_limit',
+                    'currentProvider' => $primaryCandidate['provider'],
+                    'estimatedTokens' => $estimated,
+                    'modelContextWindow' => $window,
+                    'suggestedProviders' => $this->getConfiguredProvidersForSwitch(),
+                ]);
             }
         }
 
         // Loop variables
-        $maxLoops = 5;
+        $maxLoops = self::AGENT_MAX_LOOPS;
         $loopCount = 0;
         $allCompletedActions = [];
         $finalAssistantMessage = '';
         $toolEvents = [];
+        $loopStartTime = microtime(true); // Wall-clock guard against shared-hosting timeouts
+        // Track *why* the loop ends. Inside the loop we can return early with
+        // `status=complete` (no more tool calls). If we fall out via break/while-exit
+        // we use this to mark the response as truncated so the UI can surface it
+        // instead of pretending the run finished.
+        $loopExitReason = 'max_loops';
 
         do {
             $loopCount++;
+
+            // Shared hosting wall-clock guard: if we've been running > 45s, wrap up now
+            // rather than risking a 504 gateway timeout mid-response.
+            if ((microtime(true) - $loopStartTime) > self::AGENT_WALLCLOCK_BUDGET_SEC) {
+                $this->emitEvent('timeout_warning', ['elapsed' => round(microtime(true) - $loopStartTime)]);
+                $loopExitReason = 'timeout';
+                break;
+            }
             $this->emitEvent('thinking_started', [
                 'loop' => $loopCount,
-                'models' => $modelList
+                'providers' => array_unique(array_column($modelCandidates, 'provider'))
             ]);
 
             if ($this->memory->isCancelled($conversationId)) {
@@ -278,42 +415,69 @@ PROMPT;
                 ];
             }
 
-            // Make request with functions
+            // Make request with functions - cross-provider failover
             $response = null;
             $lastError = null;
             $success = false;
+            $lastProvider = null;
+            $lastModelId = null;
 
-            foreach ($modelList as $currentModel) {
+            foreach ($modelCandidates as $candidate) {
+                $currentProvider = $candidate['provider'];
+                $currentModel = $candidate['modelId'];
+                
+                // Get AI instance for this provider (may be different from initial $ai)
+                $currentAi = $this->getAIProvider($currentProvider);
+                
                 $maxProviderAttempts = 2;
+                // Chat-only providers (Groq) MUST receive an empty tools array — no
+                // function calls, no tool dispatch. Combined with the deflection
+                // system prompt above, the model will simply chat or politely
+                // suggest switching to a tool-capable provider.
+                $candidateFunctions = self::isChatOnlyProvider($currentProvider) ? [] : $functions;
                 for ($providerAttempt = 1; $providerAttempt <= $maxProviderAttempts; $providerAttempt++) {
                     try {
-                        $response = $ai->chatWithFunctions(
+                        $response = $currentAi->chatWithFunctions(
                             $messages,
-                            $functions,
+                            $candidateFunctions,
                             $currentModel,
                             ['maxTokens' => $currentMaxTokens]
                         );
                         $success = true;
-                        break 2; // Success on this model/provider.
+                        $lastProvider = $currentProvider;
+                        $lastModelId = $currentModel;
+                        break 2; // Exit provider-retry loops, continue do-while to process response
                     } catch (Exception $e) {
                         $lastError = $e;
+                        $lastProvider = $currentProvider;
+                        $lastModelId = $currentModel;
+                        
                         if ($this->isTokenLimitError($e) && $providerAttempt < $maxProviderAttempts) {
                             $messages = $this->trimMessagesForRetry($messages);
                             $currentMaxTokens = max(256, (int)floor($currentMaxTokens * 0.6));
                             $this->emitEvent('token_retry', [
+                                'provider' => $currentProvider,
                                 'model' => $currentModel,
                                 'attempt' => $providerAttempt + 1,
                                 'maxTokens' => $currentMaxTokens
                             ]);
+                            // Reactive: when a chat-only provider hits a token limit,
+                            // surface the switch suggestion to the UI immediately so
+                            // the user can move to a longer-context tool provider.
+                            if (self::isChatOnlyProvider($currentProvider)) {
+                                $this->emitEvent('switch_provider_recommended', [
+                                    'reason' => 'context_overflow',
+                                    'currentProvider' => $currentProvider,
+                                    'suggestedProviders' => $this->getConfiguredProvidersForSwitch(),
+                                ]);
+                            }
                             continue;
                         }
+                        
+                        // For other errors, log and try next model
+                        error_log("AI Agent: {$currentProvider}/{$currentModel} failed: " . $e->getMessage());
+                        break; // Try next model
                     }
-                }
-
-                // Only continue if we have more models to try
-                if (!$success && count($modelList) > 1) {
-                    error_log("AI Agent: Model {$currentModel} failed, trying next...");
-                    continue;
                 }
             }
 
@@ -363,13 +527,26 @@ PROMPT;
                     $assistantMessage = $this->finalizeAssistantMessage($assistantMessage, $allCompletedActions, $message, $toolEvents);
                 }
 
+                // Smart Auto pipeline: when user picked Smart and the answering
+                // provider was NOT Groq (e.g. OpenRouter did the heavy tool work),
+                // ask Groq to rewrite the final message as a clean user-facing
+                // summary. Groq is fast + cheap and the user explicitly wants
+                // it for the final read. Falls back silently if Groq fails
+                // (TPM-locked, no key, etc.) so the original reply still ships.
+                if ($smartMode && $assistantMessage && $lastProvider && $lastProvider !== 'groq') {
+                    $polished = $this->polishWithGroq($assistantMessage, $allCompletedActions);
+                    if ($polished !== '') {
+                        $assistantMessage = $polished;
+                    }
+                }
+
                 // If this was a subsequent loop, we save the final summary
                 // If it's the first loop, it's just a normal text response
                 if ($assistantMessage) {
                     $this->memory->saveMessage('assistant', $assistantMessage);
                 }
                 $this->emitEvent('summary_ready', ['message' => $assistantMessage]);
-                
+
                 return [
                     'conversationId' => $conversationId,
                     'status' => 'complete',
@@ -390,8 +567,12 @@ PROMPT;
                 $arguments = json_decode($call['arguments'], true);
                 if (!is_array($arguments)) $arguments = [];
 
-                // VISIBILITY: Notify user what tool is executing
-                $this->memory->saveMessage('assistant', "Executing tool: {$name}...");
+                // Tool status is surfaced via timeline events only. We DO NOT
+                // persist "Executing tool: X..." as an assistant message because
+                // that pollutes the chat transcript when the conversation is
+                // reloaded later (the user sees rows of "Executing tool:" lines
+                // mixed in with real replies). The frontend already renders
+                // tool_started/tool_succeeded events in the typing indicator.
                 $this->emitEvent('tool_started', [
                     'loop' => $loopCount,
                     'step' => count($allCompletedActions) + count($currentTurnActions) + 1,
@@ -502,20 +683,55 @@ PROMPT;
             
         } while ($loopCount < $maxLoops);
 
-        // If we hit max loops, return what we have
-        if (!empty($allCompletedActions)) {
-                $finalAssistantMessage = $this->finalizeAssistantMessage($finalAssistantMessage, $allCompletedActions, $message, $toolEvents);
-            }
-            $this->emitEvent('summary_ready', ['message' => $finalAssistantMessage ?: "Completed multiple actions."]);
-
-            return [
-                'conversationId' => $conversationId,
-                'status' => 'complete',
-                'message' => $finalAssistantMessage ?: "Completed multiple actions.",
-                'functionCalls' => $allCompletedActions,
-                'toolEvents' => $toolEvents
-            ];
+        // We exited the do-while without an early return, which means either we hit
+        // the loop cap or the wall-clock guard. Either way, work is partial — surface
+        // that to the UI so the user knows to either continue or accept incomplete results.
+        $truncationNote = '';
+        if ($loopExitReason === 'timeout') {
+            $truncationNote = "\n\n_(I ran out of time partway through. The actions above completed; ask me to continue if more is needed.)_";
+        } elseif ($loopExitReason === 'max_loops') {
+            $truncationNote = "\n\n_(I reached the maximum number of reasoning steps. The actions above completed; ask me to continue if more is needed.)_";
         }
+
+        if (!empty($allCompletedActions)) {
+            $finalAssistantMessage = $this->finalizeAssistantMessage($finalAssistantMessage, $allCompletedActions, $message, $toolEvents);
+        }
+        if ($truncationNote !== '') {
+            $finalAssistantMessage = ($finalAssistantMessage ?: 'Completed multiple actions.') . $truncationNote;
+        }
+
+        // Smart Auto polish — same rule as the early-return path: if Smart was
+        // picked and the answer came from a non-Groq provider, let Groq write
+        // the user-facing summary.
+        if ($smartMode && $finalAssistantMessage && $lastProvider && $lastProvider !== 'groq') {
+            $polished = $this->polishWithGroq($finalAssistantMessage, $allCompletedActions);
+            if ($polished !== '') {
+                $finalAssistantMessage = $polished;
+            }
+        }
+
+        // Save the final message to conversation memory so the frontend can display it
+        if ($finalAssistantMessage) {
+            $this->memory->saveMessage('assistant', $finalAssistantMessage);
+        }
+
+        $this->emitEvent('summary_ready', [
+            'message' => $finalAssistantMessage ?: "Completed multiple actions.",
+            'truncated' => true,
+            'reason' => $loopExitReason,
+        ]);
+
+        return [
+            'conversationId' => $conversationId,
+            'status' => 'truncated',
+            'truncated' => true,
+            'reason' => $loopExitReason,
+            'loops' => $loopCount,
+            'message' => $finalAssistantMessage ?: "Completed multiple actions.",
+            'functionCalls' => $allCompletedActions,
+            'toolEvents' => $toolEvents
+        ];
+    }
 
     /**
      * Create an empty conversation and return its id for immediate UI polling.
@@ -634,27 +850,21 @@ PROMPT;
     private function finalizeAssistantMessage(string $assistantMessage, array $completedActions, string $userMessage, array $toolEvents = []): string {
         $taskPageMessage = $this->buildTaskPageAlignedResponse($completedActions, $userMessage);
         if ($taskPageMessage !== null) {
-            $toolSummary = $this->buildToolStatusSummary($toolEvents);
-            return $toolSummary !== '' ? $taskPageMessage . "\n\n" . $toolSummary : $taskPageMessage;
+            return $taskPageMessage;
         }
 
         $trimmed = trim($assistantMessage);
         $needsFallback = $trimmed === '' || preg_match('/^Completed\\s+\\d+\\s+actions?\\s+successfully\\.?$/i', $trimmed) || preg_match('/^Completed\\s+multiple\\s+actions\\.?$/i', $trimmed);
 
         if ($needsFallback) {
-            $fallback = $this->buildActionFollowUp($completedActions, $userMessage);
-            $toolSummary = $this->buildToolStatusSummary($toolEvents);
-            return $toolSummary !== '' ? $fallback . "\n\n" . $toolSummary : $fallback;
+            return $this->buildActionFollowUp($completedActions, $userMessage);
         }
 
         if (!$this->hasClearFollowUp($trimmed)) {
-            $message = rtrim($trimmed) . "\n\n" . $this->buildSuggestedNextSteps($completedActions, $userMessage);
-            $toolSummary = $this->buildToolStatusSummary($toolEvents);
-            return $toolSummary !== '' ? $message . "\n\n" . $toolSummary : $message;
+            return rtrim($trimmed) . "\n\n" . $this->buildSuggestedNextSteps($completedActions, $userMessage);
         }
 
-        $toolSummary = $this->buildToolStatusSummary($toolEvents);
-        return $toolSummary !== '' ? rtrim($trimmed) . "\n\n" . $toolSummary : $trimmed;
+        return $trimmed;
     }
 
     /**
@@ -818,53 +1028,83 @@ PROMPT;
     }
 
     /**
-     * Generate practical follow-up options based on executed actions.
+     * Generate practical follow-up suggestions based on what was just executed.
+     * These are phrased as things the user can say next — short and specific.
      */
     private function buildSuggestedNextSteps(array $completedActions, string $userMessage): string {
         $actionNames = array_map(fn($a) => $a['name'] ?? '', $completedActions);
         $lowerUserMessage = strtolower($userMessage);
         $suggestions = [];
 
-        if (in_array('list_projects', $actionNames, true) || str_contains($lowerUserMessage, 'today')) {
-            $suggestions[] = 'Review today\'s tasks across your active projects and mark top 3 priorities.';
-            $suggestions[] = 'Build a time-blocked plan (morning, afternoon, evening) from those priorities.';
+        if (in_array('list_projects', $actionNames, true)) {
+            $suggestions[] = '"Show all tasks in a table"';
+            $suggestions[] = '"Which project has the most tasks?"';
         }
 
-        if (in_array('list_tasks', $actionNames, true) || in_array('get_project_tasks', $actionNames, true) || in_array('create_task', $actionNames, true)) {
-            $suggestions[] = 'Break selected tasks into next concrete actions you can finish in 30-60 minutes.';
+        if (in_array('list_tasks', $actionNames, true) || in_array('get_project_tasks', $actionNames, true)) {
+            $suggestions[] = '"Mark all done tasks as complete"';
+            $suggestions[] = '"Show only high priority tasks"';
+            $suggestions[] = '"Add a new task to [project name]"';
+        }
+
+        if (in_array('create_task', $actionNames, true)) {
+            $suggestions[] = '"Add subtasks to that task"';
+            $suggestions[] = '"Set it as high priority"';
         }
 
         if (in_array('create_invoice', $actionNames, true) || in_array('create_client', $actionNames, true)) {
-            $suggestions[] = 'Prepare follow-up reminders so client and invoice steps do not stall.';
+            $suggestions[] = '"Show all unpaid invoices"';
+            $suggestions[] = '"Create another invoice for this client"';
+        }
+
+        if (in_array('list_habits', $actionNames, true) || in_array('create_habit', $actionNames, true)) {
+            $suggestions[] = '"Mark my morning habit as done"';
+            $suggestions[] = '"Show my habit streak"';
         }
 
         if (empty($suggestions)) {
-            $suggestions[] = 'Convert the results into a simple priority plan for today.';
-            $suggestions[] = 'Identify one quick win and one high-impact task to execute next.';
+            $suggestions[] = '"Show my tasks for today"';
+            $suggestions[] = '"What projects am I working on?"';
         }
 
         $suggestions = array_values(array_unique($suggestions));
-        $top = array_slice($suggestions, 0, 3);
+        $top = array_slice($suggestions, 0, 2);
 
-        $lines = [];
-        $lines[] = "I can help next by doing one of these now:";
-        foreach ($top as $index => $suggestion) {
-            $lines[] = ($index + 1) . ". " . $suggestion;
-        }
-
-        return implode("\n", $lines);
+        return "You can ask: " . implode(' or ', $top);
     }
 
     /**
      * Heuristic to avoid duplicating follow-up if assistant already includes one.
+     *
+     * Also suppresses generic follow-up when the response is already rich data
+     * (a markdown table, a bulleted list of results, etc.) — the user can simply
+     * ask the next question naturally.
      */
     private function hasClearFollowUp(string $content): bool {
         $lower = strtolower($content);
-        return str_contains($lower, 'next step')
+
+        // Explicit follow-up phrases
+        if (str_contains($lower, 'next step')
             || str_contains($lower, 'i can help')
             || str_contains($lower, 'i can do')
             || str_contains($lower, 'follow up')
-            || str_contains($lower, 'recommend');
+            || str_contains($lower, 'recommend')) {
+            return true;
+        }
+
+        // Response already contains a markdown table — don't pile on suggestions
+        if (substr_count($content, '|') >= 4) {
+            return true;
+        }
+
+        // Response contains a numbered or bulleted list with 4+ items — rich enough
+        $bulletCount = preg_match_all('/^[\*\-\d]\./m', $content);
+        $numberedCount = preg_match_all('/^\d+\./m', $content);
+        if (($bulletCount + $numberedCount) >= 4) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -938,6 +1178,117 @@ PROMPT;
             || str_contains($msg, 'context length')
             || str_contains($msg, 'maximum context')
             || str_contains($msg, 'too many tokens');
+    }
+
+    /**
+     * Rough token estimate using the chars/4 heuristic. Cheap, no external call.
+     * Used pre-flight to decide whether to warn the user about context limits.
+     */
+    private function estimateTokens(array $messages, string $extraText = ''): int {
+        $chars = strlen($extraText);
+        foreach ($messages as $msg) {
+            $chars += strlen((string)($msg['content'] ?? ''));
+        }
+        return (int)ceil($chars / 4);
+    }
+
+    /**
+     * Look up the model's context window. Prefers a `contextWindow` value stored
+     * on the model row in the encrypted models collection; otherwise falls back
+     * to a conservative provider default chosen so the 80% pre-flight threshold
+     * fires *before* the user hits a hard error.
+     */
+    private function getModelContextWindow(string $provider, string $modelId): int {
+        $models = $this->db->load('models') ?? [];
+        foreach (($models[$provider] ?? []) as $m) {
+            if (($m['modelId'] ?? '') === $modelId) {
+                $window = (int)($m['contextWindow'] ?? 0);
+                if ($window > 0) return $window;
+                break;
+            }
+        }
+        switch (strtolower($provider)) {
+            case 'groq':       return 8192;   // Conservative; many Groq models do 32k+
+            case 'gemini':     return 32768;
+            case 'openrouter': return 16384;
+            case 'ollama':     return 4096;
+            default:           return 4096;
+        }
+    }
+
+    /**
+     * Smart Auto pipeline: pass the final assistant message through Groq so
+     * Groq writes the user-facing summary. The agent loop (typically OpenRouter
+     * or Gemini) does the heavy lifting — tool calls, chain-of-thought — and
+     * Groq just polishes the result for fast, friendly delivery.
+     *
+     * Returns the polished string on success or '' on any failure (caller
+     * keeps the original message). Never throws.
+     */
+    private function polishWithGroq(string $original, array $completedActions): string {
+        $groqKey = $this->config['groqApiKey'] ?? '';
+        if (empty($groqKey) || empty($original)) return '';
+
+        // Pick the best Groq chat model available to the user. Prefer
+        // llama-3.3-70b-versatile (12K TPM, strong writer), fall back to
+        // gemma2-9b-it (15K TPM, fast), then gpt-oss-120b.
+        $models = $this->db->load('models') ?? [];
+        $groqModels = $models['groq'] ?? [];
+        $preferred = ['llama-3.3-70b-versatile', 'gemma2-9b-it', 'openai/gpt-oss-120b'];
+        $modelId = '';
+        foreach ($preferred as $candidate) {
+            foreach ($groqModels as $m) {
+                if (($m['enabled'] ?? true) && ($m['modelId'] ?? '') === $candidate) {
+                    $modelId = $candidate;
+                    break 2;
+                }
+            }
+        }
+        if ($modelId === '') {
+            // No preferred model — use whichever Groq model is enabled first.
+            foreach ($groqModels as $m) {
+                if ($m['enabled'] ?? true) { $modelId = $m['modelId']; break; }
+            }
+        }
+        if ($modelId === '') return '';
+
+        $actionsList = '';
+        foreach ($completedActions as $action) {
+            $name = (string)($action['name'] ?? '');
+            $summary = (string)($action['summary'] ?? '');
+            if ($name !== '') $actionsList .= "- {$name}" . ($summary !== '' ? ": {$summary}" : '') . "\n";
+        }
+
+        $systemPrompt = "You are a friendly summary writer. The user asked something and another AI did the work — your job is to rewrite the result as a short, clear, conversational message for the user. Keep all factual content (numbers, names, IDs, statuses, table contents). Do NOT invent details. If the original used a markdown table, KEEP the table verbatim. Do not apologize, do not preamble, do not say 'I rewrote this' — just deliver the polished reply.";
+        $userPrompt = "Original assistant reply to polish:\n\n" . $original;
+        if ($actionsList !== '') {
+            $userPrompt .= "\n\nActions completed:\n" . $actionsList;
+        }
+
+        try {
+            $groq = new GroqAPI($groqKey);
+            $resp = $groq->chatCompletion([
+                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'user',   'content' => $userPrompt]
+            ], $modelId, ['maxTokens' => 1024, 'temperature' => 0.6]);
+            if (isset($resp['error'])) return '';
+            $text = $resp['choices'][0]['message']['content'] ?? '';
+            return trim($text);
+        } catch (Throwable $e) {
+            error_log('Smart Auto polish via Groq failed: ' . $e->getMessage());
+            return '';
+        }
+    }
+
+    /**
+     * Which non-chat-only providers are currently configured? Used by the
+     * switch_provider_recommended event so the UI knows which buttons to render.
+     */
+    private function getConfiguredProvidersForSwitch(): array {
+        $out = [];
+        if (!empty($this->config['openrouterApiKey'])) $out[] = 'openrouter';
+        if (!empty($this->config['geminiApiKey']))     $out[] = 'gemini';
+        return $out;
     }
 
     /**
@@ -1031,12 +1382,10 @@ PROMPT;
      * Get AI provider instance
      *
      * @param string $provider
-     * @return GroqAPI|OpenRouterAPI
+     * @return GroqAPI|OpenRouterAPI|OllamaAPI|GeminiAPI
      * @throws APIException
      */
     private function getAIProvider(string $provider) {
-        $apiKey = null;
-
         switch ($provider) {
             case 'groq':
                 $apiKey = $this->config['groqApiKey'] ?? null;
@@ -1051,6 +1400,24 @@ PROMPT;
                     throw new APIException('OpenRouter API key not configured', 'API_KEY_MISSING', 500);
                 }
                 return new OpenRouterAPI($apiKey, getSiteName());
+
+            case 'gemini':
+                $apiKey = $this->config['geminiApiKey'] ?? null;
+                if (empty($apiKey)) {
+                    throw new APIException('Google Gemini API key not configured. Add it in Settings → AI API Keys.', 'API_KEY_MISSING', 500);
+                }
+                return new GeminiAPI($apiKey);
+
+            case 'ollama':
+                if (!canUseOllama()) {
+                    throw new APIException(
+                        'Ollama is not available in online mode (shared hosting cannot reach local Ollama). Use Groq, OpenRouter, or Gemini instead.',
+                        'OLLAMA_UNAVAILABLE_ONLINE',
+                        503
+                    );
+                }
+                $url = $this->config['ollamaUrl'] ?? 'http://localhost:11434';
+                return new OllamaAPI($url);
 
             default:
                 throw new APIException("Unknown AI provider: {$provider}", 'INVALID_PROVIDER', 400);
@@ -1073,6 +1440,84 @@ PROMPT;
             }
         }
         return $enabled;
+    }
+
+    /**
+     * Get ALL enabled models across ALL providers with their capabilities.
+     * Used for cross-provider failover when a model fails.
+     * 
+     * @param string|null $requiredCapability Filter by capability: 'chat', 'function_calling', or 'both'
+     * @param string|null $preferredProvider Prefer this provider first
+     * @return array Array of ['provider' => x, 'modelId' => y, 'capability' => z]
+     */
+    private function getAllCapableModels(?string $requiredCapability = null, ?string $preferredProvider = null): array {
+        $models = $this->db->load('models') ?? [];
+        $allModels = [];
+        $providers = ['groq', 'openrouter', 'gemini', 'ollama'];
+        
+        // If Ollama is not available (online mode), skip it
+        if (!canUseOllama()) {
+            $providers = array_filter($providers, fn($p) => $p !== 'ollama');
+        }
+        
+        // First add preferred provider models (if specified)
+        if ($preferredProvider && in_array($preferredProvider, $providers)) {
+            foreach (($models[$preferredProvider] ?? []) as $m) {
+                if ($m['enabled'] ?? true) {
+                    $capability = $m['capability'] ?? 'both';
+                    // Force chat-only providers (Groq) to 'chat' regardless of DB
+                    // value so they never get matched when 'function_calling' is required.
+                    if (self::isChatOnlyProvider($preferredProvider)) {
+                        $capability = 'chat';
+                    }
+                    if ($requiredCapability === null || $capability === $requiredCapability || $capability === 'both') {
+                        $allModels[] = [
+                            'provider' => $preferredProvider,
+                            'modelId' => $m['modelId'],
+                            'capability' => $capability
+                        ];
+                    }
+                }
+            }
+        }
+        
+        // Then add all other providers
+        foreach ($providers as $provider) {
+            if ($provider === $preferredProvider) continue;
+            foreach (($models[$provider] ?? []) as $m) {
+                if ($m['enabled'] ?? true) {
+                    $capability = $m['capability'] ?? 'both';
+                    // Same chat-only override applied to non-preferred providers.
+                    if (self::isChatOnlyProvider($provider)) {
+                        $capability = 'chat';
+                    }
+                    if ($requiredCapability === null || $capability === $requiredCapability || $capability === 'both') {
+                        $allModels[] = [
+                            'provider' => $provider,
+                            'modelId' => $m['modelId'],
+                            'capability' => $capability
+                        ];
+                    }
+                }
+            }
+        }
+
+        return $allModels;
+    }
+
+    /**
+     * Get models suitable for function calling across all providers.
+     * Prefers the user's selected provider but falls back to any capable model.
+     */
+    private function getFunctionCallingModels(string $preferredProvider = 'gemini'): array {
+        return $this->getAllCapableModels('function_calling', $preferredProvider);
+    }
+
+    /**
+     * Get models suitable for chat only.
+     */
+    private function getChatModels(string $preferredProvider = 'groq'): array {
+        return $this->getAllCapableModels('chat', $preferredProvider);
     }
 
     /**
@@ -1300,7 +1745,11 @@ PROMPT;
             'list_clients',
             'search_knowledge_base',
             'list_habits',
-            'list_inventory'
+            'list_inventory',
+            'list_transactions',
+            'list_invoices',
+            'list_notes',
+            'get_water_status',
         ], true);
     }
 

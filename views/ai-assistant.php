@@ -13,13 +13,18 @@ try {
     $models = [];
 }
 
-$hasGroqKey = !empty($config['groqApiKey']);
-$hasOpenRouterKey = !empty($config['openrouterApiKey']);
-$hasAnyKey = $hasGroqKey || $hasOpenRouterKey;
+$hasGroqKey       = !empty($config['groqApiKey']);
+$hasOpenRouterKey  = !empty($config['openrouterApiKey']);
+$hasGeminiKey      = !empty($config['geminiApiKey']);
+$ollamaUrl         = $config['ollamaUrl'] ?? 'http://localhost:11434';
+$hasOllama         = !empty($models['ollama']); // Ollama available if models have been detected
+$hasAnyKey         = $hasGroqKey || $hasOpenRouterKey || $hasGeminiKey || $hasOllama;
 
 // Filter enabled models from database
-$groqModels = array_filter($models['groq'] ?? [], fn($m) => $m['enabled'] ?? true);
-$openRouterModels = array_filter($models['openrouter'] ?? [], fn($m) => $m['enabled'] ?? true);
+$groqModels        = array_values(array_filter($models['groq'] ?? [],        fn($m) => $m['enabled'] ?? true));
+$openRouterModels  = array_values(array_filter($models['openrouter'] ?? [],   fn($m) => $m['enabled'] ?? true));
+$geminiModels      = array_values(array_filter($models['gemini'] ?? [],       fn($m) => $m['enabled'] ?? true));
+$ollamaModels      = array_values(array_filter($models['ollama'] ?? [],       fn($m) => $m['enabled'] ?? true));
 
 // Per-provider fallback: only use static list for providers that have NO DB models
 if (empty($groqModels)) {
@@ -29,6 +34,10 @@ if (empty($groqModels)) {
 if (empty($openRouterModels)) {
     $openRouterModels = array_map(fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
         array_keys(OpenRouterAPI::getModels()), OpenRouterAPI::getModels());
+}
+if (empty($geminiModels) && $hasGeminiKey) {
+    $geminiModels = array_map(fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
+        array_keys(GeminiAPI::getModels()), GeminiAPI::getModels());
 }
 ?>
 
@@ -40,6 +49,21 @@ if (empty($openRouterModels)) {
 .animate-fade-in-up {
     animation: fadeInUp 0.5s ease-out forwards;
 }
+/* Markdown rendered AI messages */
+.ai-markdown { font-size:0.875rem; line-height:1.6; }
+.ai-markdown p { margin:0.35em 0; }
+.ai-markdown h1,.ai-markdown h2,.ai-markdown h3 { font-weight:600; margin:0.6em 0 0.25em; }
+.ai-markdown ul,.ai-markdown ol { padding-left:1.4em; margin:0.35em 0; }
+.ai-markdown li { margin:0.15em 0; }
+.ai-markdown code { background:#f3f4f6; padding:0.1em 0.35em; border-radius:3px; font-size:0.82em; font-family:ui-monospace,monospace; }
+.ai-markdown pre { background:#1e1e2e; color:#cdd6f4; padding:0.75em 1em; border-radius:6px; overflow-x:auto; margin:0.5em 0; }
+.ai-markdown pre code { background:none; padding:0; color:inherit; font-size:0.82em; }
+.ai-markdown table { border-collapse:collapse; width:100%; margin:0.5em 0; font-size:0.85em; }
+.ai-markdown th,.ai-markdown td { border:1px solid #e5e7eb; padding:0.35em 0.65em; text-align:left; }
+.ai-markdown th { background:#f9fafb; font-weight:600; }
+.ai-markdown blockquote { border-left:3px solid #d1d5db; margin:0.4em 0; padding:0.25em 0.75em; color:#6b7280; }
+.ai-markdown a { color:#2563eb; text-decoration:underline; }
+.ai-markdown hr { border:none; border-top:1px solid #e5e7eb; margin:0.75em 0; }
 </style>
 
 <div class="space-y-6">
@@ -181,10 +205,13 @@ if (empty($openRouterModels)) {
             <div class="flex-1 flex flex-col min-h-0">
                 <!-- AI Provider and Model Selection -->
                 <div class="p-3 border-b border-gray-200 flex items-center gap-2 flex-wrap bg-gray-50 flex-shrink-0">
-                    <select id="ai-provider" onchange="updateModelList(); updateConversationState()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm">
-                        <?php if ($hasGroqKey && $hasOpenRouterKey): ?><option value="smart">Smart (Groq chat / OpenRouter complex)</option><?php endif; ?>
-                        <?php if ($hasGroqKey): ?><option value="groq">Groq</option><?php endif; ?>
-                        <?php if ($hasOpenRouterKey): ?><option value="openrouter">OpenRouter</option><?php endif; ?>
+                    <select id="ai-provider" onchange="updateModelList(); applyProviderConstraints(); updateConversationState()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm">
+                        <?php $configuredCount = ($hasGroqKey?1:0)+($hasOpenRouterKey?1:0)+($hasGeminiKey?1:0)+($hasOllama?1:0); ?>
+                        <?php if ($configuredCount >= 2): ?><option value="smart">⚡ Smart (Auto-select)</option><?php endif; ?>
+                        <option value="groq"><?= $hasGroqKey ? 'Groq' : 'Groq (key needed)' ?></option>
+                        <option value="openrouter"><?= $hasOpenRouterKey ? 'OpenRouter' : 'OpenRouter (key needed)' ?></option>
+                        <option value="gemini"><?= $hasGeminiKey ? 'Google Gemini' : 'Google Gemini (key needed)' ?></option>
+                        <option value="ollama"><?= $hasOllama ? 'Ollama (Local)' : 'Ollama (not detected)' ?></option>
                     </select>
                     <select id="ai-model" onchange="updateConversationState()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm">
                         <!-- Populated by JS -->
@@ -196,12 +223,17 @@ if (empty($openRouterModels)) {
                         <button type="button" onclick="toggleAssistantActionsMenu()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50">
                             Actions
                         </button>
-                        <div id="assistant-actions-menu" class="hidden absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
+                        <div id="assistant-actions-menu" class="hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
                             <button type="button" onclick="copyChatTranscript(); closeAssistantActionsMenu();" class="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50">Copy</button>
                             <button type="button" onclick="exportChatMarkdown(); closeAssistantActionsMenu();" class="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50">Export MD</button>
                             <button type="button" onclick="openChatSaveToKnowledgeBase(); closeAssistantActionsMenu();" class="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50">Save to KB</button>
                             <button type="button" onclick="saveChatToNotes(); closeAssistantActionsMenu();" class="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50">Save to Notes</button>
                             <button type="button" onclick="startNewConversation(); closeAssistantActionsMenu();" class="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50">New Chat</button>
+                            <div class="border-t border-gray-100 my-1"></div>
+                            <label class="flex items-center justify-between gap-2 px-3 py-2 text-xs hover:bg-gray-50 cursor-pointer">
+                                <span>Show model dot</span>
+                                <input type="checkbox" id="show-model-dot-toggle" class="w-3.5 h-3.5 accent-black" onchange="toggleProviderDot(this.checked)">
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -217,6 +249,22 @@ if (empty($openRouterModels)) {
                             <!-- Populated by JS -->
                         </div>
                     </div>
+                </div>
+
+                <!-- Switch Provider Banner — shown when backend emits switch_provider_recommended -->
+                <div id="switch-provider-banner" class="hidden mx-4 mb-2 p-3 rounded-lg border border-amber-300 bg-amber-50 text-sm text-amber-900 flex items-start gap-3 flex-shrink-0">
+                    <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"></path>
+                    </svg>
+                    <div class="flex-1 min-w-0">
+                        <div id="switch-provider-banner-text" class="font-medium"></div>
+                        <div id="switch-provider-banner-actions" class="mt-2 flex flex-wrap gap-2"></div>
+                    </div>
+                    <button type="button" onclick="dismissSwitchProviderBanner()" class="text-amber-700 hover:text-amber-900" title="Dismiss">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
                 </div>
 
                 <!-- Input Form -->
@@ -238,8 +286,10 @@ if (empty($openRouterModels)) {
 
 <script>
 const ALL_MODELS = <?php echo json_encode([
-    'groq' => array_values($groqModels),
-    'openrouter' => array_values($openRouterModels)
+    'groq'        => $groqModels,
+    'openrouter'  => $openRouterModels,
+    'gemini'      => $geminiModels,
+    'ollama'      => $ollamaModels
 ]); ?>;
 
 function updateModelList() {
@@ -257,6 +307,77 @@ function updateModelList() {
         models.map(m => `<option value="${m.modelId}" ${m.isDefault ? 'selected' : ''}>${m.displayName}</option>`).join('');
 }
 
+// Per-provider dot colors for the inline reply indicator. Each provider gets a
+// distinct hue so the user can glance and tell who answered without reading text.
+window.PROVIDER_DOT_COLORS = {
+    groq:       '#7c3aed', // violet
+    openrouter: '#ea580c', // orange
+    gemini:     '#2563eb', // blue
+    ollama:     '#16a34a', // green
+    smart:      '#0ea5e9'  // sky (rare — when smart isn't resolved yet)
+};
+
+// Toggle the "show provider dot" preference. Persists in localStorage and
+// updates already-rendered messages so the change is immediate.
+function toggleProviderDot(enabled) {
+    localStorage.setItem('ai.showProviderDot', enabled ? '1' : '0');
+    document.querySelectorAll('.provider-dot').forEach(el => {
+        el.style.display = enabled ? '' : 'none';
+    });
+}
+
+// Providers that cannot dispatch tool calls — must keep Agent Mode + Auto-Confirm
+// + Knowledge Base off so the user is not misled into expecting tool actions.
+const CHAT_ONLY_PROVIDERS = ['groq'];
+
+function isChatOnlyProvider(provider) {
+    return CHAT_ONLY_PROVIDERS.includes(String(provider || '').toLowerCase());
+}
+
+// Groq is a chat-only provider with its own model. Selection = sticky: only
+// Groq is called, only Groq is billed. KB selector hidden (KB inflates context
+// past Groq's 8K TPM) and Agent toggle locked off (Groq cannot tool-call). For
+// KB or actions, the user should pick Smart Auto or OpenRouter/Gemini directly.
+function applyProviderConstraints() {
+    const providerSelect = document.getElementById('ai-provider');
+    const provider = providerSelect ? providerSelect.value : '';
+    const chatOnly = isChatOnlyProvider(provider);
+    const agent = document.getElementById('agent-mode');
+    const agentStatus = document.getElementById('agent-mode-status');
+    const autoConf = document.getElementById('auto-confirm');
+    const kb = document.getElementById('ai-kb-folder');
+
+    if (agent) {
+        if (chatOnly) {
+            agent.checked = false;
+            agent.disabled = true;
+            agentModeEnabled = false;
+            if (agentStatus) agentStatus.textContent = '(Groq is chat-only. For actions/KB pick Smart, OpenRouter, or Gemini.)';
+        } else {
+            agent.disabled = false;
+            agentModeEnabled = !!agent.checked;
+            if (agentStatus) agentStatus.textContent = agent.checked ? '(AI can perform actions)' : '(AI only responds)';
+        }
+    }
+
+    if (autoConf) {
+        if (chatOnly) autoConf.checked = false;
+        autoConf.disabled = true;
+    }
+
+    if (kb) {
+        if (chatOnly) {
+            kb.value = '';
+            kb.disabled = true;
+            kb.classList.add('hidden');
+            selectedKbFolderId = '';
+        } else {
+            kb.disabled = false;
+            kb.classList.remove('hidden');
+        }
+    }
+}
+
 function closeAssistantActionsMenu() {
     document.getElementById('assistant-actions-menu')?.classList.add('hidden');
 }
@@ -272,14 +393,31 @@ function isComplexPrompt(prompt) {
     return keywords.some((k) => text.includes(k));
 }
 
+// Ordered list of providers that are actually configured — used by smart mode
+function getConfiguredProviders() {
+    const configured = [];
+    if (<?= $hasGroqKey ? 'true' : 'false' ?>) configured.push('groq');
+    if (<?= $hasOpenRouterKey ? 'true' : 'false' ?>) configured.push('openrouter');
+    if (<?= $hasGeminiKey ? 'true' : 'false' ?>) configured.push('gemini');
+    if (<?= $hasOllama ? 'true' : 'false' ?>) configured.push('ollama');
+    return configured;
+}
+
 function resolveProviderForMessage(message) {
     const selected = document.getElementById('ai-provider')?.value || 'groq';
     if (selected !== 'smart') return selected;
-    return isComplexPrompt(message) ? 'openrouter' : 'groq';
+    const configured = getConfiguredProviders();
+    if (!configured.length) return 'groq';
+    // For complex prompts prefer a richer model provider if available
+    if (isComplexPrompt(message)) {
+        return configured.find(p => p === 'openrouter' || p === 'gemini') || configured[0];
+    }
+    return configured[0];
 }
 
-function resolveModelForProvider(provider) {
-    if (document.getElementById('ai-provider')?.value !== 'smart') {
+function resolveModelForProvider(provider, smartMode = false) {
+    const isSmartMode = smartMode || document.getElementById('ai-provider')?.value === 'smart';
+    if (!isSmartMode) {
         return document.getElementById('ai-model')?.value || undefined;
     }
     const models = ALL_MODELS[provider] || [];
@@ -290,9 +428,24 @@ function resolveModelForProvider(provider) {
 // Initial population
 window.addEventListener('DOMContentLoaded', () => {
     updateModelList();
+    applyProviderConstraints();
     loadKBFolders();
     checkPHPRequirements();
-    
+
+    // Sync the "show model dot" checkbox with the persisted preference (default ON).
+    const dotToggle = document.getElementById('show-model-dot-toggle');
+    if (dotToggle) {
+        dotToggle.checked = localStorage.getItem('ai.showProviderDot') !== '0';
+    }
+
+    // Ctrl+Enter / Cmd+Enter to send message
+    document.getElementById('chat-input')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            document.getElementById('chat-form')?.dispatchEvent(new Event('submit', { bubbles: true }));
+        }
+    });
+
     // Close dropdown on click outside
     document.addEventListener('click', (e) => {
         const dropdown = document.getElementById('ai-tools-menu');
@@ -420,6 +573,20 @@ let chatHistory = [];
 
 // Agent Mode State
 let currentConversationId = null;
+
+// Persistence: save the active conversation id to localStorage so refreshing
+// the page restores the same chat instead of dropping the user back to an
+// empty start state. Empty / null clears the slot.
+const AI_CONVERSATION_STORAGE_KEY = 'ai.currentConversationId';
+function _persistConvId() {
+    try {
+        if (currentConversationId) {
+            localStorage.setItem(AI_CONVERSATION_STORAGE_KEY, String(currentConversationId));
+        } else {
+            localStorage.removeItem(AI_CONVERSATION_STORAGE_KEY);
+        }
+    } catch (_) { /* localStorage may be unavailable in private mode */ }
+}
 let agentModeEnabled = true;
 let autoConfirmEnabled = true;
 let pendingActions = [];
@@ -443,6 +610,50 @@ function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+function renderMarkdown(content) {
+    if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
+        return '<pre class="whitespace-pre-wrap text-sm font-sans">' + escapeHtml(content) + '</pre>';
+    }
+    try {
+        // Custom renderer: intercept mermaid code blocks
+        const renderer = new marked.Renderer();
+        renderer.code = function({ text, lang }) {
+            if ((lang || '').toLowerCase().trim() === 'mermaid') {
+                return `<div class="mermaid-block my-3 p-3 bg-white border border-gray-200 rounded-xl overflow-x-auto"><div class="mermaid">${escapeHtml(text)}</div></div>`;
+            }
+            // Default: let marked handle it
+            const escaped = escapeHtml(text);
+            const cls = lang ? ` class="language-${escapeHtml(lang)}"` : '';
+            return `<pre><code${cls}>${escaped}</code></pre>`;
+        };
+        marked.use({ renderer, breaks: true, gfm: true });
+        const html = marked.parse(content);
+        // Allow div + class/id so mermaid containers survive sanitization
+        return '<div class="ai-markdown">' + DOMPurify.sanitize(html, { ADD_TAGS: ['div'], ADD_ATTR: ['class', 'id'] }) + '</div>';
+    } catch (e) {
+        return '<pre class="whitespace-pre-wrap text-sm font-sans">' + escapeHtml(content) + '</pre>';
+    }
+}
+
+function renderMermaidInEl(el) {
+    if (typeof mermaid === 'undefined') return;
+    const nodes = el.querySelectorAll('.mermaid');
+    if (!nodes.length) return;
+    mermaid.run({ nodes }).catch(() => {});
+}
+
+function copyMsgText(btn) {
+    const text = btn.dataset.text;
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.innerHTML;
+        btn.textContent = '✓ Copied';
+        setTimeout(() => { btn.innerHTML = orig; }, 1500);
+    }).catch(() => {
+        showToast('Copy failed', 'error');
+    });
 }
 
 function getStoredKbFolderId() {
@@ -813,8 +1024,10 @@ async function saveChatToKnowledgeBase() {
 // AI Verification
 async function runAIVerification() {
     const providerSelection = document.getElementById('ai-provider').value;
-    const provider = providerSelection === 'smart' ? 'groq' : providerSelection;
-    const model = providerSelection === 'smart' ? (ALL_MODELS[provider]?.find?.(m => m.isDefault)?.modelId || ALL_MODELS[provider]?.[0]?.modelId || 'auto') : document.getElementById('ai-model').value;
+    const provider = providerSelection === 'smart' ? (getConfiguredProviders()[0] || 'groq') : providerSelection;
+    const model = providerSelection === 'smart'
+        ? (ALL_MODELS[provider]?.find?.(m => m.isDefault)?.modelId || ALL_MODELS[provider]?.[0]?.modelId || 'auto')
+        : document.getElementById('ai-model').value;
     
     // Animate icon
     const icon = document.getElementById('ai-status-icon');
@@ -991,6 +1204,7 @@ async function sendAgentMessage(message) {
             });
             if (startResponse.success && startResponse.data?.conversationId) {
                 currentConversationId = startResponse.data.conversationId;
+                _persistConvId();
                 eventCursor = 0;
             }
         } catch (error) {
@@ -1004,66 +1218,241 @@ async function sendAgentMessage(message) {
 
     startPolling();        // Start real-time updates
 
-    try {
-        const effectiveProvider = resolveProviderForMessage(message);
-        const effectiveModel = resolveModelForProvider(effectiveProvider);
-        const response = await api.post('api/ai-agent.php?action=chat', {
-            message: message,
-            conversationId: currentConversationId,
-            autoConfirm: autoConfirmEnabled,
-            provider: effectiveProvider,
-            model: effectiveModel,
-            kbFolderId: document.getElementById('ai-kb-folder')?.value || null,
-            csrf_token: CSRF_TOKEN
-        });
+    const isSmart = document.getElementById('ai-provider')?.value === 'smart';
+    const firstProvider = resolveProviderForMessage(message);
+    const providersToTry = isSmart
+        ? [firstProvider, ...getConfiguredProviders().filter(p => p !== firstProvider)]
+        : [firstProvider];
 
-        stopPolling();
-        hideTypingIndicator();
+    for (let i = 0; i < providersToTry.length; i++) {
+        const effectiveProvider = providersToTry[i];
+        const effectiveModel = resolveModelForProvider(effectiveProvider, isSmart);
 
-        if (response.success) {
-            currentConversationId = response.data.conversationId;
-            // Regular success - polling likely handled most updates, ensure final state.
-            await refreshConversation();
-            loadConversations(); // Update list sidebar
-        } else {
-            addChatMessage('assistant', 'Error: ' + (response.error || 'Failed to get response'));
+        if (i > 0) {
+            const providerLabel = effectiveProvider.charAt(0).toUpperCase() + effectiveProvider.slice(1);
+            showToast(`Retrying with ${providerLabel}...`, 'info');
         }
-    } catch (error) {
-        stopPolling();
-        hideTypingIndicator();
-        const errorMessage = error.response?.error?.message || error.message || 'Failed to connect to AI service';
-        addChatMessage('assistant', 'Error: ' + errorMessage);
+
+        try {
+            const response = await api.post('api/ai-agent.php?action=chat', {
+                message: message,
+                conversationId: currentConversationId,
+                autoConfirm: autoConfirmEnabled,
+                provider: effectiveProvider,
+                model: effectiveModel,
+                kbFolderId: document.getElementById('ai-kb-folder')?.value || null,
+                // Smart Auto pipeline signal — backend uses Groq to polish the
+                // final user-facing summary when smartMode=true and the answering
+                // provider was not Groq.
+                smartMode: document.getElementById('ai-provider')?.value === 'smart',
+                csrf_token: CSRF_TOKEN
+            });
+
+            stopPolling();
+            hideTypingIndicator();
+
+            if (response.success) {
+                currentConversationId = response.data.conversationId;
+                _persistConvId();
+                await refreshConversation();
+                loadConversations();
+                return;
+            } else {
+                if (isSmart && i < providersToTry.length - 1) {
+                    const label = effectiveProvider.charAt(0).toUpperCase() + effectiveProvider.slice(1);
+                    showToast(`${label} unavailable, trying next...`, 'warning');
+                    continue;
+                }
+                addChatMessage('assistant', 'Error: ' + (response.error || 'Failed to get response'));
+                return;
+            }
+        } catch (error) {
+            stopPolling();
+            hideTypingIndicator();
+            if (isSmart && i < providersToTry.length - 1) {
+                const label = effectiveProvider.charAt(0).toUpperCase() + effectiveProvider.slice(1);
+                showToast(`${label} failed, trying next...`, 'warning');
+                // Re-show typing for retry
+                showTypingIndicator();
+                startPolling();
+                continue;
+            }
+            const errorMessage = error.response?.error?.message || error.message || 'Failed to connect to AI service';
+            addChatMessage('assistant', 'Error: ' + errorMessage);
+            return;
+        }
     }
+}
+
+// Estimate chars across a chat-history array. ~chars/4 ≈ tokens.
+function estimateHistoryChars(history) {
+    if (!Array.isArray(history)) return 0;
+    let n = 0;
+    for (const m of history) n += String(m?.content || '').length;
+    return n;
+}
+
+// Hard cap on what we send to a chat-only provider (Groq). Groq's free-tier
+// TPM is as low as 8000 tokens for some models (gpt-oss-120b), so we keep the
+// outbound payload well under that. Drop oldest non-user turns first; always
+// preserve at least the trailing user message.
+function trimHistoryForChatOnly(history, maxChars) {
+    if (!Array.isArray(history) || history.length === 0) return [];
+    const out = [...history];
+    let total = estimateHistoryChars(out);
+    while (out.length > 1 && total > maxChars) {
+        const removed = out.shift();
+        total -= String(removed?.content || '').length;
+    }
+    // If the single remaining message is itself oversized, truncate its content.
+    if (out.length === 1 && total > maxChars) {
+        const last = out[0];
+        const head = String(last?.content || '').slice(0, Math.max(0, maxChars - 200));
+        out[0] = { ...last, content: head + '\n\n[truncated to fit chat-only model context]' };
+    }
+    return out;
+}
+
+// Heuristic — does the message imply a tool action (create/update/etc.)?
+// Mirrored from AIAgent::looksLikeActionRequest so the frontend can route
+// action-ish prompts away from Groq before round-tripping.
+function looksLikeAction(message) {
+    const t = String(message || '').toLowerCase();
+    if (!t) return false;
+    return /\b(create|add|make|new|build|update|edit|change|modify|rename|delete|remove|archive|cancel|complete|mark done|finish|close|send|email|invoice|bill|schedule|book|plan|log|record|track|export|import)\b/.test(t)
+        || /start timer|stop timer|pomodoro/.test(t);
 }
 
 // Send message using regular Chat API
 async function sendChatMessage(message) {
     showTypingIndicator();
 
-    try {
-        const effectiveProvider = resolveProviderForMessage(message);
-        const effectiveModel = resolveModelForProvider(effectiveProvider);
-        const response = await api.post('api/ai.php?action=chat', {
-            messages: chatHistory,
-            provider: effectiveProvider,
-            model: effectiveModel,
-            kbFolderId: document.getElementById('ai-kb-folder')?.value || '',
-            csrf_token: CSRF_TOKEN
-        });
+    const userPicked = document.getElementById('ai-provider')?.value || 'groq';
+    const isSmart = userPicked === 'smart';
+    const configured = getConfiguredProviders();
 
-        hideTypingIndicator();
-
-        if (response.success && response.data?.response) {
-            chatHistory.push({ role: 'assistant', content: response.data.response });
-            addChatMessage('assistant', response.data.response);
-        } else {
-            addChatMessage('assistant', 'Error: ' + (response.error || 'Failed to get response'));
-        }
-    } catch (error) {
-        hideTypingIndicator();
-        const errorMessage = error.response?.error?.message || error.message || 'Failed to connect to AI service';
-        addChatMessage('assistant', 'Error: ' + errorMessage);
+    // Provider policy:
+    // - Smart Auto = explicit opt-in to fallback. We try resolved-first, then
+    //   the rest of the configured providers if it fails.
+    // - Any explicit provider (groq, openrouter, gemini, ollama) = sticky.
+    //   No silent fallback. If the user picked Groq, only Groq is called and
+    //   only Groq is billed. If it fails, the user sees the error and decides.
+    //   This avoids surprise charges on a different provider's API.
+    let providersToTry;
+    if (isSmart) {
+        const firstProvider = resolveProviderForMessage(message);
+        providersToTry = [firstProvider, ...configured.filter(p => p !== firstProvider)];
+    } else {
+        providersToTry = [userPicked];
     }
+
+    for (let i = 0; i < providersToTry.length; i++) {
+        const effectiveProvider = providersToTry[i];
+        const effectiveModel = resolveModelForProvider(effectiveProvider, isSmart);
+
+        // Surface provider + model in the typing indicator so the user sees what
+        // is actually being called while the request is in flight (otherwise they
+        // see only animated dots until the response lands).
+        const detailEl = document.querySelector('#typing-indicator .typing-details');
+        if (detailEl) {
+            const label = effectiveProvider.charAt(0).toUpperCase() + effectiveProvider.slice(1);
+            detailEl.textContent = `${label} · ${effectiveModel || 'auto'} · thinking…`;
+        }
+
+        if (i > 0) {
+            const providerLabel = effectiveProvider.charAt(0).toUpperCase() + effectiveProvider.slice(1);
+            showToast(`Retrying with ${providerLabel}...`, 'info');
+        }
+
+        // For chat-only providers, trim outbound history. Removed the previous
+        // pre-flight refusal — it was firing on tiny prompts because chatHistory
+        // accumulates prior assistant responses and even "hi" looked oversized
+        // after one big turn. Trust backend TPM detection + auto-fallback below.
+        const isChatOnly = isChatOnlyProvider(effectiveProvider);
+        const outboundMessages = isChatOnly
+            ? trimHistoryForChatOnly(chatHistory, 24000)
+            : chatHistory;
+        const hasNextProvider = i < providersToTry.length - 1;
+
+        try {
+            const response = await api.post('api/ai.php?action=chat', {
+                messages: outboundMessages,
+                provider: effectiveProvider,
+                model: effectiveModel,
+                // KB context is heavy → never send to chat-only providers. The
+                // outer providersToTry already routed KB requests through a
+                // non-chat-only provider when KB was selected.
+                kbFolderId: isChatOnly ? '' : (document.getElementById('ai-kb-folder')?.value || ''),
+                csrf_token: CSRF_TOKEN
+            });
+
+            hideTypingIndicator();
+
+            // Smart Auto: structured switch hint = try next provider in chain.
+            // Explicit pick: structured switch hint = show banner so user can
+            // manually switch. We do NOT silently route to another billable API
+            // when the user explicitly picked one provider.
+            if (response && response.data && response.data.switchProviderRecommended) {
+                if (isSmart && hasNextProvider) {
+                    const nextProv = providersToTry[i + 1];
+                    showToast(`${effectiveProvider} busy — trying ${nextProv}`, 'info');
+                    showTypingIndicator();
+                    continue;
+                }
+                showSwitchProviderBanner({
+                    reason: response.data.reason || 'context_overflow',
+                    suggestedProviders: response.data.suggestedProviders || []
+                });
+                addChatMessage('assistant', response.data.message || 'Provider hit a limit. Pick a different provider above to continue.');
+                return;
+            }
+
+            if (response.success && response.data?.response) {
+                chatHistory.push({ role: 'assistant', content: response.data.response });
+                addChatMessage('assistant', response.data.response, [], [], {
+                    provider: response.data.provider || effectiveProvider,
+                    model: response.data.model || effectiveModel
+                });
+                return;
+            } else {
+                if (isSmart && hasNextProvider) {
+                    const label = effectiveProvider.charAt(0).toUpperCase() + effectiveProvider.slice(1);
+                    showToast(`${label} unavailable, trying next...`, 'warning');
+                    showTypingIndicator();
+                    continue;
+                }
+                addChatMessage('assistant', 'Error: ' + (response.error || 'Failed to get response'));
+                return;
+            }
+        } catch (error) {
+            const errMsg = error.response?.error?.message || error.message || 'Failed to connect to AI service';
+            const isTpmError = isChatOnly && /request too large|tokens per minute|\bTPM\b/i.test(errMsg);
+            if (isTpmError) {
+                // Show banner so user can switch manually. No silent fallback —
+                // prevents surprise charges on a non-picked provider.
+                hideTypingIndicator();
+                showSwitchProviderBanner({
+                    reason: 'context_overflow',
+                    suggestedProviders: getConfiguredProviders().filter(p => p !== 'groq' && p !== 'ollama')
+                });
+                addChatMessage('assistant', 'Groq hit its per-minute token limit. Wait ~60s for the window to clear, or pick OpenRouter / Gemini above.');
+                return;
+            }
+            // Smart Auto cycles through providers on generic errors. Explicit
+            // picks do NOT — they show the error so the user knows their choice
+            // failed and can decide what to do.
+            if (isSmart && hasNextProvider) {
+                const label = effectiveProvider.charAt(0).toUpperCase() + effectiveProvider.slice(1);
+                showToast(`${label} failed, trying next...`, 'warning');
+                showTypingIndicator();
+                continue;
+            }
+            hideTypingIndicator();
+            addChatMessage('assistant', 'Error: ' + errMsg);
+            return;
+        }
+    }
+    hideTypingIndicator();
 }
 
 // Show agent confirmation modal
@@ -1136,7 +1525,7 @@ async function confirmAction(actionId, approved) {
     }
 }
 
-function addChatMessage(role, content, functionCalls = [], toolResults = []) {
+function addChatMessage(role, content, functionCalls = [], toolResults = [], meta = null) {
     const container = document.getElementById('chat-messages');
     const isUser = role === 'user';
 
@@ -1163,7 +1552,31 @@ function addChatMessage(role, content, functionCalls = [], toolResults = []) {
 
     // Main content
     if (content) {
-        html += `<pre class="whitespace-pre-wrap text-sm font-sans">${escapeHtml(content)}</pre>`;
+        if (isUser) {
+            html += `<pre class="whitespace-pre-wrap text-sm font-sans">${escapeHtml(content)}</pre>`;
+        } else {
+            html += renderMarkdown(content);
+            // Provider/model indicator. By default a small colored dot per
+            // provider — minimal visual noise but lets the user spot which AI
+            // answered. Hover/title shows full "Provider · model". User can
+            // disable via Actions menu → "Show model dot" toggle (preference
+            // persists in localStorage).
+            if (meta && (meta.provider || meta.model)) {
+                const showDot = localStorage.getItem('ai.showProviderDot') !== '0';
+                if (showDot) {
+                    const provLabel = meta.provider ? meta.provider.charAt(0).toUpperCase() + meta.provider.slice(1) : 'AI';
+                    const fullLabel = provLabel + (meta.model ? ' · ' + meta.model : '');
+                    const dotColor = (window.PROVIDER_DOT_COLORS && window.PROVIDER_DOT_COLORS[String(meta.provider || '').toLowerCase()]) || '#6b7280';
+                    html += `<span class="provider-dot inline-block w-2 h-2 rounded-full ml-2 align-middle" style="background:${dotColor};" title="${escapeHtml(fullLabel)}" data-provider="${escapeHtml(String(meta.provider || ''))}" data-model="${escapeHtml(String(meta.model || ''))}"></span>`;
+                }
+            }
+            html += `<button onclick="copyMsgText(this)" data-text="${escapeHtml(content)}"
+                class="mt-1 ml-2 text-xs text-gray-400 hover:text-gray-600 inline-flex items-center gap-1 transition-colors">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>Copy</button>`;
+        }
     }
 
     // Show tool results
@@ -1183,6 +1596,7 @@ function addChatMessage(role, content, functionCalls = [], toolResults = []) {
     html += '</div>';
     div.innerHTML = html;
     container.appendChild(div);
+    renderMermaidInEl(div);
     container.scrollTop = container.scrollHeight;
 }
 
@@ -1211,6 +1625,7 @@ async function clearConversationHistory() {
             `;
             chatHistory = [];
             currentConversationId = null;
+            _persistConvId();
             eventCursor = 0;
             timelineEvents = [];
 
@@ -1273,12 +1688,66 @@ function applyConversationEvent(event) {
     if (type === 'run_cancelled') line = 'Run cancelled.';
     if (type === 'run_error') line = `Error: ${data.error || 'Run failed'}`;
     if (type === 'summary_ready') line = 'Final summary ready.';
+    if (type === 'switch_provider_recommended') {
+        showSwitchProviderBanner(data);
+        line = data.reason === 'context_overflow'
+            ? 'Conversation hit chat-only context limit — see suggestion above.'
+            : 'Conversation getting long for chat-only model — see suggestion above.';
+    }
 
     if (line) {
         timelineEvents.push(line);
         updateLiveStatus(line);
         renderTimeline();
     }
+}
+
+// Render the sticky switch-provider banner above the input. Buttons render only
+// for providers the backend reports as configured (suggestedProviders payload).
+function showSwitchProviderBanner(data) {
+    const banner = document.getElementById('switch-provider-banner');
+    const text = document.getElementById('switch-provider-banner-text');
+    const actions = document.getElementById('switch-provider-banner-actions');
+    if (!banner || !text || !actions) return;
+
+    const reason = data?.reason || 'context_near_limit';
+    const headline = reason === 'context_overflow'
+        ? 'This chat hit Groq\'s context limit.'
+        : 'This conversation is getting long for Groq\'s chat window.';
+    text.textContent = `${headline} Switch to OpenRouter or Google Gemini for longer context and tool actions.`;
+
+    const suggested = Array.isArray(data?.suggestedProviders) && data.suggestedProviders.length
+        ? data.suggestedProviders
+        : ['openrouter', 'gemini'];
+    const labelMap = { openrouter: 'Switch to OpenRouter', gemini: 'Switch to Gemini' };
+
+    actions.innerHTML = '';
+    suggested.forEach((p) => {
+        const label = labelMap[p];
+        if (!label) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700 transition';
+        btn.textContent = label;
+        btn.onclick = () => {
+            const sel = document.getElementById('ai-provider');
+            if (sel) {
+                sel.value = p;
+                updateModelList();
+                applyProviderConstraints();
+                if (typeof updateConversationState === 'function') updateConversationState();
+            }
+            dismissSwitchProviderBanner();
+            document.getElementById('chat-input')?.focus();
+        };
+        actions.appendChild(btn);
+    });
+
+    banner.classList.remove('hidden');
+}
+
+function dismissSwitchProviderBanner() {
+    document.getElementById('switch-provider-banner')?.classList.add('hidden');
 }
 
 async function pollConversationEvents() {
@@ -1512,6 +1981,7 @@ async function loadConversation(conversationId) {
         const response = await api.get(`api/ai-agent.php?action=get_conversation&id=${conversationId}`);
         if (response.success && response.data?.conversation) {
             currentConversationId = conversationId;
+            _persistConvId();
             const conv = response.data.conversation;
             
             // Set message count for polling baseline
@@ -1527,6 +1997,11 @@ async function loadConversation(conversationId) {
                 if (msg.role === 'user') {
                     addChatMessage('user', msg.content);
                 } else if (msg.role === 'assistant') {
+                    // Skip tool-status messages saved by older builds. Tool
+                    // progress is now surfaced through events, not the chat
+                    // transcript, but old conversations still carry them.
+                    const c = String(msg.content || '');
+                    if (/^\s*Executing tool:\s/i.test(c)) return;
                     addChatMessage('assistant', msg.content, msg.functionCalls || [], msg.toolResults || []);
                 }
             });
@@ -1554,6 +2029,7 @@ function startNewConversation() {
     stopPolling();
     hideTypingIndicator();
     currentConversationId = null;
+    _persistConvId();
     chatHistory = [];
     lastMessageCount = 0; // Reset for polling
     eventCursor = 0;
@@ -1625,11 +2101,12 @@ function startPolling() {
         };
     }
 
-    // Poll every ~1.2s to keep timeline responsive.
+    // Poll every ~0.8s for snappier "thinking" updates while the agent works.
+    // Faster than this risks flooding the rate limiter on long runs.
     pollInterval = setInterval(async () => {
         await pollConversationEvents();
         await refreshConversation();
-    }, 1200);
+    }, 800);
 }
 
 // Stop polling for updates
@@ -1676,6 +2153,9 @@ async function refreshConversation() {
                     }
                      
                     if (msg.role === 'assistant') {
+                         const c = String(msg.content || '');
+                         // Skip tool-status messages from older builds.
+                         if (/^\s*Executing tool:\s/i.test(c)) return;
                          addChatMessage('assistant', msg.content, msg.functionCalls || [], msg.toolResults || []);
                     }
                 });
@@ -1690,12 +2170,20 @@ async function refreshConversation() {
 
 // Initial load of conversations
 window.addEventListener('DOMContentLoaded', () => {
-    // After initial setup, load conversations
-    setTimeout(() => {
+    // Restore the active conversation across page refresh — pull the last
+    // conversationId from localStorage and re-load its messages so the user
+    // doesn't lose context when reloading the tab.
+    setTimeout(async () => {
         if (agentModeEnabled) {
             loadConversations();
         }
         loadSuggestions();
+        try {
+            const saved = localStorage.getItem(AI_CONVERSATION_STORAGE_KEY);
+            if (saved && typeof loadConversation === 'function') {
+                await loadConversation(saved);
+            }
+        } catch (_) { /* ignore */ }
     }, 1000);
 });
 

@@ -59,6 +59,7 @@ foreach ($projects as $project) {
     if (isset($project['tasks']) && is_array($project['tasks'])) {
         foreach ($project['tasks'] as $task) {
             $task['status'] = normalizeTaskStatus($task['status'] ?? 'todo');
+            $task['projectId'] = $project['id'];
             $allTasks[] = $task;
         }
     }
@@ -219,7 +220,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
             <div class="flex justify-between items-start mb-2">
                 <span class="text-[10px] font-bold uppercase tracking-widest text-gray-400">Pending Tasks</span>
                 <!-- Heroicon: Check Circle -->
-                <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-black dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
             </div>
@@ -232,7 +233,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
             <div class="flex justify-between items-start mb-2">
                 <span class="text-[10px] font-bold uppercase tracking-widest text-gray-400">Active Projects</span>
                 <!-- Heroicon: Folder -->
-                <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-black dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 016 3.75h3.879a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18A2.25 2.25 0 0120.25 9v.776"/>
                 </svg>
             </div>
@@ -245,7 +246,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
             <div class="flex justify-between items-start mb-2">
                 <span class="text-[10px] font-bold uppercase tracking-widest text-gray-400">Habits Today</span>
                 <!-- Heroicon: Fire (approximated with sun) -->
-                <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-black dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.252 8.252 0 016.038 7.047 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z"/>
                 </svg>
             </div>
@@ -260,7 +261,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
             <div class="flex justify-between items-start mb-2">
                 <span class="text-[10px] font-bold uppercase tracking-widest text-gray-400">Tasks This Week</span>
                 <!-- Heroicon: Calendar -->
-                <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-black dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V7.5m-18 0V7.5"/>
                 </svg>
             </div>
@@ -442,21 +443,38 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                                 'low' => 'bg-green-500 text-white',
                             ];
                             $priorityClass = $priorityColors[$priority] ?? 'bg-yellow-500 text-black';
+                            $taskId = $task['id'] ?? '';
+                            $projectId = $task['projectId'] ?? '';
                         ?>
                         <tr class="group">
                             <td class="py-4">
                                 <div class="flex items-center gap-3">
-                                    <!-- Heroicon: Circle (unchecked) -->
-                                    <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                    </svg>
-                                    <span class="text-sm font-medium"><?= htmlspecialchars($task['title']) ?></span>
+                                    <!-- Checkbox to mark done -->
+                                    <button type="button" onclick="event.stopPropagation(); dashboardMarkTaskDone('<?= htmlspecialchars($taskId) ?>', '<?= htmlspecialchars($projectId) ?>', this)" class="touch-target flex-shrink-0" title="Mark as done">
+                                        <svg class="w-5 h-5 text-gray-300 hover:text-black dark:hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                    </button>
+                                    <!-- Clickable task title → view-task page -->
+                                    <a href="?page=view-task&id=<?= urlencode($taskId) ?>&projectId=<?= urlencode($projectId) ?>" class="text-sm font-medium hover:underline">
+                                        <?= htmlspecialchars($task['title']) ?>
+                                    </a>
                                 </div>
                             </td>
                             <td class="py-4 text-right">
-                                <span class="px-2 py-1 rounded <?= $priorityClass ?> text-[10px] font-bold uppercase tracking-tighter">
-                                    <?= htmlspecialchars(ucfirst($priority)) ?>
-                                </span>
+                                <div class="flex items-center justify-end gap-2">
+                                    <a href="?page=view-task&id=<?= urlencode($taskId) ?>&projectId=<?= urlencode($projectId) ?>&autostart=1"
+                                       onclick="event.stopPropagation()"
+                                       class="touch-target flex-shrink-0 text-gray-300 hover:text-black dark:hover:text-white transition-colors"
+                                       title="Start Timer">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z"/>
+                                        </svg>
+                                    </a>
+                                    <span class="px-2 py-1 rounded <?= $priorityClass ?> text-[10px] font-bold uppercase tracking-tighter">
+                                        <?= htmlspecialchars(ucfirst($priority)) ?>
+                                    </span>
+                                </div>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -646,6 +664,35 @@ Mobile.pomodoro = (function() {
         }
     };
 })();
+
+// Mark task as done from dashboard
+async function dashboardMarkTaskDone(taskId, projectId, btn) {
+    if (!taskId || !projectId) return;
+    btn.disabled = true;
+    try {
+        const response = await App.api.put('api/tasks.php?id=' + encodeURIComponent(taskId) + '&projectId=' + encodeURIComponent(projectId), {
+            status: 'done',
+            csrf_token: CSRF_TOKEN
+        });
+        if (response.success) {
+            // Replace circle icon with checkmark
+            const svg = btn.querySelector('svg');
+            if (svg) {
+                svg.classList.remove('text-gray-300');
+                svg.classList.add('text-black', 'dark:text-white');
+                svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>';
+            }
+            // Strike-through the title
+            const row = btn.closest('tr');
+            const title = row ? row.querySelector('a') : null;
+            if (title) title.classList.add('line-through', 'text-gray-400');
+            Mobile.ui.showToast('Task completed!', 'success');
+        }
+    } catch (error) {
+        Mobile.ui.showToast('Failed to update task', 'error');
+        btn.disabled = false;
+    }
+}
 </script>
 
 <!-- Initialize Mobile -->

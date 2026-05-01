@@ -160,19 +160,23 @@ async function generateHabitSuggestions() {
 
     const modelsResponse = await api.get('api/models.php');
     const models = modelsResponse.data || {};
-    const provider = 'groq';
-    const groqModels = models?.groq || [];
-    const defaultModel = groqModels.find(m => m.isDefault) || groqModels[0];
-    const model = defaultModel?.modelId;
-    if (!model) {
+    let defaultProvider = null, defaultModel = null;
+    for (const prov of ['groq', 'openrouter', 'gemini', 'ollama']) {
+        const provModels = models[prov] || [];
+        if (!provModels.length) continue;
+        const def = provModels.find(m => m.isDefault);
+        if (def) { defaultProvider = prov; defaultModel = def; break; }
+        if (!defaultModel) { defaultProvider = prov; defaultModel = provModels[0]; }
+    }
+    if (!defaultModel) {
         showToast('No AI model configured. Please set up a model in Model Settings.', 'error');
         return;
     }
 
     const response = await api.post('api/ai.php?action=suggest_habits', {
         goals: goals,
-        provider: provider,
-        model: model,
+        provider: defaultProvider,
+        model: defaultModel.modelId,
         csrf_token: CSRF_TOKEN
     });
 

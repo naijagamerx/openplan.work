@@ -39,19 +39,35 @@ class AIHelper {
      */
     private function callAI(string $provider, string $model, string $prompt): string {
         $config = $this->db->load('config');
-        
+
         try {
-            if ($provider === 'groq') {
-                $apiKey = $config['groqApiKey'] ?? '';
-                if (empty($apiKey)) throw new Exception('Groq API Key missing');
-                $ai = new GroqAPI($apiKey);
-                return $ai->complete($prompt, $model);
-            } else {
-                $apiKey = $config['openrouterApiKey'] ?? '';
-                if (empty($apiKey)) throw new Exception('OpenRouter API Key missing');
-                $ai = new OpenRouterAPI($apiKey);
-                return $ai->complete($prompt, $model);
+            switch ($provider) {
+                case 'groq':
+                    $apiKey = $config['groqApiKey'] ?? '';
+                    if (empty($apiKey)) throw new Exception('Groq API Key missing');
+                    $ai = new GroqAPI($apiKey);
+                    break;
+                case 'openrouter':
+                    $apiKey = $config['openrouterApiKey'] ?? '';
+                    if (empty($apiKey)) throw new Exception('OpenRouter API Key missing');
+                    $ai = new OpenRouterAPI($apiKey);
+                    break;
+                case 'gemini':
+                    $apiKey = $config['geminiApiKey'] ?? '';
+                    if (empty($apiKey)) throw new Exception('Gemini API Key missing');
+                    $ai = new GeminiAPI($apiKey);
+                    break;
+                case 'ollama':
+                    if (!canUseOllama()) {
+                        throw new Exception('Ollama not available in online mode');
+                    }
+                    $url = $config['ollamaUrl'] ?? 'http://localhost:11434';
+                    $ai = new OllamaAPI($url);
+                    break;
+                default:
+                    throw new Exception("Unknown provider: {$provider}");
             }
+            return $ai->complete($prompt, $model);
         } catch (Exception $e) {
             error_log("AI Call failed: " . $e->getMessage());
             throw $e;
@@ -59,39 +75,208 @@ class AIHelper {
     }
 
     /**
-     * Parse JSON response safely
+     * Call AI with provider fallback chain.
+     * Tries each provider in AI_CRON_PROVIDER_ORDER, stops at first success.
      */
-    private function parseJSON(string $response): array {
-        $firstBrace = strpos($response, '{');
-        $firstBracket = strpos($response, '[');
-        $jsonStr = $response;
+    public function callAIWithFallback(string $prompt, string $systemPrompt = ''): string {
+        $providerOrder = defined('AI_CRON_PROVIDER_ORDER') ? AI_CRON_PROVIDER_ORDER : ['groq', 'openrouter', 'gemini', 'ollama'];
+        $config = $this->db->load('config') ?? [];
+        $models = $this->db->load('models') ?? [];
+        $lastError = null;
 
-        if ($firstBrace !== false && ($firstBracket === false || $firstBrace < $firstBracket)) {
-            if (preg_match('/\{(?:[^{}]|(?R))*\}/x', $response, $matches)) {
-                $jsonStr = $matches[0];
+        foreach ($providerOrder as $provider) {
+            // Skip Ollama if not in local mode (shared hosting cannot reach local Ollama)
+            if ($provider === 'ollama' && !canUseOllama()) {
+                continue;
             }
-        } elseif ($firstBracket !== false) {
-            if (preg_match('/\[(?:[^[\]]|(?R))*\]/x', $response, $matches)) {
-                $jsonStr = $matches[0];
+            // Skip providers missing an API key (Ollama is keyless)
+            if ($provider !== 'ollama' && empty($config[$provider . 'ApiKey'] ?? '')) {
+                continue;
+            }
+            // Resolve default model for provider
+            $providerModels = $models[$provider] ?? [];
+            $model = '';
+            foreach ($providerModels as $m) {
+                if ($m['isDefault'] ?? false) { $model = $m['modelId']; break; }
+            }
+            if (!$model && !empty($providerModels)) {
+                $model = $providerModels[0]['modelId'] ?? '';
+            }
+            if (!$model) continue;
+
+            try {
+                $fullPrompt = $systemPrompt ? $systemPrompt . "\n\n" . $prompt : $prompt;
+                return $this->callAI($provider, $model, $fullPrompt);
+            } catch (Exception $e) {
+                $lastError = $e;
+                error_log("AI Cron: provider '{$provider}' failed: " . $e->getMessage());
             }
         }
-        
+
+        throw new Exception('All AI providers failed. Last error: ' . ($lastError ? $lastError->getMessage() : 'unknown'));
+    }
+
+    /**
+     * Generate a concise daily brief for a user.
+     * Loads overdue tasks, today's tasks, pending habits, invoice count, low-stock count.
+     */
+    public function generateDailyBrief(): string {
+        $today    = date('Y-m-d');
+        $todayTs  = strtotime($today);
+
+        // Tasks
+        $projects = $this->db->load('projects') ?? [];
+        $allTasks = [];
+        foreach ($projects as $project) {
+            foreach ($project['tasks'] ?? [] as $task) {
+                $task['projectName'] = $project['name'] ?? '';
+                $allTasks[] = $task;
+            }
+        }
+        $overdueTasks = array_filter($allTasks, function ($t) use ($todayTs) {
+            if (in_array($t['status'] ?? '', ['done', 'review'], true)) return false;
+            $due = strtotime($t['dueDate'] ?? '');
+            return $due && $due < $todayTs;
+        });
+        $todayTasks = array_filter($allTasks, function ($t) use ($today) {
+            if (($t['status'] ?? '') === 'done') return false;
+            return !empty($t['dueDate']) && substr($t['dueDate'], 0, 10) === $today;
+        });
+
+        // Habits
+        $habits      = $this->db->load('habits') ?? [];
+        $completions = $this->db->load('habit_completions') ?? [];
+        $todayDone   = array_filter($completions, fn($c) => ($c['date'] ?? '') === $today && ($c['status'] ?? '') === 'complete');
+        $doneIds     = array_column(array_values($todayDone), 'habitId');
+        $pendingHabits = array_filter($habits, fn($h) => !in_array($h['id'] ?? '', $doneIds));
+
+        // Invoices
+        $invoices       = $this->db->load('invoices') ?? [];
+        $pendingInvoices = array_filter($invoices, fn($i) => in_array($i['status'] ?? '', ['sent', 'overdue']));
+
+        // Inventory
+        $inventory = $this->db->load('inventory') ?? [];
+        $lowStock  = array_filter($inventory, fn($item) => ($item['quantity'] ?? 0) < ($item['minQuantity'] ?? 5));
+
+        // Condense to avoid large prompts
+        $overdueList = implode(', ', array_map(fn($t) => $t['title'] ?? 'untitled', array_slice(array_values($overdueTasks), 0, 5)));
+        $todayList   = implode(', ', array_map(fn($t) => $t['title'] ?? 'untitled', array_slice(array_values($todayTasks),   0, 5)));
+        $habitList   = implode(', ', array_map(fn($h) => $h['name']  ?? 'habit',    array_slice(array_values($pendingHabits), 0, 5)));
+
+        $systemPrompt = 'You are a focused productivity assistant. Be concise, warm, and actionable. Use bullet points. Maximum 150 words.';
+        $prompt = "Today is {$today}. Generate a daily brief for this user:\n"
+            . '- Overdue tasks (' . count($overdueTasks) . '): ' . ($overdueList ?: 'none') . "\n"
+            . '- Due today (' . count($todayTasks) . '): ' . ($todayList ?: 'none') . "\n"
+            . '- Habits not yet done (' . count($pendingHabits) . '): ' . ($habitList ?: 'none') . "\n"
+            . '- Pending invoices: ' . count($pendingInvoices) . "\n"
+            . '- Low-stock inventory items: ' . count($lowStock) . "\n\n"
+            . 'Summarise what to focus on, flag urgent items, and give one clear actionable suggestion.';
+
+        return $this->callAIWithFallback($prompt, $systemPrompt);
+    }
+
+    /**
+     * Parse JSON response safely.
+     *
+     * Uses a bounded bracket-counting scanner instead of recursive regex to avoid
+     * catastrophic backtracking (ReDoS) on adversarial AI output.
+     */
+    private function parseJSON(string $response): array {
+        $jsonStr = $this->extractFirstJsonBlock($response);
+
         $data = json_decode($jsonStr, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            // If first attempt failed, try the other one if available
-            if ($jsonStr !== $response) {
-                return $this->parseJSON($response === $jsonStr ? "" : str_replace($jsonStr, "", $response)); // Very basic fallback
-            }
             throw new Exception('Failed to parse AI JSON response: ' . json_last_error_msg());
         }
         return $data;
     }
 
     /**
+     * Extract the first balanced JSON object or array from a string.
+     * Skips over string contents (so braces inside strings don't unbalance the count).
+     * Returns the original input if no balanced block is found.
+     */
+    private function extractFirstJsonBlock(string $response): string {
+        $len = strlen($response);
+        $start = -1;
+        $open = '';
+        $close = '';
+
+        for ($i = 0; $i < $len; $i++) {
+            $c = $response[$i];
+            if ($c === '{') { $start = $i; $open = '{'; $close = '}'; break; }
+            if ($c === '[') { $start = $i; $open = '['; $close = ']'; break; }
+        }
+
+        if ($start === -1) {
+            return $response;
+        }
+
+        $depth = 0;
+        $inString = false;
+        $escape = false;
+
+        for ($i = $start; $i < $len; $i++) {
+            $c = $response[$i];
+
+            if ($inString) {
+                if ($escape) { $escape = false; continue; }
+                if ($c === '\\') { $escape = true; continue; }
+                if ($c === '"')  { $inString = false; }
+                continue;
+            }
+
+            if ($c === '"') { $inString = true; continue; }
+            if ($c === $open)  { $depth++; continue; }
+            if ($c === $close) {
+                $depth--;
+                if ($depth === 0) {
+                    return substr($response, $start, $i - $start + 1);
+                }
+            }
+        }
+
+        return $response;
+    }
+
+    /**
+     * Sanitize user-supplied text before interpolating it into a prompt template.
+     * Defends against prompt injection by:
+     *   - Capping length so adversarial input can't dwarf the system prompt
+     *   - Stripping ASCII control chars (except \t, \n, \r) to remove stealth payloads
+     *   - Replacing curly braces in user input so it can't smuggle new {placeholders}
+     *     into the template the way str_replace expands them
+     *   - Collapsing 3+ consecutive newlines (used by injection tricks like
+     *     "\n\n\nSYSTEM: ignore previous instructions")
+     */
+    public static function sanitizeUserInputForPrompt(?string $input, int $maxLen = 2000): string {
+        $s = (string)($input ?? '');
+        if ($s === '') {
+            return '';
+        }
+        // Strip ASCII control characters except common whitespace
+        $s = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $s) ?? '';
+        // Neutralize curly braces in user input so they can't masquerade as template tokens
+        $s = strtr($s, ['{' => '(', '}' => ')']);
+        // Collapse runs of blank lines that prompt-injection often abuses
+        $s = preg_replace("/(\r?\n){3,}/", "\n\n", $s) ?? $s;
+        // Length cap (mb-aware): cap by *characters*, not bytes, so multibyte input
+        // isn't truncated mid-character. Fall back to bytewise only if mbstring missing.
+        if (function_exists('mb_strlen')) {
+            if (mb_strlen($s, 'UTF-8') > $maxLen) {
+                $s = mb_substr($s, 0, $maxLen, 'UTF-8') . '… [truncated]';
+            }
+        } elseif (strlen($s) > $maxLen) {
+            $s = substr($s, 0, $maxLen) . '… [truncated]';
+        }
+        return $s;
+    }
+
+    /**
      * Generate Project from Idea
      */
     public function generateProject(string $idea, string $provider, string $model): array {
-        $prompt = str_replace('{idea}', $idea, $this->prompts['project_from_idea']);
+        $prompt = str_replace('{idea}', self::sanitizeUserInputForPrompt($idea, 4000), $this->prompts['project_from_idea']);
         $response = $this->callAI($provider, $model, $prompt);
         return $this->parseJSON($response);
     }
@@ -102,7 +287,11 @@ class AIHelper {
     public function generateTasks(array $projectData, string $provider, string $model): array {
         $prompt = str_replace(
             ['{name}', '{description}', '{timeline}'],
-            [$projectData['name'], $projectData['description'], $projectData['timeline_weeks'] ?? 'unknown'],
+            [
+                self::sanitizeUserInputForPrompt($projectData['name'] ?? '', 200),
+                self::sanitizeUserInputForPrompt($projectData['description'] ?? '', 4000),
+                self::sanitizeUserInputForPrompt((string)($projectData['timeline_weeks'] ?? 'unknown'), 50),
+            ],
             $this->prompts['tasks_from_project']
         );
         $response = $this->callAI($provider, $model, $prompt);
@@ -115,7 +304,10 @@ class AIHelper {
     public function generateSubtasks(string $title, string $description, string $provider, string $model): array {
         $prompt = str_replace(
             ['{title}', '{description}'],
-            [$title, $description],
+            [
+                self::sanitizeUserInputForPrompt($title, 200),
+                self::sanitizeUserInputForPrompt($description, 4000),
+            ],
             $this->prompts['subtasks']
         );
         $response = $this->callAI($provider, $model, $prompt);
@@ -126,10 +318,16 @@ class AIHelper {
      * Generate Invoice Items
      */
     public function generateInvoiceItems(string $projectName, array $tasks, string $provider, string $model): array {
-        $taskTitles = array_column($tasks, 'title');
+        $taskTitles = array_map(
+            fn($t) => self::sanitizeUserInputForPrompt((string)$t, 200),
+            array_column($tasks, 'title')
+        );
         $prompt = str_replace(
             ['{project_name}', '{tasks}'],
-            [$projectName, implode(', ', $taskTitles)],
+            [
+                self::sanitizeUserInputForPrompt($projectName, 200),
+                implode(', ', $taskTitles),
+            ],
             $this->prompts['invoice_items']
         );
         $response = $this->callAI($provider, $model, $prompt);
@@ -142,7 +340,10 @@ class AIHelper {
     public function generateBrief(string $name, string $company, string $provider, string $model): string {
         $prompt = str_replace(
             ['{name}', '{company}'],
-            [$name, $company],
+            [
+                self::sanitizeUserInputForPrompt($name, 200),
+                self::sanitizeUserInputForPrompt($company, 200),
+            ],
             $this->prompts['client_brief']
         );
         return $this->callAI($provider, $model, $prompt);
@@ -154,7 +355,7 @@ class AIHelper {
     public function suggestHabits(string $goals, string $provider, string $model): array {
         $prompt = str_replace(
             '{goals}',
-            $goals,
+            self::sanitizeUserInputForPrompt($goals, 4000),
             $this->prompts['suggest_habits']
         );
         $response = $this->callAI($provider, $model, $prompt);

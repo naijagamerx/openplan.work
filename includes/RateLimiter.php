@@ -8,7 +8,7 @@
 
 class RateLimiter {
     private string $storagePath;
-    private Database $db;
+    private ?Database $db;
 
     // Rate limiting constants (can be overridden in config.php)
     private const DEFAULT_MAX_ATTEMPTS = 5;
@@ -16,7 +16,7 @@ class RateLimiter {
     private const DEFAULT_API_LIMIT = 100;
     private const DEFAULT_API_WINDOW = 3600; // 1 hour
 
-    public function __construct(Database $db) {
+    public function __construct(?Database $db = null) {
         $this->db = $db;
         $this->storagePath = DATA_PATH . '/rate_limits.json';
     }

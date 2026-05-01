@@ -3,6 +3,60 @@
  * Uses Module Pattern for encapsulation
  */
 
+// ============================================
+// Notification icon helpers (global, used by App.notifications.send and any
+// page-level notification helpers e.g. dashboard reminders, pomodoro alerts,
+// task timer alerts). Each notification type gets a default color + glyph;
+// callers can pass `color` to override (e.g. a task's user-picked color).
+// ============================================
+window.NOTIFICATION_TYPE_COLORS = {
+    task:     '#2563eb', // blue
+    habit:    '#16a34a', // green
+    pomodoro: '#dc2626', // red
+    water:    '#0ea5e9', // sky
+    reminder: '#f59e0b', // amber
+    ai:       '#7c3aed', // violet
+    general:  '#374151'  // gray
+};
+window.NOTIFICATION_TYPE_GLYPHS = {
+    task:     '✓',  // ✓
+    habit:    '↻',  // ↻
+    pomodoro: '⏱',  // ⏱
+    water:    '☀',  // ☀ (broad fallback for emoji rendering)
+    reminder: '⏰',  // ⏰
+    ai:       '✨',  // ✨
+    general:  '•'   // •
+};
+
+window.buildNotificationIcon = function(type, color) {
+    try {
+        const t = String(type || 'general').toLowerCase();
+        const bg = (color && /^#?[0-9a-fA-F]{3,8}$/.test(color))
+            ? (color.startsWith('#') ? color : '#' + color)
+            : (window.NOTIFICATION_TYPE_COLORS[t] || window.NOTIFICATION_TYPE_COLORS.general);
+        const glyph = window.NOTIFICATION_TYPE_GLYPHS[t] || window.NOTIFICATION_TYPE_GLYPHS.general;
+        const SIZE = 128;
+        const canvas = document.createElement('canvas');
+        canvas.width = SIZE;
+        canvas.height = SIZE;
+        const ctx = canvas.getContext('2d');
+        // Filled circle in the chosen color
+        ctx.fillStyle = bg;
+        ctx.beginPath();
+        ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 4, 0, Math.PI * 2);
+        ctx.fill();
+        // White glyph centred
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 76px system-ui, -apple-system, "Segoe UI Emoji", Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(glyph, SIZE / 2, SIZE / 2 + 4);
+        return canvas.toDataURL('image/png');
+    } catch (_) {
+        return ''; // Fall back gracefully — the OS will use its own default icon.
+    }
+};
+
 const App = (function() {
     'use strict';
     const DEBUG_MODE = false;
@@ -640,12 +694,13 @@ const App = (function() {
 
         /**
          * Habit Reminder System
+         *
+         * Fires browser notifications at each habit's configured reminderTime (HH:MM).
+         * Uses a ±1 minute window so the 60-second polling loop catches each reminder
+         * exactly once. Sent state is persisted per habit per day in localStorage.
          */
         habits: {
-            RANDOM_REMINDER_STORAGE_KEY: 'lazyman_habit_random_reminders_v1',
-            RANDOM_REMINDER_COUNT: 2,
-            RANDOM_WINDOW_START_MINUTE: 9 * 60,
-            RANDOM_WINDOW_END_MINUTE: 21 * 60,
+            SENT_KEY: 'lazyman_habit_reminders_sent_v2',
             getTodayDateKey() {
                 return new Date().toISOString().slice(0, 10);
             },
@@ -653,49 +708,30 @@ const App = (function() {
                 const now = new Date();
                 return (now.getHours() * 60) + now.getMinutes();
             },
-            loadRandomReminderState() {
+            /** Convert "HH:MM" string to minutes since midnight */
+            reminderTimeToMinutes(timeStr) {
+                if (!timeStr || typeof timeStr !== 'string') return null;
+                const parts = timeStr.split(':');
+                if (parts.length < 2) return null;
+                const h = parseInt(parts[0], 10);
+                const m = parseInt(parts[1], 10);
+                if (isNaN(h) || isNaN(m)) return null;
+                return h * 60 + m;
+            },
+            loadSentState() {
                 try {
-                    const raw = localStorage.getItem(this.RANDOM_REMINDER_STORAGE_KEY);
-                    if (!raw) {
-                        return null;
-                    }
-                    const parsed = JSON.parse(raw);
-                    if (!parsed || typeof parsed !== 'object') {
-                        return null;
-                    }
-                    return parsed;
-                } catch (error) {
-                    return null;
+                    const raw = localStorage.getItem(this.SENT_KEY);
+                    return raw ? JSON.parse(raw) : {};
+                } catch (e) {
+                    return {};
                 }
             },
-            saveRandomReminderState(state) {
+            saveSentState(state) {
                 try {
-                    localStorage.setItem(this.RANDOM_REMINDER_STORAGE_KEY, JSON.stringify(state));
-                } catch (error) {
+                    localStorage.setItem(this.SENT_KEY, JSON.stringify(state));
+                } catch (e) {
                     // Ignore storage errors so reminders continue to work.
                 }
-            },
-            generateRandomReminderSlots() {
-                const slots = new Set();
-                const range = Math.max(1, this.RANDOM_WINDOW_END_MINUTE - this.RANDOM_WINDOW_START_MINUTE);
-                while (slots.size < this.RANDOM_REMINDER_COUNT) {
-                    const next = this.RANDOM_WINDOW_START_MINUTE + Math.floor(Math.random() * range);
-                    slots.add(next);
-                }
-                return Array.from(slots).sort((a, b) => a - b);
-            },
-            ensureRandomReminderState(todayKey) {
-                const state = this.loadRandomReminderState();
-                if (state && state.date === todayKey && Array.isArray(state.slots) && state.slots.length) {
-                    return state;
-                }
-                const freshState = {
-                    date: todayKey,
-                    slots: this.generateRandomReminderSlots(),
-                    sent: {}
-                };
-                this.saveRandomReminderState(freshState);
-                return freshState;
             },
             async checkReminders() {
                 try {
@@ -709,40 +745,52 @@ const App = (function() {
 
                     const response = await App.api.get('api/habits.php');
                     const habits = Array.isArray(response.data) ? response.data : [];
-                    const activeDailyHabits = habits.filter((habit) => {
-                        const isDaily = String(habit.frequency || '').toLowerCase() === 'daily';
+
+                    // Only habits that are active, not completed today, and have a reminderTime set
+                    const habitsWithReminders = habits.filter((habit) => {
                         const isActive = habit.isActive !== false;
-                        return isDaily && isActive && !habit.todayCompleted;
+                        const notDone = !habit.todayCompleted;
+                        const hasTime = habit.reminderTime && typeof habit.reminderTime === 'string' && habit.reminderTime.trim() !== '';
+                        return isActive && notDone && hasTime;
                     });
 
-                    if (!activeDailyHabits.length) {
+                    if (!habitsWithReminders.length) {
                         return;
                     }
 
                     const todayKey = this.getTodayDateKey();
                     const minuteOfDay = this.getCurrentMinuteOfDay();
-                    const state = this.ensureRandomReminderState(todayKey);
+                    const sentState = this.loadSentState();
+                    let stateChanged = false;
 
-                    for (const slot of state.slots) {
-                        const slotKey = String(slot);
-                        if (minuteOfDay < slot || state.sent[slotKey]) {
-                            continue;
-                        }
+                    for (const habit of habitsWithReminders) {
+                        const reminderMinute = this.reminderTimeToMinutes(habit.reminderTime);
+                        if (reminderMinute === null) continue;
 
-                        const habit = activeDailyHabits[Math.floor(Math.random() * activeDailyHabits.length)];
+                        // Fire within ±1 minute of the configured time
+                        const diff = minuteOfDay - reminderMinute;
+                        if (diff < 0 || diff > 1) continue;
+
+                        const sentKey = `${habit.id}_${todayKey}`;
+                        if (sentState[sentKey]) continue;
+
                         const title = `Habit Reminder: ${habit.name}`;
-                        const body = `Have you done "${habit.name}" today?`;
+                        const body = `Time to "${habit.name}"`;
 
                         App.notifications.send(title, {
                             body,
                             requireInteraction: false,
-                            tag: `habit-random-${habit.id}-${todayKey}-${slotKey}`
+                            tag: `habit-${habit.id}-${todayKey}`
                         });
                         _showToast(body, 'info');
-                        state.sent[slotKey] = true;
+
+                        sentState[sentKey] = true;
+                        stateChanged = true;
                     }
 
-                    this.saveRandomReminderState(state);
+                    if (stateChanged) {
+                        this.saveSentState(sentState);
+                    }
                 } catch (error) {
                     console.error('Failed to check habit reminders:', error);
                 }
@@ -949,7 +997,12 @@ const App = (function() {
             /**
              * Send notification with fallback to toast
              * @param {string} title - Notification title
-             * @param {Object} options - Notification options
+             * @param {Object} options - Notification options. Extra recognised keys:
+             *   `type`  — one of 'task', 'habit', 'pomodoro', 'water', 'reminder', 'general'.
+             *             Selects an icon glyph + default color so each notification source
+             *             is visually distinct in the OS notification tray.
+             *   `color` — optional hex color override (e.g. a task's own color). Wins over
+             *             the type's default color so user-coloured tasks adopt their tint.
              * @param {boolean} forceToast - Force toast notification even if browser notifications available
              */
             async send(title, options = {}, forceToast = false) {
@@ -975,6 +1028,15 @@ const App = (function() {
                             if (options[key] !== undefined) {
                                 validOptions[key] = options[key];
                             }
+                        }
+
+                        // Auto-generate a colored icon when caller didn't supply one. This
+                        // is what makes each notification visually distinct in the OS tray:
+                        // a circle filled with the type's color (or task's user-chosen color)
+                        // and a glyph indicating what kind of notification it is.
+                        if (!validOptions.icon && (options.type || options.color)) {
+                            const built = window.buildNotificationIcon ? window.buildNotificationIcon(options.type, options.color) : '';
+                            if (built) validOptions.icon = built;
                         }
 
                         if (options.icon) validOptions.icon = options.icon;
@@ -1174,16 +1236,31 @@ const App = (function() {
              */
             async refreshPlan(forceRefresh = false) {
                 try {
-                    const response = await App.api.get('api/habits.php?action=get_water_plan');
-                    const hasValidSchedule = Array.isArray(response?.data?.schedule);
-                    const isExplicitlyActive = response?.data?.isActive === true;
-                    if (response.success && response.data && hasValidSchedule && isExplicitlyActive) {
-                        this.activePlan = response.data;
+                    // Use fetch directly to avoid console error for expected 404
+                    const baseUrl = typeof APP_URL !== 'undefined' ? APP_URL : '';
+                    const url = baseUrl ? `${baseUrl}/api/habits.php?action=get_water_plan` : 'api/habits.php?action=get_water_plan';
+                    const response = await fetch(url, {
+                        headers: {
+                            'X-CSRF-Token': typeof CSRF_TOKEN !== 'undefined' ? CSRF_TOKEN : ''
+                        }
+                    });
+                    
+                    if (response.status === 404) {
+                        // 404 is expected when no active plan exists
+                        this.activePlan = null;
+                        return;
+                    }
+                    
+                    const data = await response.json();
+                    const hasValidSchedule = Array.isArray(data?.data?.schedule);
+                    const isExplicitlyActive = data?.data?.isActive === true;
+                    if (data.success && data.data && hasValidSchedule && isExplicitlyActive) {
+                        this.activePlan = data.data;
                     } else {
                         this.activePlan = null;
                     }
                 } catch (error) {
-                    // 404 is expected when no active plan exists.
+                    // Network or other errors - water plan is optional
                     this.activePlan = null;
                 }
 
@@ -1806,7 +1883,19 @@ function movePomodoroOverlayBy(deltaX, deltaY) {
 
 function ensurePomodoroAudioSource(audio) {
     if (!audio) return '';
-    const trackId = localStorage.getItem(POMODORO_MUSIC_SELECTED_KEY) || '';
+    let trackId = localStorage.getItem(POMODORO_MUSIC_SELECTED_KEY) || '';
+    // Default to the first cached track when nothing is selected — so pressing
+    // Start on the overlay timer always has something to play. The track-order
+    // cache is populated by the Pomodoro page's loadMusicList().
+    if (!trackId) {
+        try {
+            const order = JSON.parse(localStorage.getItem('pomodoroMusicTrackOrder') || '[]');
+            if (Array.isArray(order) && order.length > 0 && order[0]) {
+                trackId = String(order[0]);
+                localStorage.setItem(POMODORO_MUSIC_SELECTED_KEY, trackId);
+            }
+        } catch (_) { /* ignore corrupt JSON */ }
+    }
     if (!trackId) {
         if (audio.getAttribute('src')) {
             audio.removeAttribute('src');
@@ -1828,7 +1917,9 @@ function initPomodoroAudioPersistence() {
     if (!audio) return;
 
     const savedVolume = parseFloat(localStorage.getItem(POMODORO_MUSIC_VOLUME_KEY) || '0.6');
-    const savedLoop = localStorage.getItem(POMODORO_MUSIC_LOOP_KEY) === '1';
+    // Loop defaults to ON for new users (null), preserved if explicitly set to '0'.
+    const loopStored = localStorage.getItem(POMODORO_MUSIC_LOOP_KEY);
+    const savedLoop = loopStored === null ? true : loopStored !== '0';
     const savedTime = parseFloat(localStorage.getItem(POMODORO_MUSIC_TIME_KEY) || '0');
     const shouldPlay = localStorage.getItem(POMODORO_MUSIC_PLAYING_KEY) === '1';
     let isNavigatingAway = false;
@@ -2045,7 +2136,7 @@ function initPomodoroMusicOverlay() {
             return;
         }
         const state = loadPomodoroStateSafe();
-        const shouldPlay = localStorage.getItem(POMODORO_MUSIC_PLAYING_KEY) === '1' || (!!state.running && localStorage.getItem(POMODORO_MUSIC_AUTOPLAY_KEY) === '1');
+        const shouldPlay = localStorage.getItem(POMODORO_MUSIC_PLAYING_KEY) === '1' || (!!state.running && localStorage.getItem(POMODORO_MUSIC_AUTOPLAY_KEY) !== '0');
         if (shouldPlay) {
             try {
                 await audio.play();
@@ -2066,7 +2157,7 @@ function initPomodoroMusicOverlay() {
             return;
         }
         const state = loadPomodoroStateSafe();
-        const shouldPlay = localStorage.getItem(POMODORO_MUSIC_PLAYING_KEY) === '1' || (!!state.running && localStorage.getItem(POMODORO_MUSIC_AUTOPLAY_KEY) === '1');
+        const shouldPlay = localStorage.getItem(POMODORO_MUSIC_PLAYING_KEY) === '1' || (!!state.running && localStorage.getItem(POMODORO_MUSIC_AUTOPLAY_KEY) !== '0');
         if (shouldPlay) {
             try {
                 await audio.play();
@@ -2119,6 +2210,63 @@ function initPomodoroMusicOverlay() {
         localStorage.setItem(POMODORO_OVERLAY_OFFSET_Y_KEY, '0');
         updatePomodoroMusicOverlay();
     });
+
+    // Pointer drag-and-drop on the overlay header. Reuses the existing offset
+    // bounds [-520..120, -420..120] from movePomodoroOverlayBy. Live drag
+    // applies a transient transform (no localStorage churn); final offsets
+    // persist on pointerup so refresh restores the drop point. Arrow buttons
+    // remain available for keyboard / fine-tune.
+    const overlayElement = document.getElementById('pomodoro-music-overlay');
+    const dragHandle = document.getElementById('pomodoro-overlay-drag-handle');
+    if (overlayElement && dragHandle) {
+        const DRAG_BOUNDS = { minX: -520, maxX: 120, minY: -420, maxY: 120 };
+        let dragState = null;
+
+        dragHandle.addEventListener('pointerdown', (event) => {
+            // Ignore non-primary mouse buttons; let touch + pen pass through.
+            if (event.button !== undefined && event.button !== 0) return;
+            const startX = parseInt(localStorage.getItem(POMODORO_OVERLAY_OFFSET_X_KEY) || '0', 10);
+            const startY = parseInt(localStorage.getItem(POMODORO_OVERLAY_OFFSET_Y_KEY) || '0', 10);
+            dragState = {
+                pointerId: event.pointerId,
+                pointerStartX: event.clientX,
+                pointerStartY: event.clientY,
+                offsetStartX: Number.isFinite(startX) ? startX : 0,
+                offsetStartY: Number.isFinite(startY) ? startY : 0,
+                moved: false
+            };
+            try { dragHandle.setPointerCapture(event.pointerId); } catch (_) {}
+            dragHandle.style.cursor = 'grabbing';
+            event.preventDefault();
+        });
+
+        dragHandle.addEventListener('pointermove', (event) => {
+            if (!dragState || event.pointerId !== dragState.pointerId) return;
+            const dx = event.clientX - dragState.pointerStartX;
+            const dy = event.clientY - dragState.pointerStartY;
+            // 5px threshold so a tiny mouse jitter on click is not treated as drag
+            if (!dragState.moved && Math.hypot(dx, dy) < 5) return;
+            dragState.moved = true;
+            const nextX = Math.max(DRAG_BOUNDS.minX, Math.min(DRAG_BOUNDS.maxX, dragState.offsetStartX + dx));
+            const nextY = Math.max(DRAG_BOUNDS.minY, Math.min(DRAG_BOUNDS.maxY, dragState.offsetStartY + dy));
+            overlayElement.style.transform = `translate(${nextX}px, ${nextY}px)`;
+            dragState.lastX = nextX;
+            dragState.lastY = nextY;
+        });
+
+        const finishDrag = (event) => {
+            if (!dragState || (event && event.pointerId !== dragState.pointerId)) return;
+            try { dragHandle.releasePointerCapture(dragState.pointerId); } catch (_) {}
+            dragHandle.style.cursor = 'grab';
+            if (dragState.moved && Number.isFinite(dragState.lastX) && Number.isFinite(dragState.lastY)) {
+                localStorage.setItem(POMODORO_OVERLAY_OFFSET_X_KEY, String(dragState.lastX));
+                localStorage.setItem(POMODORO_OVERLAY_OFFSET_Y_KEY, String(dragState.lastY));
+            }
+            dragState = null;
+        };
+        dragHandle.addEventListener('pointerup', finishDrag);
+        dragHandle.addEventListener('pointercancel', finishDrag);
+    }
 
     volumeInput.addEventListener('input', () => {
         const value = parseFloat(volumeInput.value || '0.6');
@@ -2342,7 +2490,7 @@ const PomodoroShared = (() => {
 function syncPomodoroAudioPlayback(state) {
     const audio = document.getElementById('pomodoro-audio');
     if (!audio) return;
-    const autoplay = localStorage.getItem(POMODORO_MUSIC_AUTOPLAY_KEY) === '1';
+    const autoplay = localStorage.getItem(POMODORO_MUSIC_AUTOPLAY_KEY) !== '0';
     const manualPause = localStorage.getItem(POMODORO_MUSIC_MANUAL_PAUSE_KEY) === '1';
     const trackId = ensurePomodoroAudioSource(audio);
     if (autoplay && state.running && trackId && !manualPause) {

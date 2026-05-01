@@ -16,6 +16,14 @@ class APIException extends Exception {
         return $this->statusCode;
     }
 
+    public function getErrorCode(): string {
+        return $this->errorCode;
+    }
+
+    public function getContext(): array {
+        return $this->meta;
+    }
+
     public function toArray(): array {
         $payload = [
             'code' => $this->errorCode,

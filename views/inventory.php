@@ -498,10 +498,15 @@ async function generateInventory() {
         // Get model info
         const modelsResponse = await api.get('api/models.php');
         const models = modelsResponse.data || {};
-        const groqModels = models?.groq || [];
-        const defaultModel = groqModels.find(m => m.isDefault) || groqModels[0];
-        const model = defaultModel?.modelId;
-        if (!model) {
+        let defaultProvider = null, defaultModel = null;
+        for (const prov of ['groq', 'openrouter', 'gemini', 'ollama']) {
+            const provModels = models[prov] || [];
+            if (!provModels.length) continue;
+            const def = provModels.find(m => m.isDefault);
+            if (def) { defaultProvider = prov; defaultModel = def; break; }
+            if (!defaultModel) { defaultProvider = prov; defaultModel = provModels[0]; }
+        }
+        if (!defaultModel) {
             showToast('No AI model configured. Please set up a model in Model Settings.', 'error');
             btn.disabled = false;
             btn.innerHTML = originalText;
@@ -511,8 +516,8 @@ async function generateInventory() {
         const response = await api.post('api/ai.php?action=generate_inventory', {
             description: description,
             category: category,
-            provider: 'groq',
-            model: model,
+            provider: defaultProvider,
+            model: defaultModel.modelId,
             csrf_token: CSRF_TOKEN
         });
 

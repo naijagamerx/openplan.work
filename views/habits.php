@@ -1,15 +1,71 @@
 <?php
+/**
+ * All Habits - Main Habits Page
+ * Route: ?page=habits (default habits landing page)
+ *
+ * Shows habit grid with stats, consistent nav, and rounded corner design.
+ * Calendar moved to ?page=habits-calendar.
+ */
 $db = new Database(getMasterPassword(), Auth::userId());
 $habits = $db->load('habits');
 $completions = $db->load('habit_completions');
 $timerSessions = $db->load('habit_timer_sessions');
 
-// Filter out inactive (archived) habits
-$habits = array_values(array_filter($habits, fn($h) => !isset($h['isActive']) || $h['isActive'] !== false));
-
 $today = date('Y-m-d');
-$currentMonth = date('m');
-$currentYear = date('Y');
+
+// Helper function to calculate per-habit streak
+$calculateHabitStreak = function($habitId, $allCompletions, $today) {
+    $habitCompletions = array_filter($allCompletions, fn($c) => $c['habitId'] === $habitId && $c['status'] === 'complete');
+    $completedDates = array_unique(array_column($habitCompletions, 'date'));
+    sort($completedDates);
+
+    $streak = 0;
+    $checkDate = new DateTime($today);
+    for ($i = 0; $i < 365; $i++) {
+        $checkDateStr = $checkDate->format('Y-m-d');
+        $hasCompletion = in_array($checkDateStr, $completedDates);
+        if ($hasCompletion) {
+            $streak++;
+            $checkDate->modify('-1 day');
+        } else {
+            if ($checkDateStr === $today) {
+                $checkDate->modify('-1 day');
+                continue;
+            }
+            break;
+        }
+    }
+    return $streak;
+};
+
+// Helper function to calculate longest streak for a habit
+$calculateLongestStreak = function($habitId, $allCompletions) {
+    $habitCompletions = array_filter($allCompletions, fn($c) => $c['habitId'] === $habitId && $c['status'] === 'complete');
+    $completedDates = array_unique(array_column($habitCompletions, 'date'));
+    sort($completedDates);
+
+    if (empty($completedDates)) {
+        return 0;
+    }
+
+    $longestStreak = 1;
+    $currentStreak = 1;
+
+    for ($i = 1; $i < count($completedDates); $i++) {
+        $prevDate = new DateTime($completedDates[$i - 1]);
+        $currDate = new DateTime($completedDates[$i]);
+        $diff = $currDate->diff($prevDate)->days;
+
+        if ($diff === 1) {
+            $currentStreak++;
+        } else {
+            $longestStreak = max($longestStreak, $currentStreak);
+            $currentStreak = 1;
+        }
+    }
+
+    return max($longestStreak, $currentStreak);
+};
 
 // Process habits with completions
 foreach ($habits as $key => $habit) {
@@ -24,11 +80,6 @@ foreach ($habits as $key => $habit) {
         }
     }
 
-    // Get timer sessions for this habit
-    $habitTimerSessions = array_filter($timerSessions, fn($s) => $s['habitId'] === $habit['id']);
-    $totalSeconds = array_sum(array_column($habitTimerSessions, 'duration'));
-    $habits[$key]['totalTime'] = $totalSeconds;
-
     // Calculate last 7 days completion for sparkline
     $habits[$key]['weeklyProgress'] = [];
     for ($i = 6; $i >= 0; $i--) {
@@ -36,98 +87,52 @@ foreach ($habits as $key => $habit) {
         $dayCompletions = array_filter($habitCompletions, fn($c) => $c['date'] === $date && $c['status'] === 'complete');
         $habits[$key]['weeklyProgress'][] = count($dayCompletions) > 0 ? 100 : 0;
     }
+
+    // Add streak calculations
+    $habits[$key]['currentStreak'] = $calculateHabitStreak($habit['id'], $completions, $today);
+    $habits[$key]['longestStreak'] = $calculateLongestStreak($habit['id'], $completions);
 }
 
 $habits = array_values($habits);
 
+// Filter out inactive habits (archived)
+$habits = array_values(array_filter($habits, fn($h) => !isset($h['isActive']) || $h['isActive'] !== false));
+
 // Calculate stats for cards
 $totalHabits = count($habits);
-$completedToday = count(array_filter($habits, fn($h) => $h['todayCompleted']));
-$weekStart = date('Y-m-d', strtotime('-6 days'));
-$weeklyCompletions = count(array_filter($completions, fn($c) => $c['date'] >= $weekStart && $c['date'] <= $today));
-
-// Calculate longest streak
-$streak = 0;
-$checkDate = new DateTime($today);
-$completedDates = array_unique(array_column($completions, 'date'));
-sort($completedDates);
-for ($i = 0; $i < count($completedDates); $i++) {
-    $compDate = new DateTime($completedDates[count($completedDates) - 1 - $i]);
-    $diff = $checkDate->diff($compDate);
-    if ($diff->days <= $i + 1 && $completedDates[count($completedDates) - 1 - $i] <= $today) {
-        $streak = $i + 1;
-    } else {
-        break;
-    }
-}
-
-// Calculate completion rate (this month)
-$monthStart = date('Y-m-01');
-$monthCompletions = count(array_filter($completions, fn($c) => $c['date'] >= $monthStart && $c['status'] === 'complete'));
-$possibleCompletions = max(1, $totalHabits * date('j')); // Days so far * habits
-$completionRate = $possibleCompletions > 0 ? round(($monthCompletions / $possibleCompletions) * 100, 1) : 0;
-
-// Generate heatmap data (current calendar year: Jan 1 - Dec 31)
-$heatmapData = [];
-$currentYear = date('Y');
-$yearStart = "$currentYear-01-01";
-$yearEnd = "$currentYear-12-31";
-
-// Generate data for all days in the current year
-$startDate = new DateTime($yearStart);
-$endDate = new DateTime($yearEnd);
-$interval = new DateInterval('P1D');
-$period = new DatePeriod($startDate, $interval, $endDate->modify('+1 day'));
-
-foreach ($period as $date) {
-    $dateStr = $date->format('Y-m-d');
-    $dayCompletions = count(array_filter($completions, fn($c) => $c['date'] === $dateStr && $c['status'] === 'complete'));
-    $heatmapData[$dateStr] = $dayCompletions;
-}
-
-function formatDuration($seconds) {
-    if ($seconds < 60) return "{$seconds}s";
-    if ($seconds < 3600) return floor($seconds / 60) . "m";
-    return floor($seconds / 3600) . "h " . floor(($seconds % 3600) / 60) . "m";
-}
-
-function getHeatmapColor($count, $max = 5) {
-    $ratio = min(1, $count / $max);
-    if ($ratio === 0) return 'bg-gray-100';
-    if ($ratio < 0.25) return 'bg-gray-300';
-    if ($ratio < 0.5) return 'bg-gray-400';
-    if ($ratio < 0.75) return 'bg-gray-600';
-    return 'bg-black';
-}
+$activeStreaks = count(array_filter($habits, fn($h) => ($h['currentStreak'] ?? 0) > 0));
+$dailyCompletion = $totalHabits > 0 ? round((count(array_filter($habits, fn($h) => $h['todayCompleted'])) / $totalHabits) * 100) : 0;
+$longestStreak = max(array_column($habits, 'longestStreak') ?: [0]);
 ?>
 
+<!-- All Habits Grid View - Rounded Design -->
 <div class="p-6 w-full">
-    <!-- Header -->
+    <!-- Navigation Menu -->
     <div class="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div>
-            <h2 class="text-3xl font-black text-gray-900 tracking-tight">Habit Analytics</h2>
-            <p class="text-gray-500 font-medium">Visualize your consistency and long-term progress.</p>
+            <h2 class="text-3xl font-black text-gray-900 tracking-tight">All Habits</h2>
+            <p class="text-gray-500 font-medium">High-productivity routine management</p>
         </div>
-        <div class="flex gap-3">
-            <button onclick="exportCSV()" class="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg font-bold hover:bg-gray-50 transition shadow-sm">
+        <div class="flex flex-wrap gap-3">
+            <button onclick="exportCSV()" class="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl font-bold hover:bg-gray-50 transition shadow-sm">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
                 Export CSV
             </button>
-            <a href="?page=habits-all" class="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg font-bold hover:bg-gray-50 transition shadow-sm">
+            <a href="?page=habits-calendar" class="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl font-bold hover:bg-gray-50 transition shadow-sm">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                 </svg>
-                All Habits
+                Calendar
             </a>
-            <a href="?page=habit-history" class="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg font-bold hover:bg-gray-50 transition shadow-sm">
+            <a href="?page=habit-history" class="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl font-bold hover:bg-gray-50 transition shadow-sm">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
                 History
             </a>
-            <a href="?page=habit-form" class="flex items-center gap-2 px-4 py-2.5 bg-black text-white rounded-lg font-bold hover:bg-gray-800 transition shadow-lg">
+            <a href="?page=habit-form" class="flex items-center gap-2 px-4 py-2.5 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition shadow-lg">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                 </svg>
@@ -136,404 +141,140 @@ function getHeatmapColor($count, $max = 5) {
         </div>
     </div>
 
-    <!-- Stats Overview Cards -->
-    <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div class="flex flex-col gap-2 rounded-xl p-6 bg-white border border-gray-200">
-            <p class="text-gray-500 text-sm font-bold uppercase tracking-wider">Longest Streak</p>
-            <div class="flex items-end justify-between">
-                <p class="text-3xl font-black"><?php echo $streak; ?> Days</p>
-                <p class="text-black text-sm font-bold">
-                    <?php
-                    $lastMonthStreak = max(0, $streak - rand(0, 5));
-                    $diff = $streak - $lastMonthStreak;
-                    echo $diff >= 0 ? "+$diff%" : "$diff%";
-                    ?>
-                </p>
-            </div>
+    <!-- Stats Cards -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div class="bg-white p-6 border border-gray-200 rounded-2xl shadow-sm">
+            <p class="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-1">Total Habits</p>
+            <h3 class="text-2xl font-black tracking-tight"><?php echo $totalHabits; ?></h3>
         </div>
-        <div class="flex flex-col gap-2 rounded-xl p-6 bg-white border border-gray-200">
-            <p class="text-gray-500 text-sm font-bold uppercase tracking-wider">Completion Rate</p>
-            <div class="flex items-end justify-between">
-                <p class="text-3xl font-black"><?php echo $completionRate; ?>%</p>
-                <p class="text-gray-500 text-sm font-bold">This month</p>
-            </div>
+        <div class="bg-white p-6 border border-gray-200 rounded-2xl shadow-sm">
+            <p class="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-1">Active Streaks</p>
+            <h3 class="text-2xl font-black tracking-tight"><?php echo $activeStreaks; ?></h3>
         </div>
-        <div class="flex flex-col gap-2 rounded-xl p-6 bg-white border border-gray-200">
-            <p class="text-gray-500 text-sm font-bold uppercase tracking-wider">Total Actions</p>
-            <div class="flex items-end justify-between">
-                <p class="text-3xl font-black"><?php echo count($completions); ?></p>
-                <p class="text-black text-sm font-bold">On track</p>
-            </div>
+        <div class="bg-white p-6 border border-gray-200 rounded-2xl shadow-sm">
+            <p class="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-1">Daily Completion</p>
+            <h3 class="text-2xl font-black tracking-tight"><?php echo $dailyCompletion; ?>%</h3>
+        </div>
+        <div class="bg-black p-6 border border-black rounded-2xl shadow-sm">
+            <p class="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-1">Longest Streak</p>
+            <h3 class="text-2xl font-black tracking-tight text-white"><?php echo $longestStreak; ?> Days</h3>
         </div>
     </section>
 
+    <!-- Habits Grid -->
+    <?php if (empty($habits)): ?>
+        <div class="bg-white border border-gray-200 rounded-2xl p-20 text-center shadow-sm">
+            <svg class="w-20 h-20 text-gray-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <h3 class="text-2xl font-black text-gray-700 mt-6">No habits yet</h3>
+            <p class="text-gray-500 mt-2">Start building your routine today</p>
+            <a href="?page=habit-form" class="inline-block mt-6 px-8 py-3 bg-black text-white text-sm font-black uppercase tracking-widest rounded-xl hover:bg-gray-800 transition">
+                Create Your First Habit
+            </a>
+        </div>
+    <?php else: ?>
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-20">
+            <?php foreach ($habits as $habit): ?>
+                <div class="bg-white border border-gray-200 rounded-2xl p-8 flex flex-col gap-6 hover:shadow-lg transition-all shadow-sm">
+                    <div class="flex justify-between items-start">
+                        <div class="flex flex-col">
+                            <h4 class="text-xl font-black tracking-tight"><?php echo e($habit['name']); ?></h4>
+                            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                Category: <?php echo ucfirst($habit['category'] ?? 'General'); ?>
+                                <?php if (!empty($habit['targetDuration'])): ?>
+                                    &bull; <?php echo $habit['targetDuration']; ?> min target
+                                <?php endif; ?>
+                            </span>
+                        </div>
+                        <div class="flex flex-col items-end">
+                            <span class="text-xs font-black uppercase tracking-widest text-gray-400">Streak</span>
+                            <span class="text-3xl font-black"><?php echo $habit['currentStreak'] ?? 0; ?></span>
+                        </div>
+                    </div>
 
+                    <div class="flex flex-col gap-2 pt-4 border-t border-gray-100">
+                        <p class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Last 7 Days</p>
+                        <div class="flex gap-2">
+                            <?php foreach ($habit['weeklyProgress'] as $progress): ?>
+                                <div class="sparkline-dot size-2 rounded-full <?php echo $progress > 0 ? 'bg-black' : 'bg-gray-200'; ?>"></div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
 
-    <!-- Main Content Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <!-- Monthly Calendar & Habits -->
-        <div class="lg:col-span-8 space-y-6">
-            <!-- Monthly Calendar -->
-            <div class="bg-white border border-gray-200 rounded-xl overflow-hidden w-full">
-                <div class="flex items-center justify-between p-6 border-b border-gray-100">
-                    <h3 class="text-lg font-bold" id="calendar-title"></h3>
+                    <!-- Action Buttons -->
                     <div class="flex gap-2">
-                        <button onclick="changeMonth(-1)" class="p-1 rounded hover:bg-gray-100 transition">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        <a href="?page=habit-form&id=<?php echo e($habit['id']); ?>"
+                           class="flex-1 h-10 bg-white border border-gray-200 text-center font-black text-[11px] uppercase tracking-widest hover:bg-gray-50 transition-all flex items-center justify-center gap-1 rounded-xl"
+                           title="Edit habit">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
                             </svg>
+                            Edit
+                        </a>
+                        <button onclick="toggleHabitArchive('<?php echo e($habit['id']); ?>', '<?php echo e($habit['name']); ?>')"
+                                class="flex-1 h-10 bg-white border border-gray-200 text-center font-black text-[11px] uppercase tracking-widest hover:bg-gray-50 transition-all flex items-center justify-center rounded-xl"
+                                title="Archive this habit">
+                            Archive
                         </button>
-                        <button onclick="changeMonth(1)" class="p-1 rounded hover:bg-gray-100 transition">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                            </svg>
+                        <button onclick="deleteHabit('<?php echo e($habit['id']); ?>', '<?php echo e($habit['name']); ?>')"
+                                class="flex-1 h-10 bg-white border border-gray-200 text-center font-black text-[11px] uppercase tracking-widest hover:bg-red-50 text-red-600 transition-all flex items-center justify-center rounded-xl"
+                                title="Delete this habit">
+                            Delete
                         </button>
+                        <a href="?page=view-habit&id=<?php echo e($habit['id']); ?>"
+                           class="flex-1 h-10 bg-black text-white text-center font-black text-[11px] uppercase tracking-widest hover:bg-gray-800 transition-all flex items-center justify-center rounded-xl">
+                            View
+                        </a>
                     </div>
                 </div>
-                <div class="grid grid-cols-7 border-b border-gray-100 bg-gray-50/50">
-                    <?php foreach (['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $day): ?>
-                        <div class="py-2 text-center text-xs font-bold text-gray-500 uppercase"><?php echo $day; ?></div>
-                    <?php endforeach; ?>
-                </div>
-                <div class="grid grid-cols-7 w-full" id="calendar-grid">
-                    <!-- Calendar will be rendered by JavaScript -->
-                </div>
-            </div>
-
-            <!-- Habits List Section Removed - Use "All Habits" page for habit list -->
-        </div>
-
-        <!-- Sidebar: Quick Stats & Info -->
-        <div class="lg:col-span-4 space-y-4">
-            <!-- Today's Progress -->
-            <div class="bg-white border border-gray-200 rounded-xl p-5">
-                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Today's Progress</h3>
-                <div class="flex items-center gap-4">
-                    <div class="relative w-20 h-20">
-                        <svg class="w-20 h-20 transform -rotate-90">
-                            <circle cx="40" cy="40" r="36" stroke="currentColor" stroke-width="8" fill="none" class="text-gray-200"/>
-                            <circle cx="40" cy="40" r="36" stroke="currentColor" stroke-width="8" fill="none" class="text-black"
-                                    stroke-dasharray="<?php echo 226 * ($totalHabits > 0 ? $completedToday / $totalHabits : 0); ?> 226"
-                                    stroke-linecap="round"/>
-                        </svg>
-                        <span class="absolute inset-0 flex items-center justify-center text-xl font-black"><?php echo $completedToday; ?>/<?php echo $totalHabits; ?></span>
-                    </div>
-                    <div class="flex-1">
-                        <p class="text-2xl font-black"><?php echo $totalHabits > 0 ? round(($completedToday / $totalHabits) * 100) : 0; ?>%</p>
-                        <p class="text-sm text-gray-500">Complete</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Weekly Summary -->
-            <div class="bg-white border border-gray-200 rounded-xl p-5">
-                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Weekly Summary</h3>
-                <div class="space-y-3">
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm text-gray-600">This Week</span>
-                        <span class="font-bold"><?php echo $weeklyCompletions; ?> completions</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm text-gray-600">Best Day</span>
-                        <span class="font-bold">
-                            <?php
-                            $dayStats = [];
-                            for ($i = 0; $i < 7; $i++) {
-                                $date = date('Y-m-d', strtotime("-$i days"));
-                                $dayStats[$date] = count(array_filter($completions, fn($c) => $c['date'] === $date && $c['status'] === 'complete'));
-                            }
-                            arsort($dayStats);
-                            $bestDate = array_key_first($dayStats);
-                            echo date('D', strtotime($bestDate));
-                            ?>
-                        </span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm text-gray-600">Current Streak</span>
-                        <span class="font-bold"><?php echo $streak; ?> days</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Quick Actions -->
-            <div class="bg-white border border-gray-200 rounded-xl p-5">
-                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Quick Actions</h3>
-                <div class="space-y-2">
-                    <a href="?page=habits-all" class="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 transition">
-                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
-                        </svg>
-                        <span class="text-sm font-medium">All Habits Grid</span>
-                    </a>
-                    <a href="?page=habit-form" class="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 transition">
-                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                        </svg>
-                        <span class="text-sm font-medium">Add New Habit</span>
-                    </a>
-                    <a href="?page=settings" class="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 transition">
-                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        </svg>
-                        <span class="text-sm font-medium">Settings</span>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
+            <?php endforeach; ?>
+        </section>
+    <?php endif; ?>
 </div>
 
 <script>
-let habitsData = <?php echo json_encode($habits); ?>;
-let completionsData = <?php echo json_encode(array_column($completions, null)); ?>;
-let currentDate = new Date(); // Current month
-
-// ============================================
-// Habit Timer Functionality
-// ============================================
-
-function formatTime(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-}
-
-function toggleHabitTimer(habitId) {
-    const habitItem = document.querySelector(`.habit-item[data-id="${habitId}"]`);
-    const playIcon = habitItem.querySelector('.play-icon');
-    const pauseIcon = habitItem.querySelector('.pause-icon');
-    const timerState = HabitTimerManager.getState();
-
-    if (timerState.running && timerState.habitId === habitId) {
-        HabitTimerManager.stop();
-        playIcon.classList.remove('hidden');
-        pauseIcon.classList.add('hidden');
-    } else {
-        const targetMinutes = parseInt(habitItem.dataset.targetDuration) || 0;
-        HabitTimerManager.start(habitId, targetMinutes);
-        playIcon.classList.add('hidden');
-        pauseIcon.classList.remove('hidden');
-    }
-}
-
-// HabitTimerManager Event Listeners
-HabitTimerManager.on('timer:tick', (state) => {
-    const habitItem = document.querySelector(`.habit-item[data-id="${state.habitId}"]`);
-    if (habitItem) {
-        const timerDisplay = habitItem.querySelector('.timer-display');
-        if (timerDisplay) {
-            timerDisplay.textContent = formatTime(state.elapsedSeconds);
-        }
-    }
-});
-
-HabitTimerManager.on('timer:target-reached', (state) => {
-    const habitItem = document.querySelector(`.habit-item[data-id="${state.habitId}"]`);
-    if (habitItem) {
-        const habitName = habitItem.dataset.name || habitItem.querySelector('h4').textContent.trim();
-        habitItem.querySelector('.play-icon')?.classList.remove('hidden');
-        habitItem.querySelector('.pause-icon')?.classList.add('hidden');
-
-        App.notifications.send(`Goal Reached: ${habitName}`, {
-            body: `You've completed your goal of ${state.targetMinutes} minutes!`,
-            requireInteraction: true,
-            silent: false
-        });
-        showToast(`Goal reached for ${habitName}!`, 'success');
-    }
-});
-
-HabitTimerManager.on('timer:restored', (state) => {
-    const habitItem = document.querySelector(`.habit-item[data-id="${state.habitId}"]`);
-    if (habitItem) {
-        const timerDisplay = habitItem.querySelector('.timer-display');
-        if (timerDisplay) {
-            timerDisplay.textContent = formatTime(state.elapsedSeconds);
-        }
-        const playIcon = habitItem.querySelector('.play-icon');
-        const pauseIcon = habitItem.querySelector('.pause-icon');
-        if (playIcon && pauseIcon) {
-            playIcon.classList.add('hidden');
-            pauseIcon.classList.remove('hidden');
-        }
-    }
-});
-
-// ============================================
-// Habit Completion
-// ============================================
-
-async function toggleHabitComplete(habitId) {
-    const habitItem = document.querySelector(`.habit-item[data-id="${habitId}"]`);
-    const isCompleted = habitItem.dataset.completed === 'true';
-
-    // Use local date instead of UTC to avoid "tomorrow" issues late at night
-    const localDate = new Date().toLocaleDateString('en-CA'); // Returns YYYY-MM-DD in local time
-    
-    const response = await api.post('api/habits.php?action=complete', {
-        habitId: habitId,
-        date: localDate,
-        status: isCompleted ? 'missed' : 'complete',
-        csrf_token: CSRF_TOKEN
-    });
-
-    if (response.success) {
-        const newState = !isCompleted;
-        habitItem.dataset.completed = newState.toString();
-
-        // Update UI
-        const titleEl = habitItem.querySelector('h4');
-        const completeBtn = habitItem.querySelector('.complete-btn');
-
-        titleEl.classList.toggle('line-through', newState);
-        titleEl.classList.toggle('text-gray-400', newState);
-
-        if (newState) {
-            completeBtn.className = 'complete-btn px-4 py-2 rounded-lg text-sm font-bold transition-all active:scale-95 bg-gray-100 text-gray-700';
-            completeBtn.textContent = 'Complete';
-        } else {
-            completeBtn.className = 'complete-btn px-4 py-2 rounded-lg text-sm font-bold transition-all active:scale-95 bg-black text-white';
-            completeBtn.textContent = 'Log Session';
-        }
-
-        showToast(newState ? 'Habit completed!' : 'Habit reopened', 'success');
-        renderCalendar();
-    }
-}
-
-async function deleteHabit(habitId) {
-    confirmAction('Delete this habit and all its history?', async () => {
-        const response = await api.delete('api/habits.php?id=' + habitId);
-        if (response.success) {
-            showToast('Habit deleted', 'success');
-            location.reload();
-        }
-    });
-}
-
-// ============================================
-// Calendar
-// ============================================
-
-function renderCalendar() {
-    const grid = document.getElementById('calendar-grid');
-    const titleEl = document.getElementById('calendar-title');
-
-    grid.innerHTML = '';
-
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                        'July', 'August', 'September', 'October', 'November', 'December'];
-    titleEl.textContent = `${monthNames[month]} ${year}`;
-
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const today = new Date();
-
-    // Empty cells before first day
-    for (let i = 0; i < firstDay; i++) {
-        const empty = document.createElement('div');
-        empty.className = 'min-h-32 h-32 border-r border-b border-gray-100 bg-gray-50/30';
-        grid.appendChild(empty);
-    }
-
-    // Days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const isToday = today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
-        const isPast = new Date(dateStr) <= new Date();
-
-        // Count completed habits for this date
-        let completedCount = 0;
-        habitsData.forEach(habit => {
-            const isCompleted = completionsData.some(c => c.habitId === habit.id && c.date === dateStr && c.status === 'complete');
-            if (isCompleted) completedCount++;
-        });
-
-        const totalHabits = habitsData.length;
-        const bars = [];
-
-        for (let i = 0; i < Math.min(totalHabits, 5); i++) {
-            const isBarComplete = i < completedCount;
-            bars.push(`<div class="h-1 w-full ${isBarComplete ? 'bg-black' : 'bg-gray-200'} rounded-full"></div>`);
-        }
-
-        const dayCell = document.createElement('div');
-        dayCell.className = `min-h-32 h-32 border-r border-b border-gray-100 p-2 group hover:bg-gray-50 cursor-pointer transition ${isToday ? 'ring-2 ring-inset ring-black bg-black/5' : ''}`;
-        dayCell.innerHTML = `
-            <span class="text-sm font-bold ${isToday ? 'text-black' : ''}">${day}</span>
-            ${isToday ? '<p class="text-[10px] mt-1 font-bold text-black">TODAY</p>' : ''}
-            <div class="mt-2 flex flex-col gap-1">
-                ${bars.join('')}
-            </div>
-        `;
-
-        dayCell.onclick = () => showDayInfo(dateStr);
-        grid.appendChild(dayCell);
-    }
-}
-
-function showDayInfo(dateStr) {
-    const date = new Date(dateStr);
-    const dateFormatted = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-
-    const completedHabits = habitsData.filter(h => {
-        return completionsData.some(c => c.habitId === h.id && c.date === dateStr && c.status === 'complete');
-    });
-
-    let message = `${dateFormatted}\n`;
-    if (completedHabits.length === 0) {
-        message += 'No habits completed';
-    } else {
-        message += `Completed: ${completedHabits.map(h => h.name).join(', ')}`;
-    }
-
-    showToast(message, 'info');
-}
-
-function changeMonth(delta) {
-    currentDate.setMonth(currentDate.getMonth() + delta);
-    renderCalendar();
-}
-
-// ============================================
-// Export CSV
-// ============================================
-
 async function exportCSV() {
-    const csvContent = "data:text/csv;charset=utf-8,Date,Habit,Status\n";
-
-    completionsData.forEach(c => {
-        const habit = habitsData.find(h => h.id === c.habitId);
-        if (habit) {
-            csvContent += `${c.date},"${habit.name}",${c.status}\n`;
-        }
+    const completions = <?php echo json_encode(array_column($completions, null)); ?>;
+    const habits = <?php echo json_encode($habits); ?>;
+    let csvContent = "data:text/csv;charset=utf-8,Date,Habit,Status\n";
+    completions.forEach(c => {
+        const habit = habits.find(h => h.id === c.habitId);
+        if (habit) csvContent += `${c.date},"${habit.name}",${c.status}\n`;
     });
-
     const link = document.createElement('a');
     link.setAttribute('href', encodeURI(csvContent));
     link.setAttribute('download', `habit-tracker-${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
     showToast('CSV exported successfully', 'success');
 }
 
-// ============================================
-// Initialize
-// ============================================
+async function toggleHabitArchive(habitId, habitName) {
+    confirmAction(`Archive "${habitName}"? It will no longer appear in your habit list.`, async () => {
+        const response = await api.post('api/habits.php?action=toggle_active', {
+            habitId: habitId,
+            csrf_token: CSRF_TOKEN
+        });
+        if (response.success) {
+            showToast(response.message || 'Habit archived', 'success');
+            setTimeout(() => location.reload(), 500);
+        } else {
+            showToast(response.error || 'Failed to archive habit', 'error');
+        }
+    });
+}
 
-document.addEventListener('DOMContentLoaded', () => {
-    renderCalendar();
-    HabitTimerManager.restoreFromStorage();
-
-    if (typeof ReminderSystem !== 'undefined') {
-        ReminderSystem.init();
-    }
-});
+async function deleteHabit(habitId, habitName) {
+    confirmAction(`Delete "${habitName}" and all its history? This cannot be undone.`, async () => {
+        const response = await api.delete('api/habits.php?id=' + habitId);
+        if (response.success) {
+            showToast(response.message || 'Habit deleted', 'success');
+            setTimeout(() => location.reload(), 500);
+        } else {
+            showToast(response.error || 'Failed to delete habit', 'error');
+        }
+    });
+}
 </script>
-

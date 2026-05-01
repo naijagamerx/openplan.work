@@ -254,7 +254,7 @@ PROMPT;
     }
 
     /**
-     * Resolve a CA bundle path for local SSL verification (Windows/MAMP friendly).
+     * Resolve a CA bundle path for local SSL verification (Windows/MAMP/Hostinger friendly).
      */
     private function resolveCaBundlePath(): ?string {
         $phpDir = dirname(PHP_BINARY);
@@ -266,7 +266,14 @@ PROMPT;
             defined('ROOT_PATH') ? ROOT_PATH . '/cacert.pem' : null,
             defined('ROOT_PATH') ? ROOT_PATH . '/certs/cacert.pem' : null,
             $phpDir . '/extras/ssl/cacert.pem',
-            $phpDir . '/cacert.pem'
+            $phpDir . '/cacert.pem',
+            // Common Linux/Hostinger paths
+            '/etc/ssl/certs/ca-certificates.crt',
+            '/etc/pki/tls/certs/ca-bundle.crt',
+            '/etc/ssl/certs/ca-bundle.crt',
+            '/usr/local/share/certs/ca-root-nss.crt',
+            '/etc/ssl/cert.pem',
+            '/usr/local/etc/openssl/cert.pem',
         ]);
 
         foreach ($candidates as $path) {

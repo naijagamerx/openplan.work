@@ -20,25 +20,24 @@ function isCronAllowed(): bool {
         return true;
     }
 
-    // Tier 3: External cron jobs allowed with optional cron_key for extra security
-    // Cron jobs only run maintenance tasks (no sensitive data access)
+    // Tier 3: External cron jobs require valid cron_key (REQUIRED, not optional)
+    // Reason: cron jobs trigger AI daily brief which costs money — anonymous trigger = DoS / cost vector
     $queryPassword = $_GET['cron_key'] ?? '';
-    
-    // If cron_key is provided, validate it (optional security)
-    if ($queryPassword !== '') {
-        $expectedKey = getenv('LAZYMAN_CRON_KEY') ?: '';
-        if ($expectedKey === '') {
-            $expectedKey = defined('CRON_KEY') ? CRON_KEY : '';
-        }
-        // Only reject if CRON_KEY is defined and doesn't match
-        if ($expectedKey !== '' && $expectedKey !== 'change_this_to_a_secure_random_key') {
-            return hash_equals($expectedKey, $queryPassword);
-        }
+    $expectedKey = getenv('LAZYMAN_CRON_KEY') ?: '';
+    if ($expectedKey === '') {
+        $expectedKey = defined('CRON_KEY') ? CRON_KEY : '';
     }
-    
-    // If no cron_key is set in config, allow all external cron requests
-    // This is safe because cron jobs only run maintenance tasks
-    return true;
+
+    // Reject if expected key is missing or still the default placeholder
+    if ($expectedKey === '' || $expectedKey === 'change_this_to_a_secure_random_key') {
+        return false;
+    }
+
+    if ($queryPassword === '') {
+        return false;
+    }
+
+    return hash_equals($expectedKey, $queryPassword);
 }
 
 // Check authentication
@@ -137,7 +136,8 @@ if ($job === 'run_daily') {
         'audit_cleanup',
         'inventory_alerts',
         'invoice_reminders',
-        'task_reminders'
+        'task_reminders',
+        'ai_daily_brief'
     ];
     
     $dailyResults = [];
@@ -193,6 +193,8 @@ function executeCronJob($job, $db, $audit) {
             return runInvoiceReminders($db, $audit);
         case 'task_reminders':
             return runTaskReminders($db, $audit);
+        case 'ai_daily_brief':
+            return runAIDailyBrief($db);
         default:
             return ['success' => false, 'error' => 'Unknown job: ' . $job];
     }
@@ -392,5 +394,67 @@ function runTaskReminders($db, $audit) {
     }
 
     return ['success' => true, 'data' => ['reminders_sent' => $reminderCount]];
+}
+
+/**
+ * Job: Generate AI daily brief using provider fallback chain
+ */
+function runAIDailyBrief($db) {
+    if (!defined('AI_CRON_ENABLED') || !AI_CRON_ENABLED) {
+        return ['success' => true, 'data' => ['skipped' => true, 'reason' => 'AI_CRON_ENABLED is false']];
+    }
+
+    $today = date('Y-m-d');
+
+    // Load all users from the global users list (load('users') always reads data/users.json)
+    $users = $db->load('users');
+    if (empty($users)) {
+        return ['success' => true, 'data' => ['skipped' => true, 'reason' => 'No users found']];
+    }
+
+    $results = [];
+    $overallSuccess = true;
+
+    foreach ($users as $user) {
+        // Skip banned users
+        if (!empty($user['banned'])) {
+            continue;
+        }
+
+        $userId = $user['id'] ?? '';
+        if (empty($userId)) {
+            continue;
+        }
+
+        // Create a user-scoped DB so API keys and data come from data/users/{userId}/
+        $userDb = $db->createScoped($userId);
+
+        try {
+            $aiHelper = new AIHelper($userDb);
+            $briefText = $aiHelper->generateDailyBrief();
+
+            // Save brief into the user's own scoped directory
+            $briefs = $userDb->load('ai_daily_brief') ?? [];
+            $briefs[$today] = [
+                'date'      => $today,
+                'brief'     => $briefText,
+                'createdAt' => date('c'),
+                'dismissed' => false
+            ];
+            ksort($briefs);
+            if (count($briefs) > 7) {
+                $briefs = array_slice($briefs, -7, null, true);
+            }
+            $userDb->save('ai_daily_brief', $briefs);
+
+            $results[$userId] = ['success' => true, 'length' => strlen($briefText)];
+        } catch (Exception $e) {
+            error_log("AI Daily Brief cron error for user {$userId}: " . $e->getMessage());
+            $results[$userId] = ['success' => false, 'error' => $e->getMessage()];
+            $overallSuccess = false;
+        }
+    }
+
+    return ['success' => $overallSuccess, 'data' => ['date' => $today, 'users' => $results]];
 }
 

@@ -7,8 +7,57 @@ class GroqAPI {
     private string $apiKey;
     private string $baseUrl = 'https://api.groq.com/openai/v1';
 
+    /**
+     * Per-model free-tier TPM (tokens per minute) caps as published by Groq.
+     * Source: https://console.groq.com/docs/rate-limits
+     *
+     * CRITICAL: Groq counts the *reserved* max_tokens against TPM, not just
+     * the actual output. So if max_tokens=8192 and the model TPM is 8000,
+     * the request is rejected before any tokens are emitted — even for a
+     * one-word prompt like "hi". We must always reserve LESS than the cap.
+     */
+    private const MODEL_TPM_FREE_TIER = [
+        'openai/gpt-oss-120b'        => 8000,
+        'openai/gpt-oss-20b'         => 8000,
+        'llama-3.3-70b-versatile'    => 12000,
+        'llama-3.1-8b-instant'       => 6000,
+        'gemma2-9b-it'               => 15000,
+        'mixtral-8x7b-32768'         => 5000,
+        'meta-llama/llama-4-scout-17b-16e-instruct'  => 30000,
+        'meta-llama/llama-4-maverick-17b-128e-instruct' => 6000,
+        'qwen/qwen3-32b'             => 6000,
+        'deepseek-r1-distill-llama-70b' => 6000,
+    ];
+
+    /** Conservative fallback when the model is unknown to the map above. */
+    private const DEFAULT_TPM = 6000;
+
+    /** Safety margin (tokens) we always leave between our reservation and the cap. */
+    private const TPM_SAFETY_MARGIN = 384;
+
     public function __construct(string $apiKey) {
         $this->apiKey = $apiKey;
+    }
+
+    /**
+     * Compute a max_tokens reservation that fits within the model's TPM cap
+     * after subtracting estimated input tokens and a safety margin.
+     *
+     * The estimate uses the chars/4 heuristic (~standard English token rate).
+     * We never go below 256 — there's always room for at least a short reply.
+     */
+    private function safeMaxTokens(string $model, array $messages, int $requested): int {
+        $tpm = self::MODEL_TPM_FREE_TIER[$model] ?? self::DEFAULT_TPM;
+        $chars = 0;
+        foreach ($messages as $m) {
+            $chars += strlen((string)($m['content'] ?? ''));
+            // Tool payloads (when chatWithFunctions is used) are accounted for
+            // by the caller passing extra options['toolPayloadChars'] — small
+            // omission acceptable here, the safety margin absorbs jitter.
+        }
+        $estInput = (int)ceil($chars / 4);
+        $available = $tpm - $estInput - self::TPM_SAFETY_MARGIN;
+        return max(256, min($requested, $available));
     }
 
     /**
@@ -27,11 +76,17 @@ class GroqAPI {
             );
         }
 
+        // Default reservation for chat replies: 1024 tokens. Plenty for normal
+        // chat (≈750 words). Caller can request larger via $options['maxTokens'];
+        // safeMaxTokens() will clamp to whatever fits in the model's TPM cap.
+        $requested = (int)($options['maxTokens'] ?? 1024);
+        $maxTokens = $this->safeMaxTokens($model, $messages, $requested);
+
         $payload = [
             'model' => $model,
             'messages' => $messages,
             'temperature' => (float)($options['temperature'] ?? 0.7),
-            'max_tokens' => (int)($options['maxTokens'] ?? 8192)
+            'max_tokens' => $maxTokens
         ];
 
         return $this->makeRequest('/chat/completions', $payload);
@@ -53,13 +108,22 @@ class GroqAPI {
             );
         }
 
+        // Tool definitions also count toward TPM. Add their JSON length to the
+        // estimate so we don't underestimate input size.
+        $toolChars = strlen(json_encode($functions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $messagesPlusTools = $messages;
+        $messagesPlusTools[] = ['role' => 'system', 'content' => str_repeat(' ', $toolChars)];
+
+        $requested = (int)($options['maxTokens'] ?? 1024);
+        $maxTokens = $this->safeMaxTokens($model, $messagesPlusTools, $requested);
+
         $payload = [
             'model' => $model,
             'messages' => $messages,
             'tools' => $functions,
             'tool_choice' => 'auto',
             'temperature' => (float)($options['temperature'] ?? 0.7),
-            'max_tokens' => (int)($options['maxTokens'] ?? 8192)
+            'max_tokens' => $maxTokens
         ];
 
         return $this->makeRequest('/chat/completions', $payload);
@@ -246,7 +310,7 @@ PROMPT;
     }
 
     /**
-     * Resolve a CA bundle path for local SSL verification (Windows/MAMP friendly).
+     * Resolve a CA bundle path for local SSL verification (Windows/MAMP/Hostinger friendly).
      */
     private function resolveCaBundlePath(): ?string {
         $phpDir = dirname(PHP_BINARY);
@@ -258,7 +322,14 @@ PROMPT;
             defined('ROOT_PATH') ? ROOT_PATH . '/cacert.pem' : null,
             defined('ROOT_PATH') ? ROOT_PATH . '/certs/cacert.pem' : null,
             $phpDir . '/extras/ssl/cacert.pem',
-            $phpDir . '/cacert.pem'
+            $phpDir . '/cacert.pem',
+            // Common Linux/Hostinger paths
+            '/etc/ssl/certs/ca-certificates.crt',
+            '/etc/pki/tls/certs/ca-bundle.crt',
+            '/etc/ssl/certs/ca-bundle.crt',
+            '/usr/local/share/certs/ca-root-nss.crt',
+            '/etc/ssl/cert.pem',
+            '/usr/local/etc/openssl/cert.pem',
         ]);
 
         foreach ($candidates as $path) {

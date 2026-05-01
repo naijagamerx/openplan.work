@@ -114,6 +114,16 @@ if ($masterPassword === '') {
             $habitCompletionRate = round(($habitsCompletedToday / $totalHabits) * 100);
         }
 
+        // Load AI daily brief for today
+        $aiBriefToday = null;
+        $today = date('Y-m-d');
+        try {
+            $briefs = $db->load('ai_daily_brief') ?? [];
+            if (!empty($briefs[$today]['brief'])) {
+                $aiBriefToday = $briefs[$today];
+            }
+        } catch (Exception $e) { /* brief not available yet */ }
+
         $backupService = new Backup($db);
         $backupSettings = array_merge([
             'enabled' => false,
@@ -253,6 +263,36 @@ if ($masterPassword === '') {
         </script>
     <?php endif; ?>
     
+    <?php if ($aiBriefToday): ?>
+    <div id="ai-daily-brief-banner" class="bg-indigo-50 border border-indigo-200 rounded-2xl p-5 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+        <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-2">
+                <svg class="w-4 h-4 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                <p class="text-sm font-bold text-indigo-900 uppercase tracking-widest">AI Daily Brief &mdash; <?php echo e(date('F j, Y', strtotime($aiBriefToday['date']))); ?></p>
+            </div>
+            <div class="text-sm text-indigo-800 leading-relaxed whitespace-pre-wrap"><?php echo e($aiBriefToday['brief']); ?></div>
+        </div>
+        <div class="flex-shrink-0">
+            <button type="button" onclick="dismissAIBrief()"
+                    class="px-3 py-1.5 border border-indigo-300 text-indigo-800 rounded-xl text-xs font-semibold hover:bg-indigo-100 transition">
+                Dismiss
+            </button>
+        </div>
+    </div>
+    <script>
+    (function() {
+        const key = 'ai_brief_dismissed_<?php echo e((string)Auth::userId()); ?>_<?php echo e($today); ?>';
+        try { if (localStorage.getItem(key)) { document.getElementById('ai-daily-brief-banner')?.remove(); } } catch(e) {}
+    })();
+    function dismissAIBrief() {
+        document.getElementById('ai-daily-brief-banner')?.remove();
+        try { localStorage.setItem('ai_brief_dismissed_<?php echo e((string)Auth::userId()); ?>_<?php echo e($today); ?>', '1'); } catch(e) {}
+    }
+    </script>
+    <?php endif; ?>
+
     <!-- Stats Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- Tasks -->
@@ -1194,11 +1234,16 @@ function sendNotification(title, options = {}) {
         return null;
     }
     if (Notification.permission === 'granted') {
-        return new Notification(title, {
+        const built = (!options.icon && (options.type || options.color) && window.buildNotificationIcon)
+            ? window.buildNotificationIcon(options.type, options.color)
+            : null;
+        const finalOpts = {
             ...options,
             requireInteraction: true,
             vibrate: [200, 100, 200]
-        });
+        };
+        if (built) finalOpts.icon = built;
+        return new Notification(title, finalOpts);
     }
     return null;
 }
