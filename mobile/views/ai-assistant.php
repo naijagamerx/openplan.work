@@ -184,7 +184,8 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     </select>
   </section>
 
-  <section class="mt-5 px-4">
+  <section class="mt-5 px-4 grid grid-cols-2 gap-2">
+    <button onclick="startNewConversation()" class="w-full bg-black text-white py-2 text-[10px] font-black uppercase tracking-widest hover:opacity-90">New Chat</button>
     <button onclick="toggleConversationHistory()" class="w-full border border-black py-2 text-[10px] font-black uppercase tracking-widest hover:bg-gray-50">Conversation History</button>
   </section>
 
