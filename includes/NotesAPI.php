@@ -7,6 +7,7 @@ class NotesAPI extends BaseAPI {
         return [
             'title',
             'content',
+            'checklist',
             'tags',
             'color',
             'isPinned',
@@ -25,6 +26,7 @@ class NotesAPI extends BaseAPI {
         $data['updatedAt'] = date('c');
         $data['isPinned'] = $data['isPinned'] ?? false;
         $data['isFavorite'] = $data['isFavorite'] ?? false;
+        $data['checklist'] = $this->sanitizeChecklist($data['checklist'] ?? []);
         $data['tags'] = $this->processTags($data['tags'] ?? []);
         return parent::create($data);
     }
@@ -38,7 +40,47 @@ class NotesAPI extends BaseAPI {
             $data['tags'] = $this->processTags($data['tags']);
         }
 
+        // Sanitize checklist if provided (client always sends the full array)
+        if (isset($data['checklist'])) {
+            $data['checklist'] = $this->sanitizeChecklist($data['checklist']);
+        }
+
         return parent::update($id, $data);
+    }
+
+    /**
+     * Normalize a checklist to a clean array of {id, text, done} items.
+     * Drops non-array input, empty text, and coerces the shape so a note's
+     * task list can never store malformed data.
+     */
+    private function sanitizeChecklist($items): array {
+        if (!is_array($items)) {
+            return [];
+        }
+
+        $clean = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $text = trim((string)($item['text'] ?? ''));
+            if ($text === '') {
+                continue;
+            }
+            // Whitelist the id charset — it is echoed into the client UI. Regenerate
+            // anything that isn't a safe token so a crafted id can't inject markup.
+            $rawId = $item['id'] ?? null;
+            $id = (is_string($rawId) && preg_match('/^[A-Za-z0-9_.-]{1,64}$/', $rawId))
+                ? $rawId
+                : uniqid('cl_', true);
+            $clean[] = [
+                'id'   => $id,
+                'text' => mb_substr($text, 0, 500),
+                'done' => !empty($item['done']),
+            ];
+        }
+
+        return array_values($clean);
     }
 
     /**

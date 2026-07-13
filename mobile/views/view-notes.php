@@ -169,6 +169,29 @@ $isEditing = ($_GET['edit'] ?? 'false') === 'true';
             white-space: pre-wrap;
             word-break: break-word;
         }
+        /* Rendered HTML note content (desktop rich notes / AI-inserted tables) */
+        #note-content-view { overflow-x: auto; }
+        #note-content-view table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 0.6rem 0;
+            font-size: 0.85rem;
+        }
+        #note-content-view th,
+        #note-content-view td {
+            border: 1px solid #d4d4d8;
+            padding: 6px 8px;
+            text-align: left;
+            vertical-align: top;
+            word-break: break-word;
+        }
+        #note-content-view th { background: #f4f4f5; font-weight: 700; }
+        #note-content-view h1 { font-size: 1.25rem; font-weight: 800; margin: 0.5rem 0; }
+        #note-content-view h2 { font-size: 1.1rem; font-weight: 700; margin: 0.5rem 0; }
+        #note-content-view ul, #note-content-view ol { margin: 0.4rem 0 0.4rem 1.1rem; }
+        #note-content-view li { list-style: disc; }
+        #note-content-view p { margin: 0.4rem 0; }
+        #note-content-view strong { font-weight: 700; }
     </style>
 </head>
 <body class="bg-gray-100 flex justify-center overflow-x-hidden">
@@ -463,6 +486,37 @@ $isEditing = ($_GET['edit'] ?? 'false') === 'true';
                 .replace(/'/g, '&#39;');
         }
 
+        // Allowlist sanitizer for rendering stored note HTML. Parsed in an inert
+        // <template> (scripts never execute), then: <script>/<style> removed,
+        // any non-allowlisted tag unwrapped to its text, and every attribute
+        // stripped except a safe http/mailto href on <a>. This is the real XSS
+        // control — the tag regex below only chooses the render path.
+        const NOTE_ALLOWED_TAGS = new Set(['TABLE','THEAD','TBODY','TFOOT','TR','TD','TH','UL','OL','LI','H1','H2','H3','H4','H5','H6','P','STRONG','EM','B','I','U','S','BR','DIV','SPAN','CODE','PRE','BLOCKQUOTE','A','HR']);
+        function sanitizeNoteHtml(html) {
+            const tpl = document.createElement('template');
+            tpl.innerHTML = html || '';
+            const walk = (node) => {
+                for (const child of Array.from(node.childNodes)) {
+                    if (child.nodeType === 8) { child.remove(); continue; } // comments
+                    if (child.nodeType !== 1) continue;                     // keep text
+                    const tag = child.tagName;
+                    if (tag === 'SCRIPT' || tag === 'STYLE') { child.remove(); continue; }
+                    if (!NOTE_ALLOWED_TAGS.has(tag)) {
+                        child.replaceWith(document.createTextNode(child.textContent || ''));
+                        continue;
+                    }
+                    for (const attr of Array.from(child.attributes)) {
+                        const ok = tag === 'A' && attr.name.toLowerCase() === 'href'
+                            && /^(https?:|mailto:)/i.test(attr.value.trim());
+                        if (!ok) child.removeAttribute(attr.name);
+                    }
+                    walk(child);
+                }
+            };
+            walk(tpl.content);
+            return tpl.innerHTML;
+        }
+
         function renderChecklistContent() {
             const container = document.getElementById('note-content-view');
             const emptyHint = document.getElementById('note-empty-hint');
@@ -474,6 +528,15 @@ $isEditing = ($_GET['edit'] ?? 'false') === 'true';
                 return;
             }
             if (emptyHint) emptyHint.classList.add('hidden');
+
+            // Desktop rich notes (and AI-inserted tables) are stored as HTML. If the
+            // content contains HTML block tags, render it as HTML so tables/formatting
+            // preview — same trust model as the desktop editor's innerHTML (per-user
+            // content). Plain-text / markdown-checklist notes keep the line renderer.
+            if (/<(table|thead|tbody|tr|td|th|ul|ol|li|h[1-6]|p|strong|em|b|i|br|div|code|blockquote)\b/i.test(currentNoteContent)) {
+                container.innerHTML = sanitizeNoteHtml(currentNoteContent);
+                return;
+            }
 
             const lines = currentNoteContent.split(/\r?\n/);
             container.innerHTML = lines.map((line, index) => {

@@ -7,9 +7,28 @@ require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../includes/AIHelper.php';
 require_once __DIR__ . '/../includes/OllamaAPI.php';
 require_once __DIR__ . '/../includes/GeminiAPI.php';
+require_once __DIR__ . '/../includes/SubscriptionHelper.php';
 
+// Keep errors out of the JSON response, but keep logging on (config.php sets
+// E_ALL + log_errors). error_reporting(0) here silently swallowed errors.
 ini_set('display_errors', 0);
-error_reporting(0);
+
+/**
+ * Charge one request against the platform's shared quota when (and only when)
+ * the user is consuming admin-supplied keys. Called immediately after a real
+ * AI API call returns successfully — before successResponse() exits.
+ */
+function aiCountSharedUsage(?array $config, ?string $userId, ?string $provider): void {
+    if (empty($config['useAdminSharedAiKeys'])) {
+        return;
+    }
+    if (!$userId || $userId === 'anonymous' || empty($provider)) {
+        return;
+    }
+    if (function_exists('incrementUsage')) {
+        incrementUsage($userId, $provider);
+    }
+}
 
 /**
  * Generate a SKU code from product name
@@ -210,7 +229,7 @@ $action = $_GET['action'] ?? $body['action'] ?? null;
 // requires loopback origin + valid X-MCP-Api-Token or static MCP secret).
 // Previous behavior of trusting raw HTTP_X_MCP_TOOL header is unsafe — header alone
 // is attacker-controlled and bypasses CSRF entirely.
-if (!Auth::isMcp()) {
+if (!Auth::isTokenAuth()) {
     $token = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if (!Auth::validateCsrf($token)) {
         errorResponse('Invalid CSRF token', 403);
@@ -319,6 +338,29 @@ if (empty($provider)) {
     }
 }
 
+// Plan-tier provider gate + shared-key swap. If the user has opted into platform
+// keys AND has an active subscription that unlocks this provider, replace the
+// user's (likely empty) key with the admin's shared key for the remainder of
+// the request. This is the only place where the raw shared key is read on the
+// chat path.
+if (!empty($config['useAdminSharedAiKeys'])) {
+    require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+    $tierSub = getActiveSubscription(Auth::userId() ?? '');
+    if (!$tierSub) {
+        errorResponse('No active subscription. Buy a plan to use platform AI keys.', 403, 'NO_SUBSCRIPTION');
+    }
+    if (!subscriptionUnlocksProvider($tierSub, $provider)) {
+        errorResponse('Your plan does not include the ' . $provider . ' provider. Upgrade to access it.', 403, 'PROVIDER_NOT_IN_PLAN');
+    }
+
+    $sharedKey = getAdminSharedKey($provider);
+    if (!empty($sharedKey)) {
+        if ($provider === 'groq')       { $groqKey = $sharedKey; }
+        if ($provider === 'openrouter') { $openrouterKey = $sharedKey; }
+        if ($provider === 'gemini')     { $geminiKey = $sharedKey; }
+    }
+}
+
 // Check API key / connectivity config
 if ($provider === 'groq' && empty($groqKey)) {
     errorResponse('Groq API key not configured. Please add it in Settings.');
@@ -370,6 +412,7 @@ try {
             }
 
             $result = $api->generateTasks($description);
+            aiCountSharedUsage($config, $userId, $provider);
             successResponse($result['data'] ?? $result);
             break;
 
@@ -424,6 +467,7 @@ try {
             }
 
             $result = $api->generatePRD($idea);
+            aiCountSharedUsage($config, $userId, $provider);
             successResponse(['prd' => $result['prd'] ?? '', 'idea' => $idea]);
             break;
 
@@ -516,6 +560,7 @@ try {
                     errorResponse('AI Error: ' . $errMsg, 500, 'AI_ERROR');
                 }
                 $content = $result['choices'][0]['message']['content'] ?? '';
+                aiCountSharedUsage($config, $userId, $provider);
                 successResponse([
                     'response' => $content,
                     'provider' => $provider,
@@ -577,6 +622,7 @@ try {
 
             $aiHelper = new AIHelper($db);
             $result = $aiHelper->suggestHabits($goals, $provider, $model);
+            aiCountSharedUsage($config, $userId, $provider);
             successResponse($result);
             break;
 
@@ -635,6 +681,7 @@ PROMPT;
                     $parsed = ['items' => []];
                 }
 
+                aiCountSharedUsage($config, $userId, $provider);
                 successResponse(['items' => $parsed['items'] ?? []]);
             } catch (Exception $e) {
                 error_log('Failed to generate inventory: ' . $e->getMessage());
@@ -711,6 +758,7 @@ PROMPT;
                     errorResponse('AI Error: ' . ($result['error']['message'] ?? 'Unknown error'), 500, 'AI_ERROR');
                 }
                 $content = $result['choices'][0]['message']['content'] ?? $result;
+                aiCountSharedUsage($config, $userId, $provider);
                 successResponse(['content' => $content]);
             } catch (Exception $e) {
                 errorResponse('AI request failed: ' . $e->getMessage(), 500, 'AI_ERROR');
@@ -799,12 +847,97 @@ PROMPT;
                 $originalWordCount = str_word_count(strip_tags($noteContent));
                 $editedWordCount = str_word_count(strip_tags($editedContent));
 
+                aiCountSharedUsage($config, $userId, $provider);
                 successResponse([
                     'content' => $editedContent,
                     'originalWordCount' => $originalWordCount,
                     'editedWordCount' => $editedWordCount,
                     'operation' => $operation
                 ]);
+            } catch (Exception $e) {
+                errorResponse('AI request failed: ' . $e->getMessage(), 500, 'AI_ERROR');
+            }
+            break;
+
+        case 'notes_chat':
+            // Docked "Notes AI" side-panel: a free-form chat that always sees the
+            // current note, and optionally the titles of every other note, so the
+            // user can brainstorm/edit alongside the editor. Client owns insertion.
+            $noteId = $body['noteId'] ?? '';
+            $incomingMessages = $body['messages'] ?? [];
+            $includeAllNotes = !empty($body['includeAllNotes']);
+
+            if (!is_array($incomingMessages) || empty($incomingMessages)) {
+                errorResponse('At least one message is required', 400, ERROR_VALIDATION);
+            }
+
+            // Sanitize the conversation turns: known roles, string content, capped
+            // length and turn-count so a runaway history can't blow the context.
+            $chatMessages = [];
+            foreach (array_slice($incomingMessages, -20) as $m) {
+                if (!is_array($m)) { continue; }
+                $role = $m['role'] ?? 'user';
+                if (!in_array($role, ['user', 'assistant'], true)) { $role = 'user'; }
+                $content = trim((string)($m['content'] ?? ''));
+                if ($content === '') { continue; }
+                $chatMessages[] = ['role' => $role, 'content' => mb_substr($content, 0, 8000)];
+            }
+            if (empty($chatMessages)) {
+                errorResponse('At least one non-empty message is required', 400, ERROR_VALIDATION);
+            }
+
+            // Load the current note (ownership-checked, mirrors edit_note above).
+            $allNotes = $db->load('notes', true);
+            $currentUserId = Auth::userId();
+            $currentNote = null;
+            foreach ($allNotes as $n) {
+                if (($n['id'] ?? '') !== $noteId) { continue; }
+                $noteUserId = $n['userId'] ?? null;
+                if (!empty($noteUserId) && $noteUserId !== $currentUserId) { continue; }
+                $currentNote = $n;
+                break;
+            }
+
+            // Build the grounding system prompt.
+            $systemPrompt = "You are a focused writing assistant embedded in a note-taking app. "
+                . "Help the user brainstorm, draft, rewrite, and refine their notes. "
+                . "When asked to produce note content, use clean markdown (## headings, - bullets, **bold**). "
+                . "Be concise and directly useful; do not add meta-commentary unless asked.";
+
+            if ($currentNote) {
+                $noteTitle = trim((string)($currentNote['title'] ?? 'Untitled'));
+                $notePlain = trim(strip_tags((string)($currentNote['content'] ?? '')));
+                $notePlain = mb_substr($notePlain, 0, 6000);
+                $systemPrompt .= "\n\n--- CURRENT NOTE ---\nTitle: {$noteTitle}\n\n"
+                    . ($notePlain !== '' ? $notePlain : '(empty note)') . "\n--- END CURRENT NOTE ---";
+            }
+
+            if ($includeAllNotes) {
+                $titles = [];
+                foreach ($allNotes as $n) {
+                    $noteUserId = $n['userId'] ?? null;
+                    if (!empty($noteUserId) && $noteUserId !== $currentUserId) { continue; }
+                    if (($n['id'] ?? '') === $noteId) { continue; }
+                    $t = trim((string)($n['title'] ?? ''));
+                    if ($t !== '') { $titles[] = $t; }
+                    if (count($titles) >= 100) { break; }
+                }
+                if (!empty($titles)) {
+                    $systemPrompt .= "\n\n--- USER'S OTHER NOTE TITLES ---\n- " . implode("\n- ", $titles)
+                        . "\n--- END TITLES ---";
+                }
+            }
+
+            array_unshift($chatMessages, ['role' => 'system', 'content' => $systemPrompt]);
+
+            try {
+                $result = $api->chatCompletion($chatMessages, $model);
+                if (isset($result['error'])) {
+                    errorResponse('AI Error: ' . ($result['error']['message'] ?? 'Unknown error'), 500, 'AI_ERROR');
+                }
+                $content = $result['choices'][0]['message']['content'] ?? '';
+                aiCountSharedUsage($config, $userId, $provider);
+                successResponse(['content' => $content]);
             } catch (Exception $e) {
                 errorResponse('AI request failed: ' . $e->getMessage(), 500, 'AI_ERROR');
             }

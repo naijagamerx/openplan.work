@@ -93,8 +93,11 @@ if (!defined('ASSETS_PATH')) {
             <?php include VIEWS_PATH . '/partials/header.php'; ?>
 
             <!-- Page Content -->
-            <main class="flex-1">
-                <div class="w-full max-w-none xl:px-8 py-8 animate-fade-in">
+            <main class="flex-1 flex flex-col">
+                <?php // Notes is a full-height app view: fill the main area (no page padding)
+                      // so its fixed-height panes reach the viewport bottom with no gray gap.
+                      $isFullBleed = ($page ?? '') === 'notes'; ?>
+                <div class="w-full max-w-none <?php echo $isFullBleed ? 'flex-1 min-h-0' : 'xl:px-8 py-8'; ?> animate-fade-in">
                     <?php include VIEWS_PATH . '/' . $page . '.php'; ?>
                 </div>
             </main>
@@ -292,7 +295,7 @@ if (!defined('ASSETS_PATH')) {
                 top: 0;
                 left: 0;
                 bottom: 0;
-                z-[60] !important;
+                z-index: 60 !important;
                 transform: translateX(-100%);
                 transition: transform 0.3s ease-in-out;
             }

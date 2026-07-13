@@ -22,8 +22,10 @@ $notesAPI = new NotesAPI($db, 'notes');
 $action = $_GET['action'] ?? null;
 $id = $_GET['id'] ?? null;
 
-// MCP bypass for CSRF validation (use consistent Auth::isMcp() method)
-$isMCP = Auth::isMcp();
+// Bypass CSRF for token-authenticated requests. MCP tools AND native-mobile
+// device tokens authenticate with a bearer token (not a browser session cookie),
+// so they are not subject to CSRF and don't carry a session CSRF token.
+$isTokenAuth = Auth::isTokenAuth();
 
 switch (requestMethod()) {
     case 'GET':
@@ -79,7 +81,7 @@ switch (requestMethod()) {
         $csrfToken = $body['csrf_token'] ?? '';
 
         // CSRF validation (skip for MCP)
-        if (!$isMCP && !Auth::validateCsrf($csrfToken)) {
+        if (!$isTokenAuth && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 
@@ -264,7 +266,7 @@ switch (requestMethod()) {
         $csrfToken = $body['csrf_token'] ?? '';
 
         // CSRF validation (skip for MCP)
-        if (!$isMCP && !Auth::validateCsrf($csrfToken)) {
+        if (!$isTokenAuth && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 
@@ -285,7 +287,7 @@ switch (requestMethod()) {
         $csrfToken = $_GET['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
 
         // CSRF validation (skip for MCP)
-        if (!$isMCP && !Auth::validateCsrf($csrfToken)) {
+        if (!$isTokenAuth && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 

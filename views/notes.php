@@ -100,9 +100,9 @@ if (empty($geminiModels) && $hasGeminiKey) {
 </div>
 
 <!-- Desktop Three-Pane Container (>= 1024px) -->
-<div class="hidden lg:flex h-[calc(100vh-64px)] overflow-hidden">
+<div class="hidden lg:flex h-[calc(100vh-72px)] overflow-hidden">
     <!-- Left Pane: Categories -->
-    <section class="w-60 flex flex-col bg-white border-r border-gray-200 flex-shrink-0 notes-page-section h-full overflow-hidden">
+    <section id="notes-category-pane" class="w-60 flex flex-col bg-white border-r border-gray-200 flex-shrink-0 notes-page-section h-full overflow-hidden">
         <!-- New Note Button (Desktop Only) -->
         <div class="p-4 hidden lg:block">
             <button onclick="createAndSelectNewNote()"
@@ -271,7 +271,7 @@ if (empty($geminiModels) && $hasGeminiKey) {
                         </svg>
                     </button>
                     <div class="w-px h-4 bg-gray-200 mx-1"></div>
-                    <button onclick="insertChecklist()" class="p-1.5 rounded-md hover:bg-gray-100 transition-colors" title="Checklist">
+                    <button onclick="focusChecklistInput()" class="p-1.5 rounded-md hover:bg-gray-100 transition-colors" title="Add task">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
                         </svg>
@@ -282,15 +282,11 @@ if (empty($geminiModels) && $hasGeminiKey) {
                         </svg>
                     </button>
                     <div class="w-px h-4 bg-gray-200 mx-1"></div>
-                    <button onclick="openAIGenerateModal()" class="p-1.5 rounded-md hover:bg-gray-100 transition-colors text-gray-600" title="AI Generate">
+                    <button onclick="toggleNotesAi()" id="notes-ai-toggle" class="p-1.5 rounded-md hover:bg-gray-100 transition-colors text-gray-600 flex items-center gap-1.5" title="Notes AI (Ctrl+I)">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
                         </svg>
-                    </button>
-                    <button onclick="openAIEditModal()" class="p-1.5 rounded-md hover:bg-gray-100 transition-colors text-gray-600" title="AI Edit (Ctrl+I)">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                        </svg>
+                        <span class="text-[11px] font-bold uppercase tracking-wider hidden xl:inline">AI</span>
                     </button>
                     <button onclick="openConvertToMarkdownModal()" class="p-1.5 rounded-md hover:bg-gray-100 transition-colors text-gray-600" title="Convert to Knowledge Base">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -357,8 +353,28 @@ if (empty($geminiModels) && $hasGeminiKey) {
                     <div id="editor-content"
                          contenteditable="true"
                          data-placeholder="Start writing..."
-                         class="w-full text-base text-gray-700 border-none focus:ring-0 p-0 placeholder:text-gray-300 bg-transparent font-sans min-h-[600px] outline-none overflow-y-auto"
+                         class="w-full text-base text-gray-700 border-none focus:ring-0 p-0 placeholder:text-gray-300 bg-transparent font-sans min-h-[320px] outline-none overflow-y-auto"
                          oninput="triggerAutoSave()"></div>
+
+                    <!-- Structured Tasks / Checklist (persisted in note.checklist) -->
+                    <div id="editor-tasks" class="mt-8 pt-6 border-t border-gray-100">
+                        <h3 class="text-[11px] font-bold uppercase tracking-widest text-gray-500 flex items-center gap-2 mb-3">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                            </svg>
+                            <span>Tasks</span>
+                            <span id="checklist-progress" class="text-gray-400 font-medium normal-case tracking-normal"></span>
+                        </h3>
+                        <div id="checklist-items" class="space-y-0.5"></div>
+                        <div class="flex items-center gap-2 mt-2 text-gray-400">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            <input id="checklist-add-input" type="text" placeholder="Add a task..."
+                                   class="flex-1 text-sm text-gray-700 border-none focus:ring-0 p-0 bg-transparent placeholder:text-gray-300 outline-none"
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault();addChecklistItem();}">
+                        </div>
+                    </div>
                 </article>
             </div>
 
@@ -382,6 +398,63 @@ if (empty($geminiModels) && $hasGeminiKey) {
                     <div class="h-6 w-[1px] bg-gray-200"></div>
                     <button onclick="showMobilePane('notes')" class="text-xs font-black uppercase tracking-widest bg-black text-white px-3 py-1.5 rounded-sm">Done</button>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Right Pane: Notes AI (collapsed until toggled; width via body.notes-ai-open) -->
+    <section id="notes-ai-pane" class="flex flex-col bg-white border-l border-gray-200 flex-shrink-0 h-full">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-4 h-14 border-b border-gray-200 flex-shrink-0">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+                </svg>
+                <span class="text-sm font-bold text-gray-900">Notes AI</span>
+            </div>
+            <div class="flex items-center gap-1">
+                <button onclick="clearNotesAiChat()" class="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-black transition" title="New chat">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                </button>
+                <button onclick="toggleNotesAi(false)" class="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-black transition" title="Close">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <!-- Controls -->
+        <div class="px-4 py-2 border-b border-gray-100 flex items-center gap-3 flex-shrink-0">
+            <select id="notes-ai-model" class="flex-1 min-w-0 text-xs text-gray-700 border border-gray-200 rounded-md px-2 py-1.5 focus:ring-0 focus:border-gray-400 bg-white"></select>
+            <label class="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 cursor-pointer whitespace-nowrap" title="Give the AI the titles of all your notes for cross-note brainstorming">
+                <input type="checkbox" id="notes-ai-all-notes" class="rounded border-gray-300 text-black focus:ring-0"> All notes
+            </label>
+        </div>
+        <!-- Quick actions (reuse edit_note / generate_note_content) -->
+        <div class="px-4 py-2 flex flex-wrap gap-1.5 border-b border-gray-100 flex-shrink-0">
+            <button onclick="notesAiQuickAction('improve')" class="notes-ai-chip">Improve</button>
+            <button onclick="notesAiQuickAction('expand')" class="notes-ai-chip">Expand</button>
+            <button onclick="notesAiQuickAction('summarize')" class="notes-ai-chip">Summarize</button>
+            <button onclick="notesAiQuickAction('rewrite')" class="notes-ai-chip">Rewrite</button>
+            <button onclick="notesAiQuickAction('generate')" class="notes-ai-chip">Generate</button>
+            <button onclick="notesAiMakeTasks()" class="notes-ai-chip font-semibold text-black">✓ Make tasks</button>
+        </div>
+        <!-- Transcript -->
+        <div id="notes-ai-transcript" class="flex-1 overflow-y-auto px-4 py-3 space-y-3 hide-scrollbar"></div>
+        <!-- Composer -->
+        <div class="p-3 border-t border-gray-200 flex-shrink-0">
+            <div class="flex items-end gap-2 border border-gray-200 rounded-xl px-3 py-2 focus-within:border-gray-400 transition-colors">
+                <textarea id="notes-ai-input" rows="1" placeholder="Ask, brainstorm, or edit…"
+                          class="flex-1 resize-none text-sm text-gray-700 border-none focus:ring-0 p-0 bg-transparent placeholder:text-gray-300 outline-none max-h-32"
+                          oninput="autoGrowNotesAiInput(this)"
+                          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();notesAiSend();}"></textarea>
+                <button onclick="notesAiSend()" id="notes-ai-send" class="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-black text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-40" title="Send">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19V5m-7 7l7-7 7 7"></path>
+                    </svg>
+                </button>
             </div>
         </div>
     </section>
@@ -479,8 +552,16 @@ if (empty($geminiModels) && $hasGeminiKey) {
         color: #000;
     }
 
+    /* Position every row so the active accent bar (::before) anchors to the
+       row itself. Without this the absolute bar escaped to a distant ancestor
+       and the active note was effectively invisible while scrolling. */
+    .note-item {
+        position: relative;
+    }
+
     .note-item.active {
         background-color: #f3f4f6;
+        box-shadow: inset 0 0 0 1px #e5e7eb;
     }
 
     .note-item.active::before {
@@ -489,8 +570,17 @@ if (empty($geminiModels) && $hasGeminiKey) {
         left: 0;
         top: 0;
         bottom: 0;
-        width: 4px;
-        background-color: #000;
+        width: 3px;
+        background-color: #0A0A0A;
+    }
+
+    /* "Editing" pill lives in every row's markup but is only revealed on the
+       active row (createNoteListItem always renders it hidden). */
+    .note-active-badge {
+        display: none !important;
+    }
+    .note-item.active .note-active-badge {
+        display: inline-flex !important;
     }
 
     .spinner:not(.hidden) {
@@ -554,6 +644,85 @@ if (empty($geminiModels) && $hasGeminiKey) {
         opacity: 0;
         pointer-events: none;
     }
+
+    /* Folder/category pane collapse — mirrors the list collapse. Toggled
+       automatically when the Notes-AI panel opens to free up horizontal room. */
+    #notes-category-pane {
+        transition: width 0.2s ease, flex-basis 0.2s ease, opacity 0.2s ease;
+    }
+    body.notes-folder-collapsed #notes-category-pane {
+        width: 0 !important;
+        flex-basis: 0 !important;
+        min-width: 0 !important;
+        border-right: 0;
+        overflow: hidden;
+    }
+    body.notes-folder-collapsed #notes-category-pane > * {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    /* Notes-AI side panel. Hidden by default; slides in as a bordered column. */
+    #notes-ai-pane {
+        width: 0;
+        flex-basis: 0;
+        overflow: hidden;
+        transition: width 0.2s ease, flex-basis 0.2s ease;
+    }
+    body.notes-ai-open #notes-ai-pane {
+        width: 380px;
+        flex-basis: 380px;
+    }
+    .notes-ai-msg-content h1,
+    .notes-ai-msg-content h2,
+    .notes-ai-msg-content h3 { font-weight: 700; margin: 0.4rem 0 0.2rem; }
+    .notes-ai-msg-content ul,
+    .notes-ai-msg-content ol { margin: 0.3rem 0 0.3rem 1.1rem; }
+    .notes-ai-msg-content li { list-style: disc; margin: 0.1rem 0; }
+    .notes-ai-msg-content ol li { list-style: decimal; }
+    .notes-ai-msg-content p { margin: 0.3rem 0; }
+    .notes-ai-msg-content code { background: #f3f4f6; padding: 0 3px; border-radius: 3px; font-size: 0.85em; }
+    .notes-ai-chip {
+        font-size: 11px;
+        font-weight: 600;
+        color: #374151;
+        border: 1px solid #e5e7eb;
+        border-radius: 9999px;
+        padding: 3px 10px;
+        transition: all 0.15s ease;
+    }
+    .notes-ai-chip:hover { border-color: #0A0A0A; color: #0A0A0A; }
+    .notes-ai-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+    #notes-ai-toggle.active { background-color: #0A0A0A; color: #fff; }
+
+    /* Rendered markdown tables (AI "put this in a table" output) — in the note
+       editor and in the AI transcript. */
+    #editor-content table,
+    #mobile-editor-content table,
+    .notes-ai-msg-content table {
+        border-collapse: collapse;
+        margin: 0.6rem 0;
+        font-size: 0.85em;
+    }
+    #editor-content table,
+    #mobile-editor-content table { width: 100%; }
+    #editor-content th, #editor-content td,
+    #mobile-editor-content th, #mobile-editor-content td,
+    .notes-ai-msg-content th, .notes-ai-msg-content td {
+        border: 1px solid #e5e7eb;
+        padding: 6px 9px;
+        text-align: left;
+        vertical-align: top;
+        word-break: break-word;
+    }
+    #editor-content th,
+    #mobile-editor-content th,
+    .notes-ai-msg-content th {
+        background: #f9fafb;
+        font-weight: 700;
+    }
+    /* The transcript pane is narrow — let a wide table scroll horizontally. */
+    .notes-ai-msg-content { overflow-x: auto; }
 
     /* Note content typography + wrap */
     #editor-content,
@@ -975,6 +1144,7 @@ function createNoteListItem(note) {
                     ${isNew ? '<span class="inline-block w-2 h-2 bg-black rounded-full flex-shrink-0" title="New note"></span>' : ''}
                     ${note.isPinned ? '<svg class="w-3 h-3 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>' : ''}
                     <h4 class="font-bold text-sm text-gray-900 truncate">${escapeHtml(note.title || 'Untitled')}</h4>
+                    <span class="note-active-badge flex-shrink-0 items-center gap-1 text-[8px] font-bold uppercase tracking-widest text-white bg-black px-1.5 py-0.5 rounded">Editing</span>
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0">
                     <button onclick="event.stopPropagation(); togglePinNote('${note.id}')" 
@@ -1158,6 +1328,14 @@ function loadNoteIntoEditor(noteId) {
         
         // Update pin button state
         updateEditorPinButton(note.isPinned);
+
+        // Load this note's structured task list + refresh the AI panel context.
+        currentChecklist = Array.isArray(note.checklist) ? note.checklist.slice() : [];
+        notesAiSavedRange = null; // caret from a previous note must not carry over
+        renderChecklist();
+        if (document.body.classList.contains('notes-ai-open')) {
+            renderNotesAiTranscript();
+        }
     }
 }
 
@@ -1210,11 +1388,17 @@ async function autoSaveNote() {
     }
 
     try {
-        const response = await api.put(`api/notes.php?id=${selectedNoteId}`, {
+        const payload = {
             title: title || 'Untitled',
             content,
             csrf_token: CSRF_TOKEN
-        });
+        };
+        // Desktop owns the structured checklist; include it so a content save
+        // and the task list stay consistent. (Mobile editor has no checklist UI.)
+        if (!isMobile) {
+            payload.checklist = currentChecklist;
+        }
+        const response = await api.put(`api/notes.php?id=${selectedNoteId}`, payload);
 
         // Check for session timeout
         if (!response || response.status === 401 || (response.message && response.message.includes('session'))) {
@@ -1456,10 +1640,11 @@ document.addEventListener('keydown', function(e) {
     }
     if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
         e.preventDefault();
-        openAIEditModal();
+        toggleNotesAi(true);
     }
     if (e.key === 'Escape' && selectedNoteId) {
         selectedNoteId = null;
+        toggleNotesAi(false);
         document.getElementById('editor-container').classList.add('hidden');
         document.getElementById('editor-empty').classList.remove('hidden');
         document.querySelectorAll('.note-item').forEach(item => {
@@ -1477,6 +1662,594 @@ const ALL_MODELS = <?php echo json_encode([
     'ollama'      => array_values($ollamaModels),
 ]); ?>;
 
+// ==================== NOTES AI PANEL + STRUCTURED CHECKLIST ====================
+// Consolidates the old AI Generate + AI Edit popups into one docked side panel.
+// Backend: api/ai.php?action=notes_chat (free chat) + edit_note / generate_note_content
+// (quick actions). All calls are async fetch — the browser never blocks.
+
+let notesAiSavedRange = null;                 // caret position inside #editor-content
+let notesAiBusy = false;                      // in-flight guard
+const notesAiChats = new Map();               // noteId -> [{role, content}]
+let currentChecklist = [];                    // structured tasks for the open note
+let notesAiPrevCollapse = null;               // remembers pane state before opening AI
+
+// Pull the real server-side reason out of a failed api.* call. The api helper
+// (assets/js/app.js) attaches the parsed JSON error body to `e.response`, so a
+// 500 from an upstream provider carries its true message there — not in e.message
+// (which is just "HTTP error! status: 500").
+function aiErr(e) {
+    return (e && e.response && (e.response.error?.message || e.response.message))
+        || (e && e.message)
+        || 'Unknown error';
+}
+
+function notesAiChatKey() { return selectedNoteId || '__scratch__'; }
+function notesAiHistory() {
+    const key = notesAiChatKey();
+    if (!notesAiChats.has(key)) notesAiChats.set(key, []);
+    return notesAiChats.get(key);
+}
+
+function hasAnyAiModel() {
+    return Object.keys(ALL_MODELS).some(p => (ALL_MODELS[p] || []).length > 0);
+}
+
+function getSelectedProviderModel() {
+    const sel = document.getElementById('notes-ai-model');
+    const raw = sel && sel.value ? sel.value : '';
+    const [provider, model] = raw.split('|');
+    return { provider: provider || '', model: model || '' };
+}
+
+function populateNotesAiModels() {
+    const sel = document.getElementById('notes-ai-model');
+    if (!sel) return 0;
+    sel.innerHTML = '';
+    const labels = { groq: 'Groq', openrouter: 'OpenRouter', gemini: 'Gemini', ollama: 'Ollama' };
+    let count = 0;
+    Object.keys(ALL_MODELS).forEach(provider => {
+        const models = ALL_MODELS[provider] || [];
+        if (!models.length) return;
+        const group = document.createElement('optgroup');
+        group.label = labels[provider] || provider;
+        models.forEach(m => {
+            const id = m.modelId || m.id;
+            if (!id) return;
+            const opt = document.createElement('option');
+            opt.value = provider + '|' + id;
+            opt.textContent = m.displayName || id;
+            if (m.isDefault) opt.selected = true;
+            group.appendChild(opt);
+            count++;
+        });
+        sel.appendChild(group);
+    });
+    return count;
+}
+
+// Capture the editor caret before focus leaves for the AI panel.
+function captureEditorRange() {
+    const editor = document.getElementById('editor-content');
+    if (!editor) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    if (editor.contains(range.commonAncestorContainer)) {
+        notesAiSavedRange = range.cloneRange();
+    }
+}
+
+function toggleNotesAi(force) {
+    const open = typeof force === 'boolean' ? force : !document.body.classList.contains('notes-ai-open');
+    const toggleBtn = document.getElementById('notes-ai-toggle');
+
+    if (open) {
+        if (!hasAnyAiModel()) {
+            showToast('Add an AI API key in Settings to use Notes AI', 'warning');
+            return;
+        }
+        // Remember current pane state, then free up room by collapsing folder + list.
+        notesAiPrevCollapse = {
+            folder: document.body.classList.contains('notes-folder-collapsed'),
+            list: document.body.classList.contains('notes-list-collapsed'),
+        };
+        document.body.classList.add('notes-ai-open', 'notes-folder-collapsed', 'notes-list-collapsed');
+        if (typeof updateNoteListToggleButtons === 'function') updateNoteListToggleButtons();
+        if (toggleBtn) toggleBtn.classList.add('active');
+        renderNotesAiTranscript();
+        setTimeout(() => document.getElementById('notes-ai-input')?.focus(), 210);
+    } else {
+        document.body.classList.remove('notes-ai-open');
+        // Restore the pane state we had before opening the panel.
+        if (notesAiPrevCollapse) {
+            document.body.classList.toggle('notes-folder-collapsed', notesAiPrevCollapse.folder);
+            document.body.classList.toggle('notes-list-collapsed', notesAiPrevCollapse.list);
+            if (typeof updateNoteListToggleButtons === 'function') updateNoteListToggleButtons();
+        }
+        if (toggleBtn) toggleBtn.classList.remove('active');
+    }
+}
+
+function autoGrowNotesAiInput(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 128) + 'px';
+}
+
+function clearNotesAiChat() {
+    notesAiChats.set(notesAiChatKey(), []);
+    renderNotesAiTranscript();
+}
+
+function renderNotesAiTranscript() {
+    const box = document.getElementById('notes-ai-transcript');
+    if (!box) return;
+    const history = notesAiHistory();
+
+    if (history.length === 0) {
+        box.innerHTML = `
+            <div class="text-center text-gray-400 mt-8 px-4">
+                <svg class="w-10 h-10 mx-auto mb-3 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+                </svg>
+                <p class="text-sm font-medium text-gray-500">Brainstorm with your notes</p>
+                <p class="text-xs mt-1">The assistant can see this note${document.getElementById('notes-ai-all-notes')?.checked ? ' and all your note titles' : ''}. Ask a question or use a quick action.</p>
+            </div>`;
+        return;
+    }
+
+    box.innerHTML = history.map((m, i) => {
+        if (m.role === 'user') {
+            return `<div class="flex justify-end">
+                <div class="max-w-[85%] bg-black text-white text-sm rounded-2xl rounded-br-sm px-3 py-2 whitespace-pre-wrap break-words">${escapeHtml(m.content)}</div>
+            </div>`;
+        }
+        return `<div class="flex flex-col items-start gap-1.5">
+            <div class="max-w-full w-full bg-gray-50 border border-gray-100 rounded-2xl rounded-bl-sm px-3 py-2 text-sm text-gray-800 notes-ai-msg-content break-words">${mdToHtml(m.content)}</div>
+            <div class="flex flex-wrap gap-1 pl-1">
+                <button onclick="insertAiMessage(${i})" class="notes-ai-chip">Insert at cursor</button>
+                <button onclick="replaceNoteWithAiMessage(${i})" class="notes-ai-chip">Replace</button>
+                <button onclick="appendAiMessage(${i})" class="notes-ai-chip">Append</button>
+                <button onclick="copyAiMessage(${i})" class="notes-ai-chip">Copy</button>
+            </div>
+        </div>`;
+    }).join('');
+    box.scrollTop = box.scrollHeight;
+}
+
+function renderNotesAiTyping(on) {
+    const box = document.getElementById('notes-ai-transcript');
+    if (!box) return;
+    let el = document.getElementById('notes-ai-typing');
+    if (on) {
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'notes-ai-typing';
+            el.className = 'flex items-center gap-1.5 text-gray-400 text-sm pl-2';
+            el.innerHTML = '<span class="inline-block w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span><span class="inline-block w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style="animation-delay:0.15s"></span><span class="inline-block w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style="animation-delay:0.3s"></span>';
+            box.appendChild(el);
+            box.scrollTop = box.scrollHeight;
+        }
+    } else if (el) {
+        el.remove();
+    }
+}
+
+function setNotesAiBusy(busy) {
+    notesAiBusy = busy;
+    const send = document.getElementById('notes-ai-send');
+    if (send) send.disabled = busy;
+    document.querySelectorAll('.notes-ai-chip').forEach(c => {
+        if (c.closest('#notes-ai-transcript')) return; // leave message-action chips enabled
+        c.disabled = busy;
+    });
+    renderNotesAiTyping(busy);
+}
+
+async function notesAiSend() {
+    if (notesAiBusy) return;
+    const input = document.getElementById('notes-ai-input');
+    const text = (input?.value || '').trim();
+    if (!text) return;
+    const { provider, model } = getSelectedProviderModel();
+    if (!provider || !model) { showToast('No AI model available', 'warning'); return; }
+
+    const history = notesAiHistory();
+    history.push({ role: 'user', content: text });
+    input.value = '';
+    autoGrowNotesAiInput(input);
+    renderNotesAiTranscript();
+    setNotesAiBusy(true);
+
+    try {
+        const response = await api.post('api/ai.php?action=notes_chat', {
+            messages: history.map(m => ({ role: m.role, content: m.content })),
+            provider,
+            model,
+            noteId: selectedNoteId || '',
+            includeAllNotes: !!document.getElementById('notes-ai-all-notes')?.checked,
+            csrf_token: CSRF_TOKEN,
+        });
+        if (response && response.success) {
+            history.push({ role: 'assistant', content: response.data.content || '(no response)' });
+        } else {
+            showToast(response?.message || 'AI request failed', 'error');
+            history.pop(); // drop the user turn that failed
+        }
+    } catch (e) {
+        showToast('AI request failed: ' + aiErr(e), 'error');
+        history.pop();
+    } finally {
+        setNotesAiBusy(false);
+        renderNotesAiTranscript();
+    }
+}
+
+// Quick actions: 'generate' hits generate_note_content; the rest hit edit_note.
+async function notesAiQuickAction(op) {
+    if (notesAiBusy) return;
+    const { provider, model } = getSelectedProviderModel();
+    if (!provider || !model) { showToast('No AI model available', 'warning'); return; }
+    const history = notesAiHistory();
+    const input = document.getElementById('notes-ai-input');
+    const extra = (input?.value || '').trim();
+
+    if (op === 'generate') {
+        if (!extra) { showToast('Type what to generate in the box first', 'info'); input?.focus(); return; }
+        history.push({ role: 'user', content: 'Generate: ' + extra });
+        input.value = '';
+        autoGrowNotesAiInput(input);
+    } else {
+        if (!selectedNoteId) { showToast('Open a note first', 'info'); return; }
+        const labels = { improve: 'Improve this note', expand: 'Expand this note', summarize: 'Summarize this note', rewrite: 'Rewrite this note' };
+        history.push({ role: 'user', content: labels[op] + (extra ? ' — ' + extra : '') });
+    }
+    renderNotesAiTranscript();
+    setNotesAiBusy(true);
+
+    try {
+        let response;
+        if (op === 'generate') {
+            response = await api.post('api/ai.php?action=generate_note_content', {
+                prompt: extra, provider, model, append: false,
+                noteId: selectedNoteId || '', csrf_token: CSRF_TOKEN,
+            });
+        } else {
+            response = await api.post('api/ai.php?action=edit_note', {
+                noteId: selectedNoteId, operation: op, provider, model,
+                prompt: extra, csrf_token: CSRF_TOKEN,
+            });
+        }
+        if (response && response.success) {
+            history.push({ role: 'assistant', content: response.data.content || '(no response)' });
+        } else {
+            showToast(response?.message || 'AI request failed', 'error');
+            history.pop();
+        }
+    } catch (e) {
+        showToast('AI request failed: ' + aiErr(e), 'error');
+        history.pop();
+    } finally {
+        setNotesAiBusy(false);
+        renderNotesAiTranscript();
+    }
+}
+
+// AI-powered: read the current note and turn it into structured checklist tasks.
+async function notesAiMakeTasks() {
+    if (notesAiBusy) return;
+    if (!selectedNoteId) { showToast('Open a note first', 'info'); return; }
+    const { provider, model } = getSelectedProviderModel();
+    if (!provider || !model) { showToast('No AI model available', 'warning'); return; }
+
+    const history = notesAiHistory();
+    history.push({ role: 'user', content: 'Create tasks from this note' });
+    renderNotesAiTranscript();
+    setNotesAiBusy(true);
+
+    // Send a precise extraction instruction (note content is already in the
+    // system prompt server-side). Show the short label in the transcript but
+    // send the detailed instruction to the model.
+    const instruction = 'From the current note, extract the concrete, actionable to-do tasks. '
+        + 'Reply with ONLY the tasks, one per line — no numbering, no bullets, no commentary. '
+        + 'Keep each task short and imperative. If there are no clear tasks, reply with exactly: NONE';
+    const apiMessages = history.map(m => ({ role: m.role, content: m.content }));
+    apiMessages[apiMessages.length - 1].content = instruction;
+
+    try {
+        const response = await api.post('api/ai.php?action=notes_chat', {
+            messages: apiMessages,
+            provider,
+            model,
+            noteId: selectedNoteId,
+            includeAllNotes: false,
+            csrf_token: CSRF_TOKEN,
+        });
+        if (response && response.success) {
+            const raw = response.data.content || '';
+            const added = addTasksFromText(raw);
+            if (added > 0) {
+                history.push({ role: 'assistant', content: `Added ${added} task${added === 1 ? '' : 's'} to this note's checklist.` });
+                showToast(`Added ${added} task${added === 1 ? '' : 's'}`, 'success');
+            } else {
+                history.push({ role: 'assistant', content: 'No actionable tasks found in this note.' });
+                showToast('No tasks found', 'info');
+            }
+        } else {
+            showToast(response?.message || 'AI request failed', 'error');
+            history.pop();
+        }
+    } catch (e) {
+        showToast('AI request failed: ' + aiErr(e), 'error');
+        history.pop();
+    } finally {
+        setNotesAiBusy(false);
+        renderNotesAiTranscript();
+    }
+}
+
+// Parse a plain-text task list into checklist items: strip bullets/numbering,
+// dedupe against existing tasks, cap length + count, then persist.
+function addTasksFromText(text) {
+    if (!text) return 0;
+    const existing = new Set(currentChecklist.map(i => i.text.trim().toLowerCase()));
+    let added = 0;
+    for (const line of text.split(/\r?\n/)) {
+        let t = line
+            .replace(/^\s*(?:[-*•‣▪]|\d+[.)])\s*/, '') // leading bullet / number
+            .replace(/^\s*\[[ xX]?\]\s*/, '')            // leading [ ] / [x]
+            .trim();
+        if (!t || /^none$/i.test(t)) continue;
+        if (t.length > 500) t = t.slice(0, 500);
+        const key = t.toLowerCase();
+        if (existing.has(key)) continue;
+        existing.add(key);
+        currentChecklist.push({ id: checklistGenId(), text: t, done: false });
+        added++;
+        if (added >= 25) break;
+    }
+    if (added > 0) { renderChecklist(); saveChecklist(); }
+    return added;
+}
+
+// ---- Applying AI output to the note (caret-aware) ----
+function aiMessageHtml(i) {
+    const m = notesAiHistory()[i];
+    return m ? mdToHtml(m.content) : '';
+}
+function aiMessageText(i) {
+    const m = notesAiHistory()[i];
+    return m ? m.content : '';
+}
+
+function insertAiMessage(i) {
+    if (!selectedNoteId) { showToast('Open a note first', 'info'); return; }
+    insertHtmlAtSavedRange(aiMessageHtml(i));
+    showToast('Inserted', 'success');
+}
+function replaceNoteWithAiMessage(i) {
+    if (!selectedNoteId) { showToast('Open a note first', 'info'); return; }
+    setEditorContent(aiMessageHtml(i));
+    triggerAutoSave();
+    showToast('Note replaced', 'success');
+}
+function appendAiMessage(i) {
+    if (!selectedNoteId) { showToast('Open a note first', 'info'); return; }
+    setEditorContent(aiMessageHtml(i), { append: true });
+    triggerAutoSave();
+    showToast('Appended', 'success');
+}
+function copyAiMessage(i) {
+    navigator.clipboard?.writeText(aiMessageText(i))
+        .then(() => showToast('Copied', 'success'))
+        .catch(() => showToast('Copy failed', 'error'));
+}
+
+function insertHtmlAtSavedRange(html) {
+    const editor = document.getElementById('editor-content');
+    if (!editor) return;
+    editor.focus();
+    const sel = window.getSelection();
+    let range;
+    if (notesAiSavedRange && editor.contains(notesAiSavedRange.commonAncestorContainer)) {
+        range = notesAiSavedRange;
+    } else {
+        range = document.createRange();
+        range.selectNodeContents(editor);
+        range.collapse(false); // end of editor
+    }
+    sel.removeAllRanges();
+    sel.addRange(range);
+    range.deleteContents();
+
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    const frag = tpl.content;
+    const lastNode = frag.lastChild;
+    range.insertNode(frag);
+    if (lastNode) {
+        range.setStartAfter(lastNode);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        notesAiSavedRange = range.cloneRange();
+    }
+    triggerAutoSave();
+}
+
+// Minimal, escape-first markdown -> HTML (headings, bold, italic, code, lists,
+// and GitHub-flavored tables). Escaping happens first so nothing here can inject
+// raw HTML; only a fixed set of attribute-free tags is emitted.
+function mdToHtml(md) {
+    if (!md) return '';
+    let s = escapeHtml(md);
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+
+    const lines = s.split(/\r?\n/);
+    let html = '';
+    let listType = null;
+    const closeList = () => { if (listType) { html += `</${listType}>`; listType = null; } };
+
+    // A markdown table separator row, e.g. |---|:--:|---| or --- | --- | ---
+    const isTableSep = (l) =>
+        l != null && l.includes('-') &&
+        /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)+\|?\s*$/.test(l);
+    const splitRow = (l) => {
+        let r = l.trim();
+        if (r.startsWith('|')) r = r.slice(1);
+        if (r.endsWith('|')) r = r.slice(0, -1);
+        return r.split('|').map(c => c.trim());
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].replace(/\s+$/, '');
+
+        // Table: a pipe row immediately followed by a separator row.
+        if (line.includes('|') && isTableSep(lines[i + 1])) {
+            closeList();
+            const header = splitRow(line);
+            const body = [];
+            let j = i + 2;
+            for (; j < lines.length; j++) {
+                const bl = lines[j];
+                if (bl == null || bl.trim() === '' || !bl.includes('|')) break;
+                body.push(splitRow(bl));
+            }
+            html += '<table class="md-table"><thead><tr>'
+                + header.map(h => `<th>${h}</th>`).join('')
+                + '</tr></thead><tbody>'
+                + body.map(row => '<tr>' + row.map(c => `<td>${c}</td>`).join('') + '</tr>').join('')
+                + '</tbody></table>';
+            i = j - 1;
+            continue;
+        }
+
+        let m;
+        if ((m = line.match(/^\s*(#{1,3})\s+(.*)$/))) {
+            closeList();
+            const level = m[1].length;
+            html += `<h${level}>${m[2]}</h${level}>`;
+        } else if ((m = line.match(/^\s*[-*]\s+(.*)$/))) {
+            if (listType !== 'ul') { closeList(); html += '<ul>'; listType = 'ul'; }
+            html += `<li>${m[1]}</li>`;
+        } else if ((m = line.match(/^\s*\d+\.\s+(.*)$/))) {
+            if (listType !== 'ol') { closeList(); html += '<ol>'; listType = 'ol'; }
+            html += `<li>${m[1]}</li>`;
+        } else if (line.trim() === '') {
+            closeList();
+        } else {
+            closeList();
+            html += `<p>${line}</p>`;
+        }
+    }
+    closeList();
+    return html;
+}
+
+// ---- Structured checklist ----
+function checklistGenId() {
+    return 'cl_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+}
+
+function renderChecklist() {
+    const box = document.getElementById('checklist-items');
+    if (!box) return;
+    // IDs are echoed into attributes; the server whitelists them to a safe token
+    // charset, and event delegation (see initNotesAi) means no id ever lands in an
+    // inline handler string. escapeHtml is kept as belt-and-suspenders.
+    box.innerHTML = currentChecklist.map(item => {
+        const done = !!item.done;
+        const idAttr = escapeHtml(item.id);
+        return `<div class="flex items-center gap-2 group py-0.5">
+            <button data-cl-toggle="${idAttr}" class="flex-shrink-0 w-4 h-4 rounded border ${done ? 'bg-black border-black' : 'border-gray-300 hover:border-gray-500'} flex items-center justify-center transition-colors" title="Toggle">
+                ${done ? '<svg class="w-3 h-3 text-white pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>' : ''}
+            </button>
+            <span class="flex-1 text-sm ${done ? 'line-through text-gray-400' : 'text-gray-700'} break-words">${escapeHtml(item.text)}</span>
+            <button data-cl-delete="${idAttr}" class="flex-shrink-0 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition" title="Remove">
+                <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>`;
+    }).join('');
+    updateChecklistProgress();
+}
+
+function updateChecklistProgress() {
+    const el = document.getElementById('checklist-progress');
+    if (!el) return;
+    const total = currentChecklist.length;
+    const done = currentChecklist.filter(i => i.done).length;
+    el.textContent = total ? `${done}/${total}` : '';
+}
+
+function focusChecklistInput() {
+    const input = document.getElementById('checklist-add-input');
+    if (input) { input.scrollIntoView({ behavior: 'smooth', block: 'center' }); input.focus(); }
+}
+
+function addChecklistItem() {
+    const input = document.getElementById('checklist-add-input');
+    const text = (input?.value || '').trim();
+    if (!text || !selectedNoteId) return;
+    currentChecklist.push({ id: checklistGenId(), text, done: false });
+    input.value = '';
+    renderChecklist();
+    saveChecklist();
+}
+
+function toggleChecklistItem(id) {
+    const item = currentChecklist.find(i => i.id === id);
+    if (!item) return;
+    item.done = !item.done;
+    renderChecklist();
+    saveChecklist();
+}
+
+function deleteChecklistItem(id) {
+    currentChecklist = currentChecklist.filter(i => i.id !== id);
+    renderChecklist();
+    saveChecklist();
+}
+
+function saveChecklist() {
+    if (!selectedNoteId) return;
+    const note = notes.find(n => n.id === selectedNoteId);
+    if (note) note.checklist = currentChecklist.slice();
+    // Persist via the single debounced autosave path (its desktop payload includes
+    // `checklist`) so the task list and note content never race as two writes.
+    triggerAutoSave();
+}
+
+function initNotesAi() {
+    populateNotesAiModels();
+    const editor = document.getElementById('editor-content');
+    if (editor && !editor.dataset.aiRangeBound) {
+        editor.addEventListener('blur', captureEditorRange);
+        editor.dataset.aiRangeBound = '1';
+    }
+    const allNotesToggle = document.getElementById('notes-ai-all-notes');
+    if (allNotesToggle) allNotesToggle.addEventListener('change', renderNotesAiTranscript);
+
+    // Checklist actions via event delegation on the stable container — no per-row
+    // inline handlers, so item ids never touch an executable attribute string.
+    const clBox = document.getElementById('checklist-items');
+    if (clBox && !clBox.dataset.clBound) {
+        clBox.addEventListener('click', (e) => {
+            const toggle = e.target.closest('[data-cl-toggle]');
+            if (toggle) { toggleChecklistItem(toggle.getAttribute('data-cl-toggle')); return; }
+            const del = e.target.closest('[data-cl-delete]');
+            if (del) { deleteChecklistItem(del.getAttribute('data-cl-delete')); }
+        });
+        clBox.dataset.clBound = '1';
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initNotesAi);
+} else {
+    initNotesAi();
+}
+
 let kbFolders = [];
 let currentAIEditContent = ''; // Store current AI edit result
 
@@ -1492,6 +2265,9 @@ async function loadKBFolders() {
     }
 }
 
+// DEPRECATED: superseded by the docked Notes AI panel (toggleNotesAi / notesAiQuickAction).
+// The toolbar buttons and Ctrl+I that called openAIGenerateModal/openAIEditModal have been
+// removed. These functions are retained temporarily and are safe to delete in a follow-up.
 // Open AI Generate modal
 function openAIGenerateModal() {
     if (!<?php echo $hasAnyKey ? 'true' : 'false'; ?>) {

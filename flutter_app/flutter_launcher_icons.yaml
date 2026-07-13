@@ -1,0 +1,10 @@
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon.png"
+  # Adaptive icon (Android): foreground = the logo, background = solid ink so the
+  # logo fills the mask on any launcher shape.
+  adaptive_icon_background: "#0A0A0A"
+  adaptive_icon_foreground: "assets/icon.png"
+  remove_alpha_ios: true
+  min_sdk_android: 21
