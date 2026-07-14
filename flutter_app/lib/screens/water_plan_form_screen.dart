@@ -6,6 +6,7 @@ import '../models/water_plan.dart';
 import '../repositories/water_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/form_widgets.dart';
 import '../widgets/hero_icon.dart';
@@ -293,6 +294,7 @@ class _WaterPlanFormScreenState extends ConsumerState<WaterPlanFormScreen> {
           ),
           title: const Text('Edit Plan'),
         ),
+        bottomNavigationBar: const AppNavBar(),
         body: ListView(
           padding: const EdgeInsets.all(AppSpacing.page),
           children: const [
@@ -323,6 +325,7 @@ class _WaterPlanFormScreenState extends ConsumerState<WaterPlanFormScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         top: false,
         bottom: false,

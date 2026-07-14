@@ -7,6 +7,7 @@ import '../repositories/dashboard_repository.dart';
 import '../repositories/tasks_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/form_widgets.dart';
 import '../widgets/hero_icon.dart';
 
@@ -165,6 +166,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
     if (_loading) {
       return Scaffold(
         appBar: AppBar(title: const Text('Edit Task')),
+        bottomNavigationBar: const AppNavBar(),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -179,6 +181,7 @@ class _TaskFormScreenState extends ConsumerState<TaskFormScreen> {
         ),
         title: Text(_isEdit ? 'Edit Task' : 'New Task'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         top: false,
         bottom: false,

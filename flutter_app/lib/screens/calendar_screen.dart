@@ -8,6 +8,7 @@ import '../models/task.dart';
 import '../repositories/meetings_repository.dart';
 import '../repositories/tasks_repository.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/hero_icon.dart';
@@ -91,6 +92,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: const AppNavBar(),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppPalette.of(context).ink,
         foregroundColor: AppPalette.of(context).onInk,

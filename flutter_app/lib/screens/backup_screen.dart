@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../repositories/backup_repository.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/form_widgets.dart';
@@ -30,6 +31,7 @@ class BackupScreen extends ConsumerWidget {
         ),
         title: const Text('Backup'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         child: backups.when(
           loading: () => ListView(

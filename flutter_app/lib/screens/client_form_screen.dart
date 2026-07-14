@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../repositories/clients_repository.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/form_widgets.dart';
 import '../widgets/hero_icon.dart';
@@ -125,6 +126,7 @@ class _ClientFormScreenState extends ConsumerState<ClientFormScreen> {
         ),
         title: Text(widget.isEdit ? 'Edit Client' : 'New Client'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         top: false,
         bottom: false,

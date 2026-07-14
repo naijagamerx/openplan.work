@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../models/ticket.dart';
 import '../repositories/admin_tickets_repository.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/form_widgets.dart';
@@ -126,6 +127,7 @@ class _TicketThreadScreenState extends ConsumerState<TicketThreadScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         child: ticket.when(
           loading: () => ListView(

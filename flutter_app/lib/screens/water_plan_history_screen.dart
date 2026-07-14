@@ -7,6 +7,7 @@ import '../models/water_plan.dart';
 import '../repositories/water_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/form_widgets.dart';
@@ -73,6 +74,7 @@ class WaterPlanHistoryScreen extends ConsumerWidget {
         ),
         title: const Text('Water Plan History'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           await context.push('/water/new');

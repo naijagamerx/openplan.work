@@ -7,6 +7,7 @@ import '../models/shared_key_status.dart';
 import '../repositories/admin_shared_keys_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/form_widgets.dart';
@@ -61,6 +62,7 @@ class _AdminSharedKeysScreenState extends ConsumerState<AdminSharedKeysScreen> {
         ),
         title: const Text('Shared AI Keys'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         child: status.when(
           loading: () => ListView(

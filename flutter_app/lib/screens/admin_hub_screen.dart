@@ -8,6 +8,7 @@ import '../repositories/payment_methods_repository.dart';
 import '../repositories/plans_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/hero_icon.dart';
@@ -33,6 +34,7 @@ class AdminHubScreen extends ConsumerWidget {
         ),
         title: const Text('Admin'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: overview.when(
         loading: () => ListView(
           padding:

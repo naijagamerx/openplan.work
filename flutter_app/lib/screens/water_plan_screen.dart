@@ -8,6 +8,7 @@ import '../models/water_plan.dart';
 import '../repositories/water_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/hero_icon.dart';
@@ -72,6 +73,7 @@ class _WaterPlanScreenState extends ConsumerState<WaterPlanScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: const AppNavBar(),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           await context.push('/water/new');

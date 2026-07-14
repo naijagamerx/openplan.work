@@ -8,6 +8,7 @@ import '../repositories/projects_repository.dart';
 import '../repositories/tasks_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/form_widgets.dart';
 import '../widgets/hero_icon.dart';
 import '../widgets/skeleton.dart';
@@ -130,6 +131,7 @@ class _ProjectFormScreenState extends ConsumerState<ProjectFormScreen> {
     if (_loading) {
       return Scaffold(
         appBar: AppBar(title: const Text('Edit Project')),
+        bottomNavigationBar: const AppNavBar(),
         body: ListView(
           padding: const EdgeInsets.all(AppSpacing.page),
           children: const [
@@ -151,6 +153,7 @@ class _ProjectFormScreenState extends ConsumerState<ProjectFormScreen> {
         ),
         title: Text(_isEdit ? 'Edit Project' : 'New Project'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         top: false,
         bottom: false,

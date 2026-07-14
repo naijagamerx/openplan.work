@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../repositories/inventory_repository.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/form_widgets.dart';
 import '../widgets/hero_icon.dart';
 import '../widgets/skeleton.dart';
@@ -142,6 +143,7 @@ class _InventoryFormScreenState extends ConsumerState<InventoryFormScreen> {
           ),
           title: const Text('Edit Product'),
         ),
+        bottomNavigationBar: const AppNavBar(),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(
               AppSpacing.page, 8, AppSpacing.page, 24),
@@ -166,6 +168,7 @@ class _InventoryFormScreenState extends ConsumerState<InventoryFormScreen> {
         ),
         title: Text(widget.isEdit ? 'Edit Product' : 'New Product'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         top: false,
         bottom: false,

@@ -6,6 +6,7 @@ import '../models/payment_method.dart';
 import '../repositories/payment_methods_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/form_widgets.dart';
@@ -32,6 +33,7 @@ class AdminPaymentMethodsScreen extends ConsumerWidget {
         ),
         title: const Text('Payment Methods'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       floatingActionButton: FloatingActionButton(
         backgroundColor: p.ink,
         foregroundColor: p.onInk,

@@ -7,6 +7,7 @@ import '../models/invoice.dart';
 import '../repositories/invoices_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/form_widgets.dart';
 import '../widgets/hero_icon.dart';
@@ -193,6 +194,7 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
           ),
           title: const Text('Edit Invoice'),
         ),
+        bottomNavigationBar: const AppNavBar(),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(AppSpacing.page, 12, AppSpacing.page, 24),
           children: const [
@@ -214,6 +216,7 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
         ),
         title: Text(widget.isEdit ? 'Edit Invoice' : 'New Invoice'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         top: false,
         bottom: false,

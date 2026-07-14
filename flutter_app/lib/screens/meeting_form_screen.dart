@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../repositories/meetings_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/form_widgets.dart';
 import '../widgets/hero_icon.dart';
 import '../widgets/skeleton.dart';
@@ -213,6 +214,7 @@ class _MeetingFormScreenState extends ConsumerState<MeetingFormScreen> {
           ),
           title: const Text('Edit Meeting'),
         ),
+        bottomNavigationBar: const AppNavBar(),
         body: ListView(
           padding: const EdgeInsets.all(AppSpacing.page),
           children: const [
@@ -235,6 +237,7 @@ class _MeetingFormScreenState extends ConsumerState<MeetingFormScreen> {
         ),
         title: Text(widget.isEdit ? 'Edit Meeting' : 'New Meeting'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         top: false,
         bottom: false,

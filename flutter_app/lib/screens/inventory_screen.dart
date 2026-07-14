@@ -7,6 +7,7 @@ import '../models/inventory_item.dart';
 import '../repositories/inventory_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/hero_icon.dart';
@@ -35,6 +36,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
         ),
         title: const Text('Inventory'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppPalette.of(context).ink,
         foregroundColor: AppPalette.of(context).onInk,

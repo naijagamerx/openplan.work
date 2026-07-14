@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../models/ticket.dart';
 import '../repositories/admin_tickets_repository.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/hero_icon.dart';
@@ -29,6 +30,7 @@ class AdminTicketsScreen extends ConsumerWidget {
         ),
         title: const Text('Support Tickets'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         child: tickets.when(
           loading: () => ListView(

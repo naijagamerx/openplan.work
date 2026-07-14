@@ -8,6 +8,7 @@ import '../repositories/dashboard_repository.dart';
 import '../repositories/habits_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/form_widgets.dart';
@@ -55,6 +56,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: habit.when(
         loading: () => ListView(
           padding: const EdgeInsets.all(AppSpacing.page),

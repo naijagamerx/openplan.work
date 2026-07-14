@@ -9,6 +9,7 @@ import '../models/audit_log.dart';
 import '../repositories/audit_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/form_widgets.dart';
@@ -75,6 +76,7 @@ class _AuditLogsScreenState extends ConsumerState<AuditLogsScreen> {
         ),
         title: const Text('Audit Logs'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         child: Column(
           children: [

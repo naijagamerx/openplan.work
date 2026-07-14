@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../repositories/finance_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/form_widgets.dart';
 import '../widgets/hero_icon.dart';
 import '../widgets/skeleton.dart';
@@ -146,6 +147,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
           ),
           title: const Text('Edit Transaction'),
         ),
+        bottomNavigationBar: const AppNavBar(),
         body: ListView(
           padding: const EdgeInsets.all(AppSpacing.page),
           children: const [
@@ -171,6 +173,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
         ),
         title: Text(widget.isEdit ? 'Edit Transaction' : 'New Transaction'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         top: false,
         bottom: false,

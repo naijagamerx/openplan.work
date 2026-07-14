@@ -9,6 +9,7 @@ import '../repositories/projects_repository.dart';
 import '../repositories/tasks_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/form_widgets.dart';
@@ -57,6 +58,7 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: project.when(
         loading: () => ListView(
           padding: const EdgeInsets.all(AppSpacing.page),

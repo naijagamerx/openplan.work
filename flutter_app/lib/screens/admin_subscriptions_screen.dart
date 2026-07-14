@@ -7,6 +7,7 @@ import '../models/subscription.dart';
 import '../repositories/admin_subscriptions_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/form_widgets.dart';
@@ -30,6 +31,7 @@ class AdminSubscriptionsScreen extends ConsumerWidget {
         ),
         title: const Text('Subscribers'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         child: subs.when(
           loading: () => ListView(

@@ -12,6 +12,7 @@ import '../models/note.dart';
 import '../repositories/notes_repository.dart';
 import '../theme/app_tokens.dart';
 import '../utils/note_blocks.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/hero_icon.dart';
 import '../widgets/notes_ai_sheet.dart';
 import '../widgets/skeleton.dart';
@@ -454,6 +455,7 @@ class _NoteFormScreenState extends ConsumerState<NoteFormScreen> {
             onPressed: () => context.pop(),
           ),
         ),
+        bottomNavigationBar: const AppNavBar(),
         body: ListView(
           padding: const EdgeInsets.all(AppSpacing.page),
           children: const [
@@ -520,6 +522,7 @@ class _NoteFormScreenState extends ConsumerState<NoteFormScreen> {
               ),
           ],
         ),
+        bottomNavigationBar: const AppNavBar(),
         body: SafeArea(
           top: false,
           bottom: false,

@@ -7,6 +7,7 @@ import '../models/client.dart';
 import '../repositories/clients_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/form_widgets.dart';
@@ -54,6 +55,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: client.when(
         loading: () => ListView(
           padding: const EdgeInsets.all(AppSpacing.page),

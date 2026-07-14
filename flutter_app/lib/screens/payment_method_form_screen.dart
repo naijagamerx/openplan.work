@@ -6,6 +6,7 @@ import '../models/payment_method.dart';
 import '../repositories/payment_methods_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/form_widgets.dart';
 import '../widgets/hero_icon.dart';
@@ -156,6 +157,7 @@ class _PaymentMethodFormScreenState
         ),
         title: Text(widget.isEdit ? 'Edit Method' : 'New Method'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         top: false,
         bottom: false,

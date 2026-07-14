@@ -6,6 +6,7 @@ import '../models/plan.dart';
 import '../repositories/plans_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/form_widgets.dart';
 import '../widgets/hero_icon.dart';
@@ -147,6 +148,7 @@ class _PlanFormScreenState extends ConsumerState<PlanFormScreen> {
         ),
         title: Text(widget.isEdit ? 'Edit Plan' : 'New Plan'),
       ),
+      bottomNavigationBar: const AppNavBar(),
       body: SafeArea(
         top: false,
         bottom: false,
