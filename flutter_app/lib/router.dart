@@ -27,6 +27,8 @@ import 'screens/habits_screen.dart';
 import 'screens/inventory_form_screen.dart';
 import 'screens/inventory_item_screen.dart';
 import 'screens/inventory_screen.dart';
+import 'screens/advanced_invoice_preview_screen.dart';
+import 'screens/advanced_invoices_screen.dart';
 import 'screens/invoice_form_screen.dart';
 import 'screens/invoice_preview_screen.dart';
 import 'screens/invoices_screen.dart';
@@ -149,6 +151,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: '/invoices/:id/edit',
           builder: (_, state) =>
               InvoiceFormScreen(invoiceId: state.pathParameters['id']!)),
+
+      // Advanced Invoices (view-only)
+      GoRoute(
+          path: '/advanced-invoices',
+          builder: (_, __) => const AdvancedInvoicesScreen()),
+      GoRoute(
+          path: '/advanced-invoices/:id',
+          builder: (_, state) => AdvancedInvoicePreviewScreen(
+              invoiceId: state.pathParameters['id']!)),
 
       // Finance
       GoRoute(path: '/finance', builder: (_, __) => const FinanceScreen()),

@@ -22,6 +22,7 @@ const _workspace = [
   _Module('Projects', HeroPaths.folder, route: '/projects'),
   _Module('Clients', HeroPaths.users, route: '/clients'),
   _Module('Invoices', HeroPaths.document, route: '/invoices'),
+  _Module('Advanced Invoices', HeroPaths.receipt, route: '/advanced-invoices'),
   _Module('Finance', HeroPaths.banknotes, route: '/finance'),
   _Module('Inventory', HeroPaths.cube, route: '/inventory'),
 ];
