@@ -7,6 +7,7 @@ import '../models/inventory_item.dart';
 import '../repositories/inventory_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/ai_inventory_sheet.dart';
 import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
@@ -35,6 +36,13 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
           onPressed: () => context.pop(),
         ),
         title: const Text('Inventory'),
+        actions: [
+          IconButton(
+            tooltip: 'AI Generate',
+            icon: const HeroIcon(HeroPaths.sparkles, size: 20),
+            onPressed: _openAiGenerate,
+          ),
+        ],
       ),
       bottomNavigationBar: const AppNavBar(),
       floatingActionButton: FloatingActionButton(
@@ -82,7 +90,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
             final q = _query.toLowerCase();
             return item.name.toLowerCase().contains(q) ||
                 item.sku.toLowerCase().contains(q);
-          }).toList();
+          }).toList()
+            // A-Z by name (mobile/views/inventory.php sorts; Flutter rendered
+            // raw insertion order before).
+            ..sort((a, b) =>
+                a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
           final lowStockCount = list.where((i) => i.isLowStock).length;
           final totalValue =
@@ -133,6 +145,23 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _openAiGenerate() async {
+    final created = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => const AiInventorySheet(),
+    );
+    if (!mounted) return;
+    if (created != null && created > 0) {
+      ref.invalidate(inventoryProvider);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Added $created item${created == 1 ? '' : 's'}'),
+          behavior: SnackBarBehavior.floating));
+    }
   }
 }
 

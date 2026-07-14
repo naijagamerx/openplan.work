@@ -91,6 +91,35 @@ class AIRepository {
     return _extractReply(data);
   }
 
+  /// Ask the AI to suggest inventory items from a free-text [description] and a
+  /// [category] hint (api/ai.php?action=generate_inventory). Returns the raw
+  /// suggested items (name/description/category/sku/cost/price/quantity/
+  /// reorderPoint/supplier) — the backend resolves the provider from config, so
+  /// no provider/model is sent (matches mobile/views/inventory.php).
+  Future<List<Map<String, dynamic>>> generateInventory({
+    required String description,
+    String category = 'General',
+  }) async {
+    final data = await _api.post('/api/ai.php',
+        query: {'action': 'generate_inventory'},
+        body: {'description': description, 'category': category});
+    final map = data is Map ? data.cast<String, dynamic>() : const {};
+    final items = (map['items'] as List?) ?? const [];
+    return items
+        .whereType<Map>()
+        .map((m) => m.cast<String, dynamic>())
+        .toList();
+  }
+
+  /// Persist AI-suggested inventory [items] (api/ai.php?action=create_inventory_items).
+  /// Returns the number created.
+  Future<int> createInventoryItems(List<Map<String, dynamic>> items) async {
+    final data = await _api.post('/api/ai.php',
+        query: {'action': 'create_inventory_items'}, body: {'items': items});
+    final map = data is Map ? data.cast<String, dynamic>() : const {};
+    return (map['created'] as num?)?.toInt() ?? 0;
+  }
+
   /// Agent / function-calling chat (api/ai-agent.php?action=chat). Creates a
   /// conversation on demand if [conversationId] is null.
   Future<AgentChatResult> agentChat(
