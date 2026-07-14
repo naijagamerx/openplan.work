@@ -18,7 +18,6 @@ import '../widgets/pomodoro_music_player.dart';
 import '../widgets/progress_ring.dart';
 import '../widgets/section_card.dart';
 import '../widgets/skeleton.dart';
-import '../widgets/stat_card.dart';
 
 /// Full Pomodoro screen — mirrors mobile/views/pomodoro.php.
 /// Reachable from the Menu hub (not a primary tab), so it uses a plain
@@ -39,8 +38,10 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
   PomodoroTrack? _selectedTrack;
   bool _musicPlaying = false;
   double _volume = 0.7;
-  bool _loop = false;
-  bool _playWhileRunning = false;
+  // Defaults ON: focus music should play alongside a running Pomodoro and loop
+  // for the whole session without the user toggling anything first.
+  bool _loop = true;
+  bool _playWhileRunning = true;
   bool _uploading = false;
 
   PomodoroController? _watchedCtrl;
@@ -83,6 +84,20 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
   @override
   Widget build(BuildContext context) {
     final ctrl = ref.watch(pomodoroControllerProvider);
+    // Auto-select the first library track once it loads so "play while running"
+    // has something to play out of the box. If the timer is already running,
+    // start playback immediately; otherwise it kicks in when the timer starts.
+    ref.listen<AsyncValue<List<PomodoroTrack>>>(pomodoroMusicProvider,
+        (prev, next) {
+      next.whenData((list) {
+        if (_selectedTrack == null && list.isNotEmpty) {
+          setState(() {
+            _selectedTrack = list.first;
+            _musicPlaying = _playWhileRunning && ctrl.isRunning;
+          });
+        }
+      });
+    });
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -481,36 +496,59 @@ class _PresetChip extends StatelessWidget {
 // Stats row: Completed Today / Current Session / Focus Time.
 // ---------------------------------------------------------------------------
 
+/// Three focus stats in one unified strip (number over label, hairline
+/// dividers). One wide card reads cleaner than three narrow bordered tiles,
+/// whose long labels wrapped mid-word ("COMPL / ETED / TODAY").
 class _StatsRow extends StatelessWidget {
   const _StatsRow({required this.ctrl});
   final PomodoroController ctrl;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final p = AppPalette.of(context);
+    Widget divider() => Container(width: 1, height: 40, color: p.border);
+    return SectionCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: _Stat(
+                value: '${ctrl.completedToday}', label: 'Completed'),
+          ),
+          divider(),
+          Expanded(
+            child: _Stat(
+                value: '${ctrl.currentSession}', label: 'Session'),
+          ),
+          divider(),
+          Expanded(
+            child: _Stat(
+                value: '${ctrl.totalFocusMinutes}m', label: 'Focus Time'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  const _Stat({required this.value, required this.label});
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
-          child: StatCard(
-            label: 'Completed Today',
-            iconPath: HeroPaths.checkCircle,
-            valueInt: ctrl.completedToday,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: StatCard(
-            label: 'Current Session',
-            iconPath: HeroPaths.clock,
-            valueInt: ctrl.currentSession,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: StatCard(
-            label: 'Focus Time',
-            iconPath: HeroPaths.fire,
-            valueText: '${ctrl.totalFocusMinutes}m',
-          ),
+        Text(value, style: AppType.mono(size: 26, color: p.textPrimary)),
+        const SizedBox(height: 6),
+        Text(
+          label.toUpperCase(),
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          style: AppType.label(context, color: p.textMuted),
         ),
       ],
     );
