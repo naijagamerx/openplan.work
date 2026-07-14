@@ -32,6 +32,7 @@ class NoteFormScreen extends ConsumerStatefulWidget {
 class _NoteFormScreenState extends ConsumerState<NoteFormScreen> {
   final _title = TextEditingController();
   final _content = TextEditingController();
+  final _contentFocus = FocusNode();
   final _tags = TextEditingController();
   String? _color;
   bool _isPinned = false;
@@ -68,6 +69,7 @@ class _NoteFormScreenState extends ConsumerState<NoteFormScreen> {
     _debounce?.cancel();
     _title.dispose();
     _content.dispose();
+    _contentFocus.dispose();
     _tags.dispose();
     super.dispose();
   }
@@ -87,9 +89,25 @@ class _NoteFormScreenState extends ConsumerState<NoteFormScreen> {
         _isFavorite = n.isFavorite;
         _dirty = false;
         _lastSavedAt = n.updatedAt ?? n.createdAt;
+        // Open an existing note with content in the RENDERED view (tables,
+        // headings, paragraphs show rich — parity with the PC contenteditable
+        // note). One tap on the body drops into the raw editor. New/empty notes
+        // stay in edit mode so you land in the text field ready to type.
+        _preview = n.content.trim().isNotEmpty;
       }
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
+  }
+
+  /// Switch from the rendered view into the raw editor and focus the field so
+  /// tapping the note is a single gesture (the field is built by setState, so
+  /// focus is requested after the frame commits).
+  void _enterEditMode() {
+    if (!_preview) return;
+    setState(() => _preview = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _contentFocus.requestFocus();
+    });
   }
 
   List<String> _parseTags() => _tags.text
@@ -118,42 +136,58 @@ class _NoteFormScreenState extends ConsumerState<NoteFormScreen> {
 
   void _applyAiText(String text, NotesAiApply mode) {
     final base = _content.text;
-    // Wrap in setState so the rebuild refreshes BOTH the editable TextField and
-    // the read-only Markdown preview (the preview reads _content.text at build
-    // and would otherwise show stale content after a Replace/Insert/Append).
-    setState(() {
-      switch (mode) {
-        case NotesAiApply.replace:
-          _content.value = TextEditingValue(
-            text: text,
-            selection: TextSelection.collapsed(offset: text.length),
-          );
-        case NotesAiApply.append:
-          final joined = base.isEmpty ? text : '$base\n\n$text';
-          _content.value = TextEditingValue(
-            text: joined,
-            selection: TextSelection.collapsed(offset: joined.length),
-          );
-        case NotesAiApply.insert:
-          final sel = _content.selection;
-          final start = sel.isValid && sel.start >= 0 ? sel.start : base.length;
-          final end = sel.isValid && sel.end >= 0 ? sel.end : base.length;
-          final joined = base.replaceRange(start, end, text);
-          _content.value = TextEditingValue(
-            text: joined,
-            selection: TextSelection.collapsed(offset: start + text.length),
-          );
-      }
-      _preview = false; // drop to the editor so the applied text is visible
-    });
-    // Arm dirty + debounced autosave for the programmatic change.
-    _onChange();
-    // Setting _content.text fires _onChange → dirty + debounced autosave.
+
+    // Replace with text identical to the note is a no-op that used to show a
+    // misleading "Added to note" — say so explicitly instead.
+    if (mode == NotesAiApply.replace && text.trim() == base.trim()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('AI reply already matches the note — nothing to replace'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    late final String nextText;
+    late final int caret;
+    switch (mode) {
+      case NotesAiApply.replace:
+        nextText = text;
+        caret = text.length;
+      case NotesAiApply.append:
+        nextText = base.isEmpty ? text : '$base\n\n$text';
+        caret = nextText.length;
+      case NotesAiApply.insert:
+        final sel = _content.selection;
+        final start = sel.isValid && sel.start >= 0 ? sel.start : base.length;
+        final end = sel.isValid && sel.end >= 0 ? sel.end : base.length;
+        nextText = base.replaceRange(start, end, text);
+        caret = start + text.length;
+    }
+
+    // composing: empty avoids a stale IME composing region after a full swap.
+    _content.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: caret),
+      composing: TextRange.empty,
+    );
+    // Show the RENDERED result so AI markdown (tables/headings/paragraphs)
+    // appears rich immediately — matching what the PC note shows. Tap the body
+    // to drop back into the raw editor.
+    setState(() => _preview = true);
+    _onChange(); // dirty + debounced autosave
+
+    final label = switch (mode) {
+      NotesAiApply.replace => 'Note replaced',
+      NotesAiApply.append => 'Text appended',
+      NotesAiApply.insert => 'Text inserted',
+    };
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Added to note'),
+      SnackBar(
+        content: Text(label),
         behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 1),
+        duration: const Duration(seconds: 1),
       ),
     );
   }
@@ -251,6 +285,7 @@ class _NoteFormScreenState extends ConsumerState<NoteFormScreen> {
   // ── Rich content inserters ─────────────────────────────────────────────
   void _insertTable() {
     setState(() {
+      _preview = false; // land in the editor so the skeleton is fillable
       _content.text = insertTable(_content.text, columns: 3, rows: 2);
       _content.selection =
           TextSelection.collapsed(offset: _content.text.length);
@@ -259,6 +294,7 @@ class _NoteFormScreenState extends ConsumerState<NoteFormScreen> {
 
   void _insertChecklist() {
     setState(() {
+      _preview = false;
       _content.text = insertChecklist(_content.text, items: 3);
       _content.selection =
           TextSelection.collapsed(offset: _content.text.length);
@@ -465,7 +501,13 @@ class _NoteFormScreenState extends ConsumerState<NoteFormScreen> {
               icon: HeroIcon(
                   _preview ? HeroPaths.pencil : HeroPaths.document,
                   size: 20),
-              onPressed: () => setState(() => _preview = !_preview),
+              onPressed: () {
+                if (_preview) {
+                  _enterEditMode();
+                } else {
+                  setState(() => _preview = true);
+                }
+              },
             ),
             IconButton(
               icon: const HeroIcon(HeroPaths.dots, size: 20),
@@ -513,34 +555,48 @@ class _NoteFormScreenState extends ConsumerState<NoteFormScreen> {
                     ),
                     const SizedBox(height: 10),
                     if (_preview)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: _content.text.trim().isEmpty
-                            ? Text('Nothing to preview',
-                                style: TextStyle(color: p.textFaint))
-                            : MarkdownBody(
-                                data: _content.text,
-                                selectable: true,
-                                extensionSet: md.ExtensionSet.gitHubWeb,
-                                styleSheet: MarkdownStyleSheet(
-                                  p: TextStyle(
-                                      fontSize: 17,
-                                      height: 1.5,
-                                      color: p.textPrimary),
-                                  tableBorder:
-                                      TableBorder.all(color: p.border),
-                                  tableHead: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      color: p.textPrimary),
-                                  tableCellsPadding:
-                                      const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 6),
+                      // Rendered (rich) view — tap anywhere to drop into the
+                      // raw editor. Opaque hit-test so the whole area (incl.
+                      // gaps between blocks) is tappable; MarkdownBody is left
+                      // non-selectable so the tap enters edit mode instead of
+                      // starting a text selection.
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _enterEditMode,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: _content.text.trim().isEmpty
+                              ? Text('Tap to start writing…',
+                                  style: TextStyle(color: p.textFaint))
+                              : MarkdownBody(
+                                  data: _content.text,
+                                  selectable: false,
+                                  // Preserve single newlines so plainly-typed,
+                                  // day-to-day notes render line-for-line (GFM
+                                  // otherwise collapses soft breaks to spaces).
+                                  softLineBreak: true,
+                                  extensionSet: md.ExtensionSet.gitHubWeb,
+                                  styleSheet: MarkdownStyleSheet(
+                                    p: TextStyle(
+                                        fontSize: 17,
+                                        height: 1.5,
+                                        color: p.textPrimary),
+                                    tableBorder:
+                                        TableBorder.all(color: p.border),
+                                    tableHead: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: p.textPrimary),
+                                    tableCellsPadding:
+                                        const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 6),
+                                  ),
                                 ),
-                              ),
+                        ),
                       )
                     else
                       TextField(
                         controller: _content,
+                        focusNode: _contentFocus,
                         minLines: 1,
                         // null → grows to full content height so the outer
                         // ListView owns all scrolling (a finite cap made the
