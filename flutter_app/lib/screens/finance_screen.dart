@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../models/invoice.dart';
 import '../models/transaction.dart';
 import '../repositories/finance_repository.dart';
+import '../repositories/invoices_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/app_bottom_nav.dart';
@@ -30,6 +32,13 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   @override
   Widget build(BuildContext context) {
     final finance = ref.watch(financeProvider);
+    // Revenue = finance income + PAID invoices (web parity: finance.php sums
+    // paid-invoice totals into revenue AND the monthly chart buckets). Without
+    // this the Flutter totals under-report for invoice-driven businesses.
+    final paidInvoices =
+        (ref.watch(invoicesProvider).asData?.value ?? const <Invoice>[])
+            .where((i) => i.status == 'paid')
+            .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -85,12 +94,14 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                 AppSpacing.page, 12, AppSpacing.page, 120),
             children: [
               FadeIn(
-                child: _StatCards(transactions: list),
+                child: _StatCards(
+                    transactions: list, paidInvoices: paidInvoices),
               ),
               const SizedBox(height: AppSpacing.gap),
               FadeIn(
                 delay: const Duration(milliseconds: 60),
-                child: _PulseChart(transactions: list),
+                child: _PulseChart(
+                    transactions: list, paidInvoices: paidInvoices),
               ),
               const SizedBox(height: AppSpacing.gap),
               FadeIn(
@@ -121,15 +132,19 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 // ---------------------------------------------------------------------------
 
 class _StatCards extends StatelessWidget {
-  const _StatCards({required this.transactions});
+  const _StatCards({required this.transactions, required this.paidInvoices});
   final List<FinanceTransaction> transactions;
+  final List<Invoice> paidInvoices;
 
   @override
   Widget build(BuildContext context) {
     final currency = NumberFormat.simpleCurrency();
+    final invoiceRevenue =
+        paidInvoices.fold(0.0, (s, i) => s + i.total);
     final income = transactions
-        .where((t) => t.isIncome)
-        .fold(0.0, (s, t) => s + t.amount);
+            .where((t) => t.isIncome)
+            .fold(0.0, (s, t) => s + t.amount) +
+        invoiceRevenue;
     final expenses = transactions
         .where((t) => !t.isIncome)
         .fold(0.0, (s, t) => s + t.amount);
@@ -208,8 +223,9 @@ class _StatCard extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _PulseChart extends StatelessWidget {
-  const _PulseChart({required this.transactions});
+  const _PulseChart({required this.transactions, required this.paidInvoices});
   final List<FinanceTransaction> transactions;
+  final List<Invoice> paidInvoices;
 
   @override
   Widget build(BuildContext context) {
@@ -226,6 +242,16 @@ class _PulseChart extends StatelessWidget {
       for (var i = 0; i < months.length; i++) {
         if (t.date.year == months[i].year && t.date.month == months[i].month) {
           netByMonth[i] += t.isIncome ? t.amount : -t.amount;
+        }
+      }
+    }
+    // Paid invoices add to the month's income (web buckets them by createdAt).
+    for (final inv in paidInvoices) {
+      final d = inv.createdAt;
+      if (d == null) continue;
+      for (var i = 0; i < months.length; i++) {
+        if (d.year == months[i].year && d.month == months[i].month) {
+          netByMonth[i] += inv.total;
         }
       }
     }

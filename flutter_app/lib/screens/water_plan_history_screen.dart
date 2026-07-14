@@ -200,7 +200,7 @@ class WaterPlanHistoryScreen extends ConsumerWidget {
     );
   }
 
-  /// "MMM j, y" oldest → newest, or "—" when dates are missing.
+  /// "MMM d, y" oldest → newest, or "—" when dates are missing.
   static String _dateRange(List<WaterPlan> plans) {
     final dates = plans
         .map((p) => p.createdAt)
@@ -208,7 +208,7 @@ class WaterPlanHistoryScreen extends ConsumerWidget {
         .toList()
       ..sort((a, b) => a.compareTo(b));
     if (dates.isEmpty) return '—';
-    final fmt = DateFormat('MMM j, y');
+    final fmt = DateFormat('MMM d, y');
     if (dates.length == 1) return fmt.format(dates.first);
     return '${fmt.format(dates.first)} → ${fmt.format(dates.last)}';
   }
@@ -236,7 +236,7 @@ class _HistoryCard extends StatelessWidget {
     final isManual = (plan.source ?? 'manual') == 'manual';
     final sourceLabel = isManual ? 'Manual' : 'History';
     final dateText = created != null
-        ? DateFormat('MMM j, y · h:mm a').format(created)
+        ? DateFormat('MMM d, y · h:mm a').format(created)
         : '—';
 
     return Container(
