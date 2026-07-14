@@ -10,6 +10,7 @@ import '../repositories/pomodoro_repository.dart';
 import '../state/pomodoro_controller.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/app_bottom_nav.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/form_widgets.dart';
@@ -84,19 +85,25 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
   @override
   Widget build(BuildContext context) {
     final ctrl = ref.watch(pomodoroControllerProvider);
-    // Auto-select the first library track once it loads so "play while running"
-    // has something to play out of the box. If the timer is already running,
-    // start playback immediately; otherwise it kicks in when the timer starts.
-    ref.listen<AsyncValue<List<PomodoroTrack>>>(pomodoroMusicProvider,
-        (prev, next) {
-      next.whenData((list) {
-        if (_selectedTrack == null && list.isNotEmpty) {
+    // Auto-select the first library track once it's available so "play while
+    // running" has something to play out of the box. Uses a synchronous
+    // ref.watch (NOT ref.listen): the provider is a non-autoDispose
+    // FutureProvider, so it resolves once per process and stays cached — on the
+    // 2nd+ visit to this screen there is no loading→data TRANSITION for
+    // ref.listen to fire on, which left _selectedTrack null and Start playing
+    // silence. Reading the cached value directly handles both fresh and repeat
+    // visits. setState can't run during build, so defer to post-frame; the
+    // mounted + still-null guard makes it fire exactly once.
+    ref.watch(pomodoroMusicProvider).whenData((list) {
+      if (_selectedTrack == null && list.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _selectedTrack != null) return;
           setState(() {
             _selectedTrack = list.first;
             _musicPlaying = _playWhileRunning && ctrl.isRunning;
           });
-        }
-      });
+        });
+      }
     });
     return Scaffold(
       appBar: AppBar(
@@ -106,6 +113,11 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
         ),
         title: const Text('Pomodoro'),
       ),
+      // Floating footer on this pushed page too (parity with mobile web, which
+      // includes bottom-nav.php on every page). current:'' → no tab highlighted
+      // since we're not ON a primary tab. The ListView's 120px bottom padding
+      // already clears the pill (> kBottomNavClearance).
+      bottomNavigationBar: const AppNavBar(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
             AppSpacing.page, 8, AppSpacing.page, 120),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../theme/app_tokens.dart';
 import 'hero_icon.dart';
@@ -8,6 +9,45 @@ class NavTab {
   final String label;
   final String iconPath;
   final String? route; // null = not yet built (shows "coming soon")
+}
+
+/// Drop-in floating footer for secondary/pushed screens (Pomodoro, Water Plan,
+/// Calendar, …) that keep their OWN AppBar + back arrow, so they can't use the
+/// full [AppScaffold] shell. Encapsulates the tab→route navigation once so any
+/// Scaffold just adds `bottomNavigationBar: const AppNavBar()`.
+///
+/// Pass [current] only when the screen corresponds to a nav tab; on a pushed
+/// section page leave it '' so nothing is falsely highlighted.
+///
+/// NOTE: the pill floats over content — a scrolling body must pad its bottom by
+/// at least [kBottomNavClearance] so the last item clears it.
+class AppNavBar extends StatelessWidget {
+  const AppNavBar({super.key, this.current = ''});
+
+  final String current;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.transparent,
+      child: AppBottomNav(
+        current: current,
+        onTap: (tab) {
+          if (tab.label == current) return;
+          if (tab.route != null) {
+            context.go(tab.route!);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('${tab.label} coming soon'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        },
+      ),
+    );
+  }
 }
 
 /// Total bottom clearance every primary screen's scrollable list must add so
@@ -122,54 +162,43 @@ class _FloatingItemState extends State<_FloatingItem> {
           color: widget.active ? p.ink : Colors.transparent,
           borderRadius: BorderRadius.circular(AppRadii.pill),
         ),
-        child: Row(
-          // MainAxisSize.max so the pill fills its Expanded slot exactly.
-          // With MainAxisSize.min the Row committed to its content's natural
-          // width before the Flexible/FittedBox could shrink the label, which
-          // made pressed inactive items overflow their slot by ~21px ("RIGHT
-          // overflowed by 21 pixels"). Max lets the slot impose a hard width
-          // and the FittedBox scales the label to fit.
-          mainAxisSize: MainAxisSize.max,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            HeroIcon(
-              widget.tab.iconPath,
-              size: 22,
-              color: color,
-              strokeWidth: widget.active ? 1.8 : 1.5,
-            ),
-            // Animated label: grows in beside the icon. Wrapped in Flexible +
-            // FittedBox(scaleDown) so that if the slot (Expanded with flex) is
-            // narrower than the text's natural width, the text shrinks instead
-            // of overflowing its sibling / the bar edge.
-            Flexible(
-              child: AnimatedSize(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.centerLeft,
-                child: reveal
-                    ? Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            widget.tab.label.toUpperCase(),
-                            maxLines: 1,
-                            softWrap: false,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.5,
-                              color: color,
-                            ),
-                          ),
-                        ),
-                      )
-                    : const SizedBox(width: 0),
+        // FittedBox scales the WHOLE item (icon + optional label) down to fit
+        // its flex slot, so a revealed label can never overflow — this is what
+        // produced the "RIGHT overflowed by ~1.7px" stripe: a pressed inactive
+        // tab (narrow 1-flex slot) revealed its label, and the fixed icon +
+        // paddings alone were ~2px wider than the slot. Scaling only the label
+        // couldn't recover that fixed width; scaling the whole row can, on any
+        // screen width. mainAxisSize.min gives FittedBox the row's natural size
+        // to scale from.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              HeroIcon(
+                widget.tab.iconPath,
+                size: 22,
+                color: color,
+                strokeWidth: widget.active ? 1.8 : 1.5,
               ),
-            ),
-          ],
+              if (reveal)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text(
+                    widget.tab.label.toUpperCase(),
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                      color: color,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
