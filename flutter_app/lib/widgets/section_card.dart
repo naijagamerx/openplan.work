@@ -38,9 +38,17 @@ class SectionCard extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(heading!.toUpperCase(),
-                      style: AppType.label(context,
-                          color: p.textPrimary, size: 13)),
+                  // Flexible + ellipsis so a long heading next to a `trailing`
+                  // widget can't overflow the row (this was the "RIGHT
+                  // OVERFLOWED" stripe on the Finance "Financial Pulse" card,
+                  // whose heading + date-range trailing exceeded the width).
+                  Flexible(
+                    child: Text(heading!.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppType.label(context,
+                            color: p.textPrimary, size: 13)),
+                  ),
                   if (trailing != null) trailing!,
                 ],
               ),

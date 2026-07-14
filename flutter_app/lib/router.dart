@@ -28,6 +28,7 @@ import 'screens/inventory_form_screen.dart';
 import 'screens/inventory_item_screen.dart';
 import 'screens/inventory_screen.dart';
 import 'screens/invoice_form_screen.dart';
+import 'screens/invoice_preview_screen.dart';
 import 'screens/invoices_screen.dart';
 import 'screens/kb_file_screen.dart';
 import 'screens/knowledge_base_screen.dart';
@@ -142,6 +143,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: '/invoices/new', builder: (_, __) => const InvoiceFormScreen()),
       GoRoute(
           path: '/invoices/:id',
+          builder: (_, state) =>
+              InvoicePreviewScreen(invoiceId: state.pathParameters['id']!)),
+      GoRoute(
+          path: '/invoices/:id/edit',
           builder: (_, state) =>
               InvoiceFormScreen(invoiceId: state.pathParameters['id']!)),
 

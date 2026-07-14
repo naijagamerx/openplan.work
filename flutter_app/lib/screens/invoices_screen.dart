@@ -279,7 +279,7 @@ class _InvoiceRow extends ConsumerWidget {
     final fmt = NumberFormat.simpleCurrency(name: invoice.currency);
     final dueText = invoice.dueDate == null
         ? null
-        : DateFormat('MMM j, y').format(invoice.dueDate!.toLocal());
+        : DateFormat('MMM d, y').format(invoice.dueDate!.toLocal());
 
     return SectionCard(
       child: InkWell(

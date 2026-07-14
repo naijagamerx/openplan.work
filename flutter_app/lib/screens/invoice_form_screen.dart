@@ -605,7 +605,7 @@ class _DateRow extends StatelessWidget {
                   child: Text(
                     value == null
                         ? 'No date'
-                        : DateFormat('MMM j, y').format(value!.toLocal()),
+                        : DateFormat('MMM d, y').format(value!.toLocal()),
                     style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w500,

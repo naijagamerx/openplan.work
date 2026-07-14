@@ -465,7 +465,7 @@ class _TransactionRow extends StatelessWidget {
     final income = transaction.isIncome;
     final amountColor =
         income ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
-    final dateLabel = DateFormat('MMM j').format(transaction.date);
+    final dateLabel = DateFormat('MMM d').format(transaction.date);
     final desc = transaction.description.trim().isNotEmpty
         ? transaction.description
         : 'Untitled';
