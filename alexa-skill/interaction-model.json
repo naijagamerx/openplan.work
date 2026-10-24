@@ -1,0 +1,342 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "my plan",
+      "intents": [
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "GetTodayTasksIntent",
+          "slots": [],
+          "samples": [
+            "tasks",
+            "my tasks",
+            "what are my tasks",
+            "what's on my plate",
+            "what is on my list today",
+            "what are my tasks today",
+            "what do I have to do today",
+            "today's tasks",
+            "list today's tasks",
+            "list my tasks",
+            "show my tasks",
+            "show me my tasks",
+            "read my tasks",
+            "read today's tasks",
+            "what is on my plate today",
+            "my tasks for today",
+            "what is overdue",
+            "what tasks are overdue",
+            "overdue tasks",
+            "what do I need to do",
+            "what's left today",
+            "tasks for today",
+            "what's due today"
+          ]
+        },
+        {
+          "name": "GetTodosIntent",
+          "slots": [],
+          "samples": [
+            "todos",
+            "my todos",
+            "read my todos",
+            "what are my todos",
+            "list my todos",
+            "show my todos",
+            "show me my todos",
+            "list todos",
+            "open todos",
+            "todo list",
+            "my todo list",
+            "what is on my todo list",
+            "what's on my todo list",
+            "read todos"
+          ]
+        },
+        {
+          "name": "GetHabitsTodayIntent",
+          "slots": [],
+          "samples": [
+            "habits",
+            "my habits",
+            "did I do my habits",
+            "habits status",
+            "how are my habits today",
+            "have I done my habits",
+            "check my habits",
+            "habits today",
+            "what habits are left",
+            "show my habits",
+            "list habits",
+            "habit status",
+            "how are habits",
+            "habit progress"
+          ]
+        },
+        {
+          "name": "GetWaterIntent",
+          "slots": [],
+          "samples": [
+            "water",
+            "my water",
+            "how much water did I drink",
+            "water status",
+            "water count",
+            "did I hit my water goal",
+            "how is my water today",
+            "water tracker",
+            "my hydration",
+            "how much water today",
+            "water progress",
+            "did I drink water",
+            "how many glasses today"
+          ]
+        },
+        {
+          "name": "GetFinanceSummaryIntent",
+          "slots": [],
+          "samples": [
+            "finance",
+            "money",
+            "what did I earn this month",
+            "finance summary",
+            "monthly revenue",
+            "how much did I make this month",
+            "money this month",
+            "my finance this month",
+            "revenue this month",
+            "expenses this month",
+            "income this month",
+            "what is my net this month",
+            "my finance summary",
+            "how much money this month"
+          ]
+        },
+        {
+          "name": "AddTodoIntent",
+          "slots": [
+            {
+              "name": "Item",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "add todo {Item}",
+            "add to my todos {Item}",
+            "remind me to {Item}",
+            "create a todo to {Item}",
+            "new todo {Item}",
+            "put {Item} on my list",
+            "add todo to {Item}",
+            "create todo {Item}",
+            "add reminder {Item}"
+          ]
+        },
+        {
+          "name": "MarkHabitDoneIntent",
+          "slots": [
+            {
+              "name": "HabitName",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "mark {HabitName} as done",
+            "I did {HabitName}",
+            "complete habit {HabitName}",
+            "finished {HabitName}",
+            "check off {HabitName}",
+            "{HabitName} is done",
+            "I finished {HabitName}",
+            "I completed {HabitName}",
+            "mark habit {HabitName} done",
+            "{HabitName} done"
+          ]
+        },
+        {
+          "name": "AddTaskIntent",
+          "slots": [
+            {
+              "name": "TaskTitle",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "add task {TaskTitle}",
+            "new task {TaskTitle}",
+            "create task {TaskTitle}",
+            "create a task {TaskTitle}",
+            "create a task to {TaskTitle}",
+            "put {TaskTitle} on my task list",
+            "add a task {TaskTitle}",
+            "add task for {TaskTitle}",
+            "task {TaskTitle}",
+            "I need to {TaskTitle}",
+            "remind me about {TaskTitle}"
+          ]
+        },
+        {
+          "name": "AddProjectIntent",
+          "slots": [
+            {
+              "name": "ProjectName",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "create project {ProjectName}",
+            "add new project {ProjectName}",
+            "start project {ProjectName}",
+            "make a project called {ProjectName}",
+            "create a project for {ProjectName}",
+            "new project {ProjectName}",
+            "add project {ProjectName}",
+            "create project called {ProjectName}",
+            "begin project {ProjectName}"
+          ]
+        },
+        {
+          "name": "AddClientIntent",
+          "slots": [
+            {
+              "name": "ClientName",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "add client {ClientName}",
+            "create new client {ClientName}",
+            "add new client {ClientName}",
+            "register client {ClientName}",
+            "new client {ClientName}",
+            "create client {ClientName}",
+            "add a client {ClientName}",
+            "save client {ClientName}"
+          ]
+        },
+        {
+          "name": "AddNoteIntent",
+          "slots": [
+            {
+              "name": "NoteContent",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "add note {NoteContent}",
+            "take a note {NoteContent}",
+            "create note {NoteContent}",
+            "save note {NoteContent}",
+            "write down {NoteContent}",
+            "note that {NoteContent}",
+            "remember {NoteContent}",
+            "make a note {NoteContent}",
+            "jot down {NoteContent}",
+            "save a note {NoteContent}"
+          ]
+        },
+        {
+          "name": "AddMeetingIntent",
+          "slots": [
+            {
+              "name": "MeetingTitle",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "schedule meeting {MeetingTitle}",
+            "add meeting {MeetingTitle}",
+            "book meeting {MeetingTitle}",
+            "create meeting {MeetingTitle}",
+            "set up meeting {MeetingTitle}",
+            "plan meeting {MeetingTitle}",
+            "new meeting {MeetingTitle}",
+            "schedule {MeetingTitle}",
+            "book {MeetingTitle}"
+          ]
+        },
+        {
+          "name": "StartPomodoroIntent",
+          "slots": [
+            {
+              "name": "Duration",
+              "type": "AMAZON.DURATION"
+            }
+          ],
+          "samples": [
+            "start pomodoro",
+            "start a pomodoro",
+            "start focus timer",
+            "begin pomodoro session",
+            "start a {Duration} pomodoro",
+            "set pomodoro for {Duration}",
+            "start a {Duration} focus session",
+            "begin pomodoro",
+            "pomodoro",
+            "focus mode",
+            "start focus mode",
+            "start a focus session",
+            "{Duration} pomodoro"
+          ]
+        },
+        {
+          "name": "AddHabitIntent",
+          "slots": [
+            {
+              "name": "HabitName",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "add habit {HabitName}",
+            "track new habit {HabitName}",
+            "create habit {HabitName}",
+            "start tracking {HabitName}",
+            "new habit {HabitName}",
+            "track {HabitName}",
+            "add a habit {HabitName}",
+            "create a habit {HabitName}",
+            "begin tracking {HabitName}"
+          ]
+        },
+        {
+          "name": "AdjustInventoryIntent",
+          "slots": [
+            {
+              "name": "InventoryPhrase",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "add {InventoryPhrase} to inventory",
+            "remove {InventoryPhrase} from inventory",
+            "subtract {InventoryPhrase}",
+            "I used {InventoryPhrase}",
+            "stock {InventoryPhrase}",
+            "I have more {InventoryPhrase}",
+            "adjust inventory {InventoryPhrase}",
+            "inventory {InventoryPhrase}",
+            "update inventory {InventoryPhrase}",
+            "restock {InventoryPhrase}"
+          ]
+        }
+      ],
+      "types": []
+    }
+  }
+}

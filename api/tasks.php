@@ -11,7 +11,7 @@ if (!Auth::check()) {
 }
 
 // Validate CSRF for non-GET requests (bypass for MCP)
-if (requestMethod() !== 'GET' && !Auth::isMcp()) {
+if (requestMethod() !== 'GET' && !Auth::isTokenAuth()) {
     $body = getJsonBody();
     $token = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if (!Auth::validateCsrf($token)) {

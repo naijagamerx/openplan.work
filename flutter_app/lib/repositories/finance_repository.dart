@@ -38,6 +38,7 @@ class FinanceRepository {
     required DateTime date,
     String category = '',
     String description = '',
+    String notes = '',
   }) async {
     await _api.post('/api/finance.php', query: {'action': 'add'}, body: {
       'type': type,
@@ -45,6 +46,7 @@ class FinanceRepository {
       'date': date.toIso8601String(),
       if (category.isNotEmpty) 'category': category,
       if (description.isNotEmpty) 'description': description,
+      if (notes.isNotEmpty) 'notes': notes,
     });
   }
 
@@ -55,6 +57,7 @@ class FinanceRepository {
     DateTime? date,
     String? category,
     String? description,
+    String? notes,
   }) async {
     await _api.put('/api/finance.php', query: {'id': id}, body: {
       if (type != null) 'type': type,
@@ -62,6 +65,7 @@ class FinanceRepository {
       if (date != null) 'date': date.toIso8601String(),
       if (category != null) 'category': category,
       if (description != null) 'description': description,
+      if (notes != null) 'notes': notes,
     });
   }
 

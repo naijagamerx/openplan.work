@@ -19,9 +19,7 @@ date_default_timezone_set('UTC');
 
 // Check authentication
 if (!Auth::check()) {
-    http_response_code(401);
-    echo json_encode(['success' => false, 'error' => 'Unauthorized']);
-    exit;
+    errorResponse('Unauthorized', 401, ERROR_UNAUTHORIZED);
 }
 
 // Unlock session file to allow concurrent polling requests
@@ -31,6 +29,31 @@ session_write_close();
 $masterPassword = getMasterPassword();
 $db = new Database($masterPassword, Auth::userId());
 $config = $db->load('config', true);
+
+// Shared-key overlay: if the user opted into platform AI and has an active
+// subscription, copy the admin's shared key for each unlocked provider into
+// $config before AIAgent reads it. Users on their own keys are untouched.
+if (!empty($config['useAdminSharedAiKeys'])) {
+    require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+    $agentSub = getActiveSubscription(Auth::userId() ?? '');
+    if ($agentSub && is_array($agentSub['providers'] ?? null)) {
+        $providerKeyMap = [
+            'groq'       => 'groqApiKey',
+            'openrouter' => 'openrouterApiKey',
+            'gemini'     => 'geminiApiKey'
+        ];
+        foreach ($agentSub['providers'] as $p) {
+            $field = $providerKeyMap[$p] ?? null;
+            if ($field === null) {
+                continue;
+            }
+            $sk = getAdminSharedKey($p);
+            if (!empty($sk)) {
+                $config[$field] = $sk;
+            }
+        }
+    }
+}
 
 // Get action from query parameter
 $action = $_GET['action'] ?? 'chat';
@@ -55,9 +78,22 @@ try {
 
             // Validate CSRF token (always required for chat)
             $csrfToken = $body['csrf_token'] ?? '';
-            if (!Auth::validateCsrf($csrfToken)) {
+            if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
                 error_log('AI Agent Error: Invalid CSRF token.');
                 errorResponse('Invalid CSRF token', 403);
+            }
+
+            // Plan-tier provider gate (shared-keys path only).
+            if (!empty($config['useAdminSharedAiKeys'])) {
+                require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+                $effectiveProvider = $body['provider'] ?? $provider;
+                $tierSub = getActiveSubscription(Auth::userId() ?? '');
+                if (!$tierSub) {
+                    errorResponse('No active subscription. Buy a plan to use platform AI keys.', 403);
+                }
+                if (!subscriptionUnlocksProvider($tierSub, $effectiveProvider)) {
+                    errorResponse('Your plan does not include the ' . $effectiveProvider . ' provider. Upgrade to access it.', 403);
+                }
             }
 
             // Convert string "null" to actual null
@@ -78,6 +114,13 @@ try {
                     $body['outputLength'] ?? 'normal',
                     !empty($body['smartMode'])
                 );
+                if (!empty($config['useAdminSharedAiKeys'])) {
+                    $countedProvider = $body['provider'] ?? $provider;
+                    $countedUserId = Auth::userId() ?? '';
+                    if ($countedUserId !== '' && !empty($countedProvider)) {
+                        incrementUsage($countedUserId, $countedProvider);
+                    }
+                }
                 successResponse($result);
             } catch (Exception $e) {
                 error_log('AI Agent: Chat method threw exception: ' . $e->getMessage());
@@ -87,7 +130,7 @@ try {
 
         case 'start_conversation':
             $body = getJsonBody();
-            if (!Auth::validateCsrf($body['csrf_token'] ?? '')) {
+            if (!Auth::isTokenAuth() && !Auth::validateCsrf($body['csrf_token'] ?? '')) {
                 errorResponse('Invalid CSRF token', 403);
             }
             $seed = trim((string)($body['titleSeed'] ?? 'New Conversation'));
@@ -115,7 +158,7 @@ try {
                 errorResponse('conversationId and actionId are required', 400);
             }
 
-            if (!Auth::validateCsrf($body['csrf_token'] ?? '')) {
+            if (!Auth::isTokenAuth() && !Auth::validateCsrf($body['csrf_token'] ?? '')) {
                 errorResponse('Invalid CSRF token', 403);
             }
 
@@ -165,7 +208,7 @@ try {
                 errorResponse('Conversation ID is required', 400);
             }
 
-            if (!Auth::validateCsrf($body['csrf_token'] ?? '')) {
+            if (!Auth::isTokenAuth() && !Auth::validateCsrf($body['csrf_token'] ?? '')) {
                 errorResponse('Invalid CSRF token', 403);
             }
 
@@ -204,7 +247,7 @@ try {
                 errorResponse('Conversation ID is required', 400);
             }
 
-            if (!Auth::validateCsrf($body['csrf_token'] ?? '')) {
+            if (!Auth::isTokenAuth() && !Auth::validateCsrf($body['csrf_token'] ?? '')) {
                 errorResponse('Invalid CSRF token', 403);
             }
 
@@ -218,7 +261,7 @@ try {
             // Delete ALL conversations for the current user
             $body = getJsonBody();
 
-            if (!Auth::validateCsrf($body['csrf_token'] ?? '')) {
+            if (!Auth::isTokenAuth() && !Auth::validateCsrf($body['csrf_token'] ?? '')) {
                 errorResponse('Invalid CSRF token', 403);
             }
 
@@ -246,7 +289,7 @@ try {
                 errorResponse('Conversation ID and title are required', 400);
             }
 
-            if (!Auth::validateCsrf($body['csrf_token'] ?? '')) {
+            if (!Auth::isTokenAuth() && !Auth::validateCsrf($body['csrf_token'] ?? '')) {
                 errorResponse('Invalid CSRF token', 403);
             }
 
@@ -266,7 +309,7 @@ try {
                 errorResponse('Conversation ID is required', 400);
             }
 
-            if (!Auth::validateCsrf($body['csrf_token'] ?? '')) {
+            if (!Auth::isTokenAuth() && !Auth::validateCsrf($body['csrf_token'] ?? '')) {
                 errorResponse('Invalid CSRF token', 403);
             }
 
@@ -295,31 +338,15 @@ try {
     }
 
 } catch (APIException $e) {
-    http_response_code($e->getStatusCode());
-    echo json_encode([
-        'success' => false,
-        'error' => $e->getMessage(),
-        'code' => $e->getErrorCode(),
-        'context' => $e->getContext()
-    ]);
-    exit;
+    // Use the shared envelope {success:false, error:{code,message}} so the
+    // frontend can read error.message consistently with every other endpoint.
+    errorResponse($e->getMessage(), $e->getStatusCode(), $e->getErrorCode());
 
 } catch (ValidationException $e) {
-    http_response_code(400);
-    echo json_encode([
-        'success' => false,
-        'error' => $e->getMessage(),
-        'code' => 'VALIDATION_ERROR'
-    ]);
-    exit;
+    errorResponse($e->getMessage(), 400, ERROR_VALIDATION);
 
 } catch (Exception $e) {
     error_log('AI Agent unhandled exception: ' . $e->getMessage());
-    http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'error' => 'An unexpected error occurred'
-    ]);
-    exit;
+    errorResponse('An unexpected error occurred', 500, ERROR_SERVER);
 }
 

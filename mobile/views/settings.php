@@ -384,6 +384,12 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     </section>
 
     <!-- API Keys Section -->
+    <?php if (!empty($config['useAdminSharedAiKeys'])): ?>
+    <section class="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/40 p-4 text-xs text-blue-900 dark:text-blue-200">
+        <p class="font-semibold mb-1 text-sm">Using shared platform AI keys</p>
+        <p>Provider key inputs are hidden because the platform keys are in use.</p>
+    </section>
+    <?php else: ?>
     <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden">
         <button onclick="Mobile.settings.toggleSection('api-section')" class="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-zinc-800 transition-colors">
             <div class="flex items-center gap-3">
@@ -432,6 +438,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
             </form>
         </div>
     </section>
+    <?php endif; ?>
 
     <!-- Water Settings Section -->
     <section class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 overflow-hidden">

@@ -96,7 +96,7 @@ if (isset($_POST['generate'])) {
             $excludePatterns = [
                 '/^\.(auto-claude|claude|kiro|qoder|serena|trae)$/',
                 '/^doc\//', '/^sample\//', '/^test\//', '/^tests\//', '/^test_delete\//',
-                '/AGENTS\.md$/', '/CLAUDE\.md$/',
+                '/AGENTS\.md$/', '/CLAUDE(\.local)?\.md$/',
                 '/includes\/master_password\.php/', '/includes\/master_password\.php\.backup/',
                 '/api\/ai-test\.php$/',
                 '/views\/notes-backup/', '/views\/view-notes-backup/',
@@ -223,7 +223,7 @@ if (isset($_POST['generate'])) {
             releaseExportRecursiveDelete($stagingPath);
 
             $message = 'Export generated successfully!';
-            $downloadUrl = APP_URL . '/release-artifacts/' . basename($zipPath);
+            $downloadUrl = APP_URL . '/api/release-download.php?file=' . urlencode(basename($zipPath));
         } catch (Exception $e) {
             $error = 'Export failed: ' . $e->getMessage();
             if (is_dir($stagingPath)) {
@@ -245,7 +245,7 @@ if (is_dir($outputDir)) {
             'name' => $file,
             'size' => filesize($filepath),
             'date' => filemtime($filepath),
-            'url' => APP_URL . '/release-artifacts/' . $file
+            'url' => APP_URL . '/api/release-download.php?file=' . urlencode($file)
         ];
     }
 }

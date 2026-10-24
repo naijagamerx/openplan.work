@@ -5,6 +5,12 @@
  * Run: php restore_from_backup.php
  */
 
+// CLI-only: never expose this file-copying maintenance script over HTTP.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('This script can only be run from the command line.');
+}
+
 // Configuration
 $backupDir = __DIR__ . '/release-artifacts/openplan.work-hosted-clean-20260312-070308';
 $currentDir = __DIR__;

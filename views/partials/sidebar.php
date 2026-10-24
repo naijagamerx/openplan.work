@@ -18,6 +18,8 @@ $menuItems = [
     ['page' => 'invoices', 'icon' => 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', 'label' => 'Invoices'],
     ['page' => 'advanced-invoices', 'icon' => 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', 'label' => 'Advanced Invoices'],
     ['page' => 'ai-assistant', 'icon' => 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z', 'label' => 'AI Assistant'],
+    ['page' => 'subscription', 'icon' => 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', 'label' => 'Subscription'],
+    ['page' => 'support', 'icon' => 'M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z', 'label' => 'Support'],
 ];
 
 $isAdmin = Auth::isAdmin();
@@ -58,21 +60,17 @@ $isAdmin = Auth::isAdmin();
             <span>Settings</span>
         </a>
 
-        <?php if ($isAdmin): ?>
-        <a href="?page=users" data-page="users" style="<?php echo $currentPage === 'users' ? 'background-color:#000;color:#fff;' : ''; ?>"
-           class="sidebar-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 transition mt-2 <?php echo $currentPage === 'users' ? 'active bg-black text-white' : 'hover:bg-gray-100'; ?>">
+        <?php
+        $adminHubPages = ['admin-hub', 'users', 'release-export', 'admin-plans', 'admin-payment-methods', 'admin-payments', 'admin-subscriptions', 'admin-tickets', 'admin-shared-keys'];
+        $adminActive = in_array($currentPage, $adminHubPages, true);
+        if ($isAdmin):
+        ?>
+        <a href="?page=admin-hub" data-page="admin-hub" style="<?php echo $adminActive ? 'background-color:#000;color:#fff;' : ''; ?>"
+           class="sidebar-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 transition mt-2 <?php echo $adminActive ? 'active bg-black text-white' : 'hover:bg-gray-100'; ?>">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-1a4 4 0 00-5-4m-4 5H2v-1a4 4 0 015-4m6 5v-1a4 4 0 00-4-4H7m6-8a4 4 0 11-8 0 4 4 0 018 0zm6 2a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path>
             </svg>
-            <span>Users</span>
-        </a>
-
-        <a href="?page=release-export" data-page="release-export" style="<?php echo $currentPage === 'release-export' ? 'background-color:#000;color:#fff;' : ''; ?>"
-           class="sidebar-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 transition mt-2 <?php echo $currentPage === 'release-export' ? 'active bg-black text-white' : 'hover:bg-gray-100'; ?>">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 5v14m0 0l-5-5m5 5l5-5M19 20H5"></path>
-            </svg>
-            <span>Release Export</span>
+            <span>Admin Hub</span>
         </a>
         <?php endif; ?>
 

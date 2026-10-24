@@ -107,6 +107,38 @@ foreach ($tasksByDay as $day => $dayTasks) {
     $tasksByDay[$day] = $dayTasks;
 }
 
+// Load meetings for the current month (additive layer on top of tasks).
+$meetingsByDay = [];
+$monthMeetingCount = 0;
+try {
+    $allMeetings = $db->load('meetings') ?? [];
+    foreach ($allMeetings as $meeting) {
+        $meetingDate = substr((string)($meeting['date'] ?? ''), 0, 10);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $meetingDate)) {
+            continue;
+        }
+        $mYear = (int)substr($meetingDate, 0, 4);
+        $mMonth = (int)substr($meetingDate, 5, 2);
+        if ($mYear !== $year || $mMonth !== $month) {
+            continue;
+        }
+        $day = (int)substr($meetingDate, 8, 2);
+        if (!isset($meetingsByDay[$day])) {
+            $meetingsByDay[$day] = [];
+        }
+        $meetingsByDay[$day][] = $meeting;
+        $monthMeetingCount++;
+    }
+    foreach ($meetingsByDay as $d => $items) {
+        usort($items, static function ($a, $b) {
+            return strcmp((string)($a['startTime'] ?? ''), (string)($b['startTime'] ?? ''));
+        });
+        $meetingsByDay[$d] = $items;
+    }
+} catch (Exception $e) {
+    error_log('Failed to load meetings on mobile calendar: ' . $e->getMessage());
+}
+
 $requestedDay = isset($_GET['day']) ? (int)$_GET['day'] : 0;
 $selectedDay = 0;
 if ($requestedDay >= 1 && $requestedDay <= $daysInMonth) {
@@ -132,6 +164,8 @@ if ($selectedDay < 1 || $selectedDay > $daysInMonth) {
 }
 
 $selectedTasks = $tasksByDay[$selectedDay] ?? [];
+$selectedMeetings = $meetingsByDay[$selectedDay] ?? [];
+$selectedDateIso = sprintf('%04d-%02d-%02d', $year, $month, $selectedDay);
 $monthTaskCount = count($monthTasks);
 $selectedDateLabel = date('M j', mktime(0, 0, 0, $month, $selectedDay, $year));
 $siteName = getSiteName() ?? 'LazyMan';
@@ -142,7 +176,9 @@ for ($i = 0; $i < $firstDayOfMonth; $i++) {
         'day' => null,
         'selected' => false,
         'hasTasks' => false,
-        'taskCount' => 0
+        'taskCount' => 0,
+        'hasMeetings' => false,
+        'meetingCount' => 0
     ];
 }
 for ($day = 1; $day <= $daysInMonth; $day++) {
@@ -150,7 +186,9 @@ for ($day = 1; $day <= $daysInMonth; $day++) {
         'day' => $day,
         'selected' => $day === $selectedDay,
         'hasTasks' => !empty($tasksByDay[$day]),
-        'taskCount' => count($tasksByDay[$day] ?? [])
+        'taskCount' => count($tasksByDay[$day] ?? []),
+        'hasMeetings' => !empty($meetingsByDay[$day]),
+        'meetingCount' => count($meetingsByDay[$day] ?? [])
     ];
 }
 while (count($calendarCells) % 7 !== 0) {
@@ -158,7 +196,9 @@ while (count($calendarCells) % 7 !== 0) {
         'day' => null,
         'selected' => false,
         'hasTasks' => false,
-        'taskCount' => 0
+        'taskCount' => 0,
+        'hasMeetings' => false,
+        'meetingCount' => 0
     ];
 }
 ?>
@@ -268,11 +308,13 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                         class="aspect-square border-r border-b border-gray-100 dark:border-zinc-800 flex flex-col items-center justify-center relative transition-colors <?= $cell['selected'] ? 'bg-black text-white dark:bg-white dark:text-black' : 'hover:bg-gray-50 dark:hover:bg-zinc-900' ?>"
                     >
                         <span class="text-xs <?= $cell['selected'] ? 'font-bold' : 'font-medium' ?>"><?= $cell['day'] ?></span>
-                        <?php if ($cell['hasTasks']): ?>
+                        <?php if ($cell['hasTasks'] || $cell['hasMeetings']): ?>
                             <div class="absolute bottom-2 flex items-center gap-1">
-                                <span class="w-2 h-2 rounded-full bg-green-500 border border-white dark:border-zinc-900"></span>
-                                <?php if (($cell['taskCount'] ?? 0) > 1): ?>
-                                    <span class="text-[8px] font-bold leading-none text-green-600 dark:text-green-400"><?= (int)$cell['taskCount'] ?></span>
+                                <?php if ($cell['hasTasks']): ?>
+                                    <span class="w-2 h-2 rounded-full bg-green-500 border border-white dark:border-zinc-900"></span>
+                                <?php endif; ?>
+                                <?php if ($cell['hasMeetings']): ?>
+                                    <span class="w-2 h-2 rounded-full bg-purple-500 border border-white dark:border-zinc-900"></span>
                                 <?php endif; ?>
                             </div>
                         <?php endif; ?>
@@ -280,37 +322,83 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                 <?php endif; ?>
             <?php endforeach; ?>
         </div>
-        <p class="mt-3 text-[10px] font-bold uppercase tracking-widest text-green-600 dark:text-green-400">Green dot = day has task/event</p>
+        <p class="mt-3 text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">
+            <span class="text-green-600 dark:text-green-400">Green</span> = tasks &middot;
+            <span class="text-purple-600 dark:text-purple-400">Purple</span> = meetings
+        </p>
     </section>
 
     <section class="px-4 py-3 bg-gray-50 dark:bg-zinc-900 border-y border-gray-100 dark:border-zinc-800">
         <div class="flex items-center justify-between">
-            <span class="text-[10px] font-black uppercase tracking-widest"><?= $monthTaskCount ?> task<?= $monthTaskCount === 1 ? '' : 's' ?> this month</span>
+            <span class="text-[10px] font-black uppercase tracking-widest">
+                <?= $monthTaskCount ?> task<?= $monthTaskCount === 1 ? '' : 's' ?>
+                &middot;
+                <?= $monthMeetingCount ?> meeting<?= $monthMeetingCount === 1 ? '' : 's' ?>
+            </span>
             <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Selected: <?= htmlspecialchars($selectedDateLabel) ?></span>
         </div>
     </section>
 
-    <section class="px-4 py-5">
-        <?php if (empty($selectedTasks)): ?>
-            <div class="text-center py-8 border border-gray-100 dark:border-zinc-800">
-                <p class="text-xs font-bold uppercase tracking-widest text-gray-400">No tasks on this day</p>
-            </div>
-        <?php else: ?>
-            <div class="space-y-4">
-                <?php foreach ($selectedTasks as $task): ?>
-                    <a href="?page=view-task&id=<?= urlencode($task['id']) ?>&projectId=<?= urlencode($task['projectId']) ?>" class="flex items-center gap-4 <?= $task['completed'] ? 'opacity-30' : 'group' ?>">
-                        <div class="w-1 h-12 <?= $task['completed'] ? 'bg-gray-200 dark:bg-zinc-700' : 'bg-black dark:bg-white' ?>"></div>
-                        <div class="flex-1 border-b border-gray-100 dark:border-zinc-800 pb-4">
-                            <div class="flex justify-between items-start mb-1 gap-3">
-                                <h3 class="text-sm font-bold uppercase tracking-tight leading-tight"><?= htmlspecialchars($task['title']) ?></h3>
-                                <span class="text-[10px] font-black flex-shrink-0"><?= htmlspecialchars($task['dueTime']) ?></span>
-                            </div>
-                            <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Project: <?= htmlspecialchars($task['projectName']) ?></span>
-                        </div>
+    <section class="px-4 py-5 space-y-5">
+        <?php if (!empty($selectedMeetings)): ?>
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400">Meetings</span>
+                    <a href="?page=meeting-form&date=<?= htmlspecialchars($selectedDateIso) ?>" class="text-[10px] font-black uppercase tracking-widest text-black dark:text-white inline-flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        Add
                     </a>
-                <?php endforeach; ?>
+                </div>
+                <div class="space-y-3">
+                    <?php foreach ($selectedMeetings as $meeting): ?>
+                        <a href="?page=meeting-form&id=<?= urlencode((string)($meeting['id'] ?? '')) ?>" class="flex items-center gap-4 group">
+                            <div class="w-1 h-12" style="background-color: <?= htmlspecialchars((string)($meeting['color'] ?? '#a855f7')) ?>"></div>
+                            <div class="flex-1 border-b border-gray-100 dark:border-zinc-800 pb-3">
+                                <div class="flex justify-between items-start mb-1 gap-3">
+                                    <h3 class="text-sm font-bold uppercase tracking-tight leading-tight"><?= htmlspecialchars((string)($meeting['title'] ?? 'Meeting')) ?></h3>
+                                    <span class="text-[10px] font-black flex-shrink-0"><?= htmlspecialchars((string)($meeting['startTime'] ?? '--:--')) ?></span>
+                                </div>
+                                <?php if (!empty($meeting['location'])): ?>
+                                    <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">@ <?= htmlspecialchars((string)$meeting['location']) ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
             </div>
         <?php endif; ?>
+
+        <div>
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-[10px] font-black uppercase tracking-widest text-green-600 dark:text-green-400">Tasks</span>
+                <?php if (empty($selectedMeetings)): ?>
+                    <a href="?page=meeting-form&date=<?= htmlspecialchars($selectedDateIso) ?>" class="text-[10px] font-black uppercase tracking-widest text-black dark:text-white inline-flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        New Meeting
+                    </a>
+                <?php endif; ?>
+            </div>
+            <?php if (empty($selectedTasks)): ?>
+                <div class="text-center py-8 border border-gray-100 dark:border-zinc-800">
+                    <p class="text-xs font-bold uppercase tracking-widest text-gray-400">No tasks on this day</p>
+                </div>
+            <?php else: ?>
+                <div class="space-y-4">
+                    <?php foreach ($selectedTasks as $task): ?>
+                        <a href="?page=view-task&id=<?= urlencode($task['id']) ?>&projectId=<?= urlencode($task['projectId']) ?>" class="flex items-center gap-4 <?= $task['completed'] ? 'opacity-30' : 'group' ?>">
+                            <div class="w-1 h-12 <?= $task['completed'] ? 'bg-gray-200 dark:bg-zinc-700' : 'bg-black dark:bg-white' ?>"></div>
+                            <div class="flex-1 border-b border-gray-100 dark:border-zinc-800 pb-4">
+                                <div class="flex justify-between items-start mb-1 gap-3">
+                                    <h3 class="text-sm font-bold uppercase tracking-tight leading-tight"><?= htmlspecialchars($task['title']) ?></h3>
+                                    <span class="text-[10px] font-black flex-shrink-0"><?= htmlspecialchars($task['dueTime']) ?></span>
+                                </div>
+                                <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Project: <?= htmlspecialchars($task['projectName']) ?></span>
+                            </div>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
     </section>
 </main>
 

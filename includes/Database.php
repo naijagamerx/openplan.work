@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Database Class - JSON file handling with encryption
  */
@@ -28,6 +28,23 @@ class Database {
         if (!is_dir($this->dataPath)) {
             mkdir($this->dataPath, 0755, true);
         }
+    }
+
+    /**
+     * Factory: build a Database scoped to a user by injecting a pre-derived 32-byte
+     * data key directly, bypassing the password derivation step. Used by Alexa
+     * multi-user mode where the data key is unwrapped from a platform-encrypted
+     * blob (per-user wrappedDataKey in alexa_links collection) rather than
+     * derived from a live master password.
+     */
+    public static function fromRawKey(string $userId, string $rawKey): self {
+        if (!preg_match('/^[a-f0-9-]{36}$/i', $userId) && !preg_match('/^[a-zA-Z0-9_-]+$/', $userId)) {
+            throw new Exception('Invalid user ID format');
+        }
+        $instance = new self('placeholder', $userId);
+        $instance->masterPassword = '';                          // no longer trustworthy; do not use
+        $instance->encryption = Encryption::fromRawKey($rawKey);
+        return $instance;
     }
 
     public function getDataPath(): string {
@@ -143,12 +160,19 @@ class Database {
         try {
             $encryptedData = $this->encryption->encrypt($data);
 
-            $fp = fopen($filePath, 'w');
+            // Open WITHOUT truncating ('c'), acquire the exclusive lock, THEN
+            // truncate+write. The old 'w' mode truncated the file on open —
+            // before the lock — so a concurrent reader or a crash mid-write
+            // could observe an empty/half file. That was the root cause of the
+            // recurring *.corrupt.*.bak files. This mirrors savePlainCollection().
+            $fp = fopen($filePath, 'c');
             if (!$fp) {
                 throw new Exception("Could not open file for writing: $filePath");
             }
 
             if (flock($fp, LOCK_EX)) {
+                ftruncate($fp, 0);
+                rewind($fp);
                 fwrite($fp, $encryptedData);
                 fflush($fp);
                 flock($fp, LOCK_UN);

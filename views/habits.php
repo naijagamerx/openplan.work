@@ -88,6 +88,29 @@ foreach ($habits as $key => $habit) {
         $habits[$key]['weeklyProgress'][] = count($dayCompletions) > 0 ? 100 : 0;
     }
 
+    // Per-day tap counts for the current ISO week (Mon-Sun). Mirrors the API
+    // augmentation so the view renders the 7 clickable count boxes without
+    // making a separate API call.
+    $weekStart = new DateTime($today);
+    $weekStart->modify('-' . ((int)$weekStart->format('N') - 1) . ' days');
+    $habits[$key]['weekCounts'] = [];
+    $habits[$key]['weekDates'] = [];
+    for ($i = 0; $i < 7; $i++) {
+        $dayDate = $weekStart->format('Y-m-d');
+        $habits[$key]['weekDates'][] = $dayDate;
+        $dayRecords = array_filter($habitCompletions, fn($c) => ($c['date'] ?? '') === $dayDate);
+        $dayCount = 0;
+        foreach ($dayRecords as $rec) {
+            if (array_key_exists('count', $rec)) {
+                $dayCount += max(0, (int)$rec['count']);
+            } elseif (($rec['status'] ?? '') === 'complete') {
+                $dayCount += 1;
+            }
+        }
+        $habits[$key]['weekCounts'][] = $dayCount;
+        $weekStart->modify('+1 day');
+    }
+
     // Add streak calculations
     $habits[$key]['currentStreak'] = $calculateHabitStreak($habit['id'], $completions, $today);
     $habits[$key]['longestStreak'] = $calculateLongestStreak($habit['id'], $completions);
@@ -176,7 +199,10 @@ $longestStreak = max(array_column($habits, 'longestStreak') ?: [0]);
     <?php else: ?>
         <section class="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-20">
             <?php foreach ($habits as $habit): ?>
-                <div class="bg-white border border-gray-200 rounded-2xl p-8 flex flex-col gap-6 hover:shadow-lg transition-all shadow-sm">
+                <div class="habit-card bg-white border border-gray-200 rounded-2xl p-8 flex flex-col gap-6 hover:shadow-lg transition-all shadow-sm cursor-pointer"
+                     data-habit-id="<?php echo e($habit['id']); ?>"
+                     data-today="<?php echo e($today); ?>"
+                     title="Click anywhere on the card to add to today's count">
                     <div class="flex justify-between items-start">
                         <div class="flex flex-col">
                             <h4 class="text-xl font-black tracking-tight"><?php echo e($habit['name']); ?></h4>
@@ -194,10 +220,37 @@ $longestStreak = max(array_column($habits, 'longestStreak') ?: [0]);
                     </div>
 
                     <div class="flex flex-col gap-2 pt-4 border-t border-gray-100">
-                        <p class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Last 7 Days</p>
-                        <div class="flex gap-2">
-                            <?php foreach ($habit['weeklyProgress'] as $progress): ?>
-                                <div class="sparkline-dot size-2 rounded-full <?php echo $progress > 0 ? 'bg-black' : 'bg-gray-200'; ?>"></div>
+                        <div class="flex items-center justify-between mb-1">
+                            <p class="text-[9px] font-black text-gray-400 uppercase tracking-widest">This Week</p>
+                            <p class="text-[10px] font-black text-gray-700">
+                                Total:
+                                <span class="habit-week-total" data-habit-id="<?php echo e($habit['id']); ?>">
+                                    <?php echo array_sum($habit['weekCounts'] ?? [0, 0, 0, 0, 0, 0, 0]); ?>
+                                </span>
+                            </p>
+                        </div>
+                        <div class="grid grid-cols-7 gap-1">
+                            <?php $dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S']; ?>
+                            <?php foreach (($habit['weekDates'] ?? []) as $i => $weekDate): ?>
+                                <?php $count = (int)($habit['weekCounts'][$i] ?? 0); ?>
+                                <div class="flex flex-col items-center gap-1">
+                                    <span class="text-[9px] font-black uppercase tracking-widest text-gray-400"><?php echo e($dayLabels[$i] ?? ''); ?></span>
+                                    <div class="relative">
+                                        <button type="button"
+                                            class="habit-count-box w-9 h-9 rounded-md text-xs font-black flex items-center justify-center transition-all <?php echo $count > 0 ? 'bg-black text-white' : 'bg-white border border-gray-200 text-gray-400 hover:border-gray-400'; ?>"
+                                            data-habit-id="<?php echo e($habit['id']); ?>"
+                                            data-date="<?php echo e($weekDate); ?>"
+                                            data-count="<?php echo $count; ?>"
+                                            aria-label="<?php echo e($dayLabels[$i] ?? ''); ?> <?php echo e($weekDate); ?> count <?php echo $count; ?>"
+                                            title="Click to add"><?php echo $count > 0 ? $count : ''; ?></button>
+                                        <button type="button"
+                                            class="habit-dec-btn absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-white border border-black text-black text-[10px] font-black leading-none flex items-center justify-center hover:bg-black hover:text-white transition <?php echo $count > 0 ? '' : 'hidden'; ?>"
+                                            data-habit-id="<?php echo e($habit['id']); ?>"
+                                            data-date="<?php echo e($weekDate); ?>"
+                                            aria-label="Subtract <?php echo e($dayLabels[$i] ?? ''); ?> <?php echo e($weekDate); ?>"
+                                            title="Subtract">−</button>
+                                    </div>
+                                </div>
                             <?php endforeach; ?>
                         </div>
                     </div>
@@ -277,4 +330,126 @@ async function deleteHabit(habitId, habitName) {
         }
     });
 }
+
+// Habit count boxes — left-click increments, right-click / long-press decrements.
+(function initHabitCountBoxes() {
+    const boxes = document.querySelectorAll('.habit-count-box');
+    if (!boxes.length) return;
+
+    async function updateCount(box, direction) {
+        const habitId = box.dataset.habitId;
+        const date = box.dataset.date;
+        const action = direction === 'inc' ? 'increment_count' : 'decrement_count';
+        const currentCount = parseInt(box.dataset.count || '0', 10);
+        const optimisticCount = direction === 'inc' ? currentCount + 1 : Math.max(0, currentCount - 1);
+
+        applyCount(box, optimisticCount);
+
+        try {
+            const response = await api.post(`api/habits.php?action=${action}`, {
+                habitId,
+                date,
+                csrf_token: CSRF_TOKEN
+            });
+            if (response && response.success) {
+                const serverCount = parseInt(response.data?.count ?? optimisticCount, 10);
+                applyCount(box, serverCount);
+            } else {
+                applyCount(box, currentCount);
+                showToast(response?.error?.message || response?.error || 'Failed to update count', 'error');
+            }
+        } catch (err) {
+            console.error('habit count update failed:', err);
+            applyCount(box, currentCount);
+            showToast('Failed to update count', 'error');
+        }
+    }
+
+    function findDecButton(box) {
+        const wrap = box.parentElement;
+        if (!wrap) return null;
+        return wrap.querySelector('.habit-dec-btn');
+    }
+
+    function applyCount(box, count) {
+        box.dataset.count = String(count);
+        box.textContent = count > 0 ? String(count) : '';
+        if (count > 0) {
+            box.classList.add('bg-black', 'text-white');
+            box.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-400', 'hover:border-gray-400');
+        } else {
+            box.classList.remove('bg-black', 'text-white');
+            box.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-400', 'hover:border-gray-400');
+        }
+        const decBtn = findDecButton(box);
+        if (decBtn) {
+            decBtn.classList.toggle('hidden', count <= 0);
+        }
+        const total = document.querySelector(`.habit-week-total[data-habit-id="${box.dataset.habitId}"]`);
+        if (total) {
+            const cardBoxes = document.querySelectorAll(`.habit-count-box[data-habit-id="${box.dataset.habitId}"]`);
+            let sum = 0;
+            cardBoxes.forEach(b => { sum += parseInt(b.dataset.count || '0', 10); });
+            total.textContent = String(sum);
+        }
+    }
+
+    function boxFromDecBtn(decBtn) {
+        const wrap = decBtn.parentElement;
+        if (!wrap) return null;
+        return wrap.querySelector('.habit-count-box');
+    }
+
+    boxes.forEach(box => {
+        box.addEventListener('click', (e) => {
+            e.preventDefault();
+            updateCount(box, 'inc');
+        });
+
+        // Long-press to decrement on touch devices.
+        let pressTimer = null;
+        box.addEventListener('touchstart', () => {
+            pressTimer = setTimeout(() => {
+                pressTimer = null;
+                updateCount(box, 'dec');
+            }, 500);
+        }, { passive: true });
+        box.addEventListener('touchend', () => {
+            if (pressTimer) {
+                clearTimeout(pressTimer);
+                pressTimer = null;
+            }
+        });
+        box.addEventListener('touchmove', () => {
+            if (pressTimer) {
+                clearTimeout(pressTimer);
+                pressTimer = null;
+            }
+        });
+    });
+
+    document.querySelectorAll('.habit-dec-btn').forEach(decBtn => {
+        decBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const box = boxFromDecBtn(decBtn);
+            if (box) updateCount(box, 'dec');
+        });
+    });
+
+    // Card-level click anywhere on the habit card increments today's box.
+    // Skipped when the click originates from a button, anchor, or any
+    // interactive descendant so per-box clicks and edit/archive/delete still work.
+    document.querySelectorAll('.habit-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('button, a, input, select, textarea')) return;
+            const habitId = card.dataset.habitId;
+            const today = card.dataset.today;
+            const todayBox = card.querySelector(`.habit-count-box[data-habit-id="${habitId}"][data-date="${today}"]`);
+            if (todayBox) {
+                updateCount(todayBox, 'inc');
+            }
+        });
+    });
+})();
 </script>

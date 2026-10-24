@@ -381,34 +381,56 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                 $borderClass = $isCompleted ? 'border border-black' : 'border border-gray-200';
                 $hoverClass = $isCompleted ? 'hover:bg-black hover:text-white' : 'hover:border-black';
             ?>
-            <div class="group flex items-center justify-between p-4 <?= $borderClass ?> <?= $hoverClass ?> transition-all cursor-pointer"
-                 onclick="Mobile.habits.openDetail('<?= $habitId ?>')"
+            <?php $weekDates = $habit['weekDates'] ?? []; $weekCounts = $habit['weekCounts'] ?? []; $weekTotal = array_sum($weekCounts); ?>
+            <div class="flex flex-col gap-3 p-4 <?= $borderClass ?> <?= $hoverClass ?> transition-all"
                  data-habit-id="<?= $habitId ?>"
                  data-completed="<?= $isCompleted ? '1' : '0' ?>">
-                <div class="flex flex-col">
-                    <span class="text-xs font-bold uppercase tracking-wider"><?= $habitName ?></span>
-                    <span class="text-[9px] <?= $isCompleted ? 'opacity-60' : 'text-gray-400' ?> uppercase mt-0.5">
-                        <?= $category ?><?php if ($goalText): ?> &bull; <?= $goalText ?><?php endif; ?>
+                <div class="flex items-center justify-between cursor-pointer" onclick="Mobile.habits.openDetail('<?= $habitId ?>')">
+                    <div class="flex flex-col">
+                        <span class="text-xs font-bold uppercase tracking-wider"><?= $habitName ?></span>
+                        <span class="text-[9px] <?= $isCompleted ? 'opacity-60' : 'text-gray-400' ?> uppercase mt-0.5">
+                            <?= $category ?><?php if ($goalText): ?> &bull; <?= $goalText ?><?php endif; ?>
+                        </span>
+                    </div>
+                    <button
+                        type="button"
+                        class="p-1 -m-1 touch-target"
+                        onclick="event.stopPropagation(); Mobile.habits.toggle('<?= $habitId ?>')"
+                        aria-label="<?= $isCompleted ? 'Mark habit incomplete' : 'Mark habit complete' ?>"
+                    >
+                        <?php if ($isCompleted): ?>
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        <?php else: ?>
+                            <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        <?php endif; ?>
+                    </button>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">This Week</span>
+                    <span class="text-[9px] font-black uppercase tracking-widest text-gray-600">
+                        Total <span class="habit-week-total" data-habit-id="<?= $habitId ?>"><?= (int)$weekTotal ?></span>
                     </span>
                 </div>
-                <button
-                    type="button"
-                    class="p-1 -m-1 touch-target"
-                    onclick="event.stopPropagation(); Mobile.habits.toggle('<?= $habitId ?>')"
-                    aria-label="<?= $isCompleted ? 'Mark habit incomplete' : 'Mark habit complete' ?>"
-                >
-                    <?php if ($isCompleted): ?>
-                        <!-- Heroicon: Check Circle (completed) -->
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                    <?php else: ?>
-                        <!-- Heroicon: Circle (uncompleted) -->
-                        <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                    <?php endif; ?>
-                </button>
+                <div class="grid grid-cols-7 gap-1">
+                    <?php $dayLabels = ['M','T','W','T','F','S','S']; ?>
+                    <?php foreach ($weekDates as $i => $weekDate): $count = (int)($weekCounts[$i] ?? 0); ?>
+                        <div class="flex flex-col items-center gap-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-gray-400"><?= htmlspecialchars($dayLabels[$i] ?? '') ?></span>
+                            <button type="button"
+                                class="habit-count-box w-9 h-9 rounded-md text-xs font-black flex items-center justify-center transition-all <?= $count > 0 ? 'bg-black text-white' : 'bg-white border border-gray-200 text-gray-400'; ?>"
+                                data-habit-id="<?= $habitId ?>"
+                                data-date="<?= htmlspecialchars($weekDate) ?>"
+                                data-count="<?= $count ?>"
+                                onclick="event.stopPropagation(); Mobile.habits.incrementCount(this);"
+                                oncontextmenu="event.preventDefault(); event.stopPropagation(); Mobile.habits.decrementCount(this); return false;"
+                                aria-label="<?= htmlspecialchars($dayLabels[$i] ?? '') ?> <?= htmlspecialchars($weekDate) ?> count <?= $count ?>"><?= $count > 0 ? $count : '' ?></button>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
             </div>
             <?php endforeach; ?>
         </div>
@@ -556,10 +578,94 @@ Mobile.habits = (function() {
         }
     }
 
+    function applyCountToBox(box, count) {
+        box.dataset.count = String(count);
+        box.textContent = count > 0 ? String(count) : '';
+        if (count > 0) {
+            box.classList.add('bg-black', 'text-white');
+            box.classList.remove('bg-white', 'border', 'border-gray-200', 'text-gray-400');
+        } else {
+            box.classList.remove('bg-black', 'text-white');
+            box.classList.add('bg-white', 'border', 'border-gray-200', 'text-gray-400');
+        }
+        const habitId = box.dataset.habitId;
+        const totalEl = document.querySelector(`.habit-week-total[data-habit-id="${habitId}"]`);
+        if (totalEl) {
+            const habitBoxes = document.querySelectorAll(`.habit-count-box[data-habit-id="${habitId}"]`);
+            let sum = 0;
+            habitBoxes.forEach(b => { sum += parseInt(b.dataset.count || '0', 10); });
+            totalEl.textContent = String(sum);
+        }
+    }
+
+    async function updateBoxCount(box, action) {
+        const habitId = box.dataset.habitId;
+        const date = box.dataset.date;
+        const previous = parseInt(box.dataset.count || '0', 10);
+        const optimistic = action === 'increment_count' ? previous + 1 : Math.max(0, previous - 1);
+        applyCountToBox(box, optimistic);
+
+        try {
+            const response = await App.api.post(`api/habits.php?action=${action}`, {
+                habitId,
+                date,
+                csrf_token: CSRF_TOKEN
+            });
+            if (response && response.success) {
+                const serverCount = parseInt(response.data?.count ?? optimistic, 10);
+                applyCountToBox(box, serverCount);
+            } else {
+                applyCountToBox(box, previous);
+                toast(response?.error?.message || response?.error || 'Failed to update count', 'error');
+            }
+        } catch (err) {
+            console.error('habit count update failed:', err);
+            applyCountToBox(box, previous);
+            toast('Failed to update count', 'error');
+        }
+    }
+
+    function incrementCount(box) {
+        if (!box) return;
+        updateBoxCount(box, 'increment_count');
+    }
+
+    function decrementCount(box) {
+        if (!box) return;
+        updateBoxCount(box, 'decrement_count');
+    }
+
+    function bindLongPress() {
+        document.querySelectorAll('.habit-count-box').forEach(box => {
+            if (box.dataset.longPressBound === '1') return;
+            box.dataset.longPressBound = '1';
+            let pressTimer = null;
+            box.addEventListener('touchstart', () => {
+                pressTimer = setTimeout(() => {
+                    pressTimer = null;
+                    decrementCount(box);
+                }, 500);
+            }, { passive: true });
+            const clearPress = () => {
+                if (pressTimer) {
+                    clearTimeout(pressTimer);
+                    pressTimer = null;
+                }
+            };
+            box.addEventListener('touchend', clearPress);
+            box.addEventListener('touchmove', clearPress);
+            box.addEventListener('touchcancel', clearPress);
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', bindLongPress);
+
     // Public API
     return {
         toggle,
-        openDetail
+        openDetail,
+        incrementCount,
+        decrementCount
     };
 
 })();

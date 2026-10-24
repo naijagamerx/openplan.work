@@ -24,7 +24,7 @@ $csrfHeader = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
 $payload = json_decode(file_get_contents('php://input'), true);
 $csrfBody = is_array($payload) ? ($payload['csrf_token'] ?? '') : '';
 
-if (!Auth::validateCsrf($csrfHeader ?: $csrfBody)) {
+if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfHeader ?: $csrfBody)) {
     http_response_code(403);
     echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
     exit;

@@ -68,7 +68,7 @@ try {
         }
 
         $csrfToken = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403, ERROR_FORBIDDEN);
         }
 
@@ -103,7 +103,7 @@ try {
 
         $body = getJsonBody();
         $csrfToken = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403, ERROR_FORBIDDEN);
         }
 

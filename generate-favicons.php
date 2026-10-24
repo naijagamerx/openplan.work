@@ -4,6 +4,12 @@
  * Run this script to create the initial favicon files
  */
 
+// CLI-only: never expose this asset-writing maintenance script over HTTP.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('This script can only be run from the command line.');
+}
+
 // Ensure GD is available
 if (!extension_loaded('gd')) {
     echo "Error: GD extension is required\n";

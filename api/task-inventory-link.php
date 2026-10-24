@@ -18,7 +18,7 @@ if ($method !== 'POST') {
 $body = getJsonBody();
 $token = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
 
-if (!Auth::validateCsrf($token)) {
+if (!Auth::isTokenAuth() && !Auth::validateCsrf($token)) {
     errorResponse('Invalid CSRF token', 403);
 }
 

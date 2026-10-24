@@ -42,7 +42,7 @@ switch ($action) {
         $csrfToken = $body['csrf_token'] ?? '';
 
         // CSRF validation
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 
@@ -71,10 +71,22 @@ switch ($action) {
                 $url = trim($body['ollamaUrl']);
                 $config['ollamaUrl'] = $url !== '' ? $url : 'http://localhost:11434';
             }
+        } elseif ($section === 'customInstructions') {
+            // AI custom system prompt (custom-instruction.php). Stored verbatim on
+            // the config collection alongside a last-updated timestamp.
+            $config['customInstructions'] = trim((string)($body['customInstructions'] ?? ''));
+            $config['customInstructionsUpdatedAt'] = date('c');
         } elseif ($section === 'notifications') {
             $config['notificationsEnabled'] = filter_var($body['notificationsEnabled'] ?? $config['notificationsEnabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
             $config['waterReminderInterval'] = intval($body['waterReminderInterval'] ?? $config['waterReminderInterval'] ?? 60);
             $config['waterReminderGoal'] = intval($body['waterReminderGoal'] ?? $config['waterReminderGoal'] ?? 8);
+            // Alert-type toggles derived from task dueDate (App.notificationCenter).
+            $config['overdueAlerts'] = filter_var($body['overdueAlerts'] ?? $config['overdueAlerts'] ?? true, FILTER_VALIDATE_BOOLEAN);
+            $config['dueSoonAlerts'] = filter_var($body['dueSoonAlerts'] ?? $config['dueSoonAlerts'] ?? true, FILTER_VALIDATE_BOOLEAN);
+            $config['notStartedAlerts'] = filter_var($body['notStartedAlerts'] ?? $config['notStartedAlerts'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            // Sound + volume for habit/water/pomodoro reminders.
+            $config['soundEnabled'] = filter_var($body['soundEnabled'] ?? $config['soundEnabled'] ?? true, FILTER_VALIDATE_BOOLEAN);
+            $config['volume'] = max(0, min(100, intval($body['volume'] ?? $config['volume'] ?? 80)));
         } else {
             errorResponse('Invalid section');
         }
@@ -105,7 +117,7 @@ switch ($action) {
         $csrfToken = $body['csrf_token'] ?? '';
 
         // CSRF validation
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 

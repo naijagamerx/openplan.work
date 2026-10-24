@@ -120,15 +120,23 @@ abstract class BaseAPI {
 
     /**
      * Send not found error
+     *
+     * Public because endpoint scripts (clients.php, todos.php, projects.php,
+     * tasks.php) call this from global scope. Declaring it protected caused a
+     * fatal "Call to protected method from global scope" whenever a not-found
+     * branch executed.
      */
-    protected function notFound(string $resource = 'Resource'): void {
+    public function notFound(string $resource = 'Resource'): void {
         errorResponse($resource . ' not found', 404, ERROR_NOT_FOUND);
     }
 
     /**
      * Send validation error
+     *
+     * Public for the same reason as notFound() — invoked from global scope in
+     * the endpoint scripts when required-field validation fails.
      */
-    protected function validationError(string $message): void {
+    public function validationError(string $message): void {
         errorResponse($message, 400, ERROR_VALIDATION);
     }
 }

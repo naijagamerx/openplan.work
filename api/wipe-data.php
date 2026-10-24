@@ -16,7 +16,7 @@ if (!Auth::check()) {
 
 // CSRF validation
 $csrfToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-if (!Auth::validateCsrf($csrfToken)) {
+if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
     errorResponse('Invalid CSRF token', 403);
 }
 
@@ -83,8 +83,13 @@ if ($createBackup) {
     }
 }
 
-// Get all encrypted data files
-$files = glob(DATA_PATH . '/*.json.enc');
+// Get all encrypted data files for the CURRENT user only.
+// Must scope to the per-user directory (data/users/<uuid>) — the old code
+// globbed the global DATA_PATH root, which (a) let any authenticated user
+// delete global/shared collections and (b) targeted the wrong files entirely
+// in this per-user storage model. getDataPath() resolves to the caller's
+// own directory because $db was constructed with Auth::userId().
+$files = glob($db->getDataPath() . '/*.json.enc');
 $deleted = [];
 $failed = [];
 

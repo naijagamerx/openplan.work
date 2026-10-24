@@ -132,12 +132,13 @@ if ($job === 'run_daily') {
     // Run all daily maintenance tasks sequentially
     $tasks = [
         'overdue_invoices',
-        'rate_limit_cleanup', 
+        'rate_limit_cleanup',
         'audit_cleanup',
         'inventory_alerts',
         'invoice_reminders',
         'task_reminders',
-        'ai_daily_brief'
+        'ai_daily_brief',
+        'subscription_expiry_check'
     ];
     
     $dailyResults = [];
@@ -195,9 +196,90 @@ function executeCronJob($job, $db, $audit) {
             return runTaskReminders($db, $audit);
         case 'ai_daily_brief':
             return runAIDailyBrief($db);
+        case 'subscription_expiry_check':
+            return runSubscriptionExpiryCheck();
         default:
             return ['success' => false, 'error' => 'Unknown job: ' . $job];
     }
+}
+
+/**
+ * Job: subscription expiry maintenance.
+ *   - Marks expired subscriptions whose expiresAt < now and status=active.
+ *   - Sends "expiring in 3 days" email for subscriptions in the 0-3 day window.
+ *   - Sends "expired" email once on the transition.
+ */
+function runSubscriptionExpiryCheck() {
+    $globalDb = new Database(APP_NAME);
+    $subs = $globalDb->load('subscriptions', true);
+    if (!is_array($subs)) {
+        return ['success' => true, 'data' => ['expired' => 0, 'warned' => 0]];
+    }
+    $now = time();
+    $threeDays = 3 * 86400;
+    $expiredCount = 0;
+    $warnedCount = 0;
+    $changed = false;
+
+    // Build user lookup once.
+    $users = $globalDb->load('users', true);
+    $userMap = [];
+    foreach ($users as $u) {
+        $userMap[$u['id'] ?? ''] = $u;
+    }
+
+    foreach ($subs as $i => $s) {
+        if (($s['status'] ?? '') !== 'active') {
+            continue;
+        }
+        $expiresAt = strtotime((string)($s['expiresAt'] ?? ''));
+        if ($expiresAt === false) {
+            continue;
+        }
+        $user = $userMap[$s['userId'] ?? ''] ?? null;
+
+        if ($expiresAt <= $now) {
+            $subs[$i]['status'] = 'expired';
+            $subs[$i]['updatedAt'] = date('c');
+            $changed = true;
+            $expiredCount++;
+            if ($user && class_exists('Mailer') && method_exists('Mailer', 'sendSubscriptionExpiredEmail')) {
+                try {
+                    $masterPassword = getMasterPassword();
+                    if ($masterPassword !== '') {
+                        $userDb = new Database($masterPassword, $user['id']);
+                        $config = $userDb->load('config', false);
+                        $mailer = new Mailer(is_array($config) ? $config : []);
+                        $mailer->sendSubscriptionExpiredEmail($user, $subs[$i]);
+                    }
+                } catch (Throwable $e) {
+                    error_log('expired email failed: ' . $e->getMessage());
+                }
+            }
+        } elseif (($expiresAt - $now) <= $threeDays && empty($s['expiringEmailSentAt'])) {
+            $subs[$i]['expiringEmailSentAt'] = date('c');
+            $changed = true;
+            $warnedCount++;
+            if ($user && class_exists('Mailer') && method_exists('Mailer', 'sendSubscriptionExpiringEmail')) {
+                try {
+                    $masterPassword = getMasterPassword();
+                    if ($masterPassword !== '') {
+                        $userDb = new Database($masterPassword, $user['id']);
+                        $config = $userDb->load('config', false);
+                        $mailer = new Mailer(is_array($config) ? $config : []);
+                        $mailer->sendSubscriptionExpiringEmail($user, $subs[$i]);
+                    }
+                } catch (Throwable $e) {
+                    error_log('expiring email failed: ' . $e->getMessage());
+                }
+            }
+        }
+    }
+
+    if ($changed) {
+        $globalDb->save('subscriptions', $subs);
+    }
+    return ['success' => true, 'data' => ['expired' => $expiredCount, 'warned' => $warnedCount]];
 }
 
 /**

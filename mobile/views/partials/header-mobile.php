@@ -17,6 +17,17 @@ $rightAction = $rightAction ?? 'none';
 $rightTarget = $rightTarget ?? '';
 $rightIsLink = $rightIsLink ?? false;
 
+require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+$mobHeaderSub = Auth::check() ? getActiveSubscription(Auth::userId() ?? '') : null;
+$mobHeaderRemaining = null;
+if ($mobHeaderSub) {
+    $cap = (int)($mobHeaderSub['monthlyRequestCap'] ?? 0);
+    if ($cap > 0) {
+        $usage = getMonthlyUsage(Auth::userId() ?? '');
+        $mobHeaderRemaining = max(0, $cap - (int)($usage['totalRequests'] ?? 0));
+    }
+}
+
 // Auto-detect URL-like targets so pages don't need to always set $rightIsLink manually.
 $targetIsUrlLike = is_string($rightTarget)
     && preg_match('#^(\\?|/|\\./|\\.\\./|https?://)#', $rightTarget) === 1;
@@ -86,5 +97,47 @@ if ($rightAction === 'add') {
     <?php else: ?>
         <div class="flex-1"></div>
     <?php endif; ?>
-    <?= $rightContent ?>
+    <div class="flex items-center gap-1">
+        <?php if (Auth::check()): ?>
+        <button type="button" data-notif-toggle="notif-panel-mobile" class="relative p-2 touch-target" aria-label="Notifications">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+            </svg>
+            <span data-notif-badge class="hidden absolute top-0.5 right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold leading-[18px] text-center rounded-full"></span>
+        </button>
+        <?php endif; ?>
+        <?= $rightContent ?>
+    </div>
 </header>
+<?php if (Auth::check()): ?>
+<div id="notif-panel-mobile" data-notif-panel class="hidden fixed top-[3.5rem] right-2 left-2 max-w-[420px] mx-auto z-50 max-h-[70vh] overflow-y-auto bg-white dark:bg-zinc-900 rounded-lg shadow-xl border border-gray-200 dark:border-gray-800" style="top: calc(3.5rem + env(safe-area-inset-top))">
+    <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Notifications</h3>
+        <a href="?page=tasks" class="text-xs text-gray-500 hover:text-gray-900 dark:text-gray-400">View all tasks</a>
+    </div>
+    <div data-notif-list></div>
+</div>
+<script>
+(function initMobileNotifBell() {
+    if (window.App?.notificationCenter?.initialize) {
+        App.notificationCenter.initialize();
+    } else {
+        document.addEventListener('DOMContentLoaded', function() {
+            window.App?.notificationCenter?.initialize?.();
+        });
+    }
+})();
+</script>
+<?php endif; ?>
+<?php if ($mobHeaderSub): ?>
+<a href="?page=settings#ai-quota" class="block px-4 py-1.5 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-100 dark:border-yellow-900/40 text-xs text-yellow-900 dark:text-yellow-200 flex items-center gap-2">
+    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+    </svg>
+    <?php if ($mobHeaderRemaining !== null): ?>
+        <span class="font-medium"><?= number_format($mobHeaderRemaining) ?> AI requests left</span>
+    <?php else: ?>
+        <span class="font-medium">Unlimited AI requests</span>
+    <?php endif; ?>
+</a>
+<?php endif; ?>

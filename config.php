@@ -209,14 +209,18 @@ ini_set('error_log', DATA_PATH . '/php_error.log');
 if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.cookie_httponly', 1);
     ini_set('session.cookie_samesite', SESSION_COOKIE_SAMESITE);
-    if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+    // Use the proxy-aware HTTPS detection ($isHttps, computed above from HTTPS,
+    // X-Forwarded-Proto, and REQUEST_SCHEME). On Hostinger TLS terminates at the
+    // proxy so $_SERVER['HTTPS'] is often unset — the old check left the session
+    // cookie without the Secure flag.
+    if ($isHttps) {
         ini_set('session.cookie_secure', 1);
     }
     ini_set('session.gc_maxlifetime', SESSION_STORAGE_LIFETIME);
     session_set_cookie_params([
         'lifetime' => SESSION_STORAGE_LIFETIME,
         'path' => '/',
-        'secure' => (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on'),
+        'secure' => $isHttps,
         'httponly' => true,
         'samesite' => SESSION_COOKIE_SAMESITE
     ]);

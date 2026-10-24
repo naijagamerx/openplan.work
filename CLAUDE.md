@@ -15,7 +15,46 @@ LazyMan Tools is a PHP-based task management system with encrypted JSON storage.
 - **Authentication**: Session-based with bcrypt password hashing
 - **Security**: AES-256-GCM encryption, CSRF tokens, XSS protection, .htaccess data protection
 
+## App Surfaces & Where They Live (read this before any UI/footer/nav work)
+
+This repo ships **four distinct client surfaces** plus the PHP backend that powers them. They look similar but their source lives in different folders — editing the wrong one is the #1 source of "I fixed it but nothing changed" confusion.
+
+| Surface | Folder | What it is | Runs where |
+|---|---|---|---|
+| **Desktop web** | `views/` (83 files) + `assets/js/app.js` | Vanilla-JS + Tailwind PHP pages; `views/layouts/main.php` is the shell | `index.php?page=` |
+| **Mobile web** | `mobile/views/` (94 files) | Parallel PHP view tree for phone-width; `mobile/views/partials/` has `header-mobile.php`, `bottom-nav.php`, `offcanvas-menu.php` | `mobile/index.php?page=` |
+| **Android WebView shell** | `android/app/src/main/java/com/taskmanager/app/MainActivity.java` | Thin WebView wrapper. **Hardcoded `APP_URL = "https://openplan.work/mobile/"`** (line 19) — points at the *deployed* mobile web, NOT local files. Package: `com.taskmanager.app`. Bundle id: `com.taskmanager.app`. | Installable APK |
+| **Flutter native client** | `flutter_app/` | Real native mobile app. Package: `work.openplan.openplan_app` (this is the "openplan" app on the device). Name in `pubspec.yaml`: `openplan_app`. Built with Riverpod + go_router + dio. | Android + iOS |
+
+### Footer / bottom-nav ownership map (the gotcha)
+
+Each surface has its **own** footer — fixing one does not fix the others:
+
+- **Desktop web** → `views/layouts/main.php` (sidebar-based, no bottom nav)
+- **Mobile web** (`mobile/`) → `mobile/views/partials/bottom-nav.php`. Tabs: `Menu / Tasks / Habits / Settings`. Active/inactive color classes are currently identical (both `text-black dark:text-white`) — there is no visual active state.
+- **Android WebView** (`com.taskmanager.app`) → renders the deployed `mobile/` bottom-nav at `https://openplan.work/mobile/`. **A stale deploy will show a different footer than your local `mobile/` source.** To change the footer seen in this app you must (a) edit `mobile/views/partials/bottom-nav.php`, then (b) redeploy `openplan.work`.
+- **Flutter** (`work.openplan.openplan_app`) → `flutter_app/lib/widgets/app_bottom_nav.dart`. Tabs (5): `Dashboard / Tasks / Notes / Habits / Menu` (different order/labels than the web mobile nav). `notes_screen.dart` uses `AppScaffold` so it renders the footer as a primary tab (also still reachable via the menu hub push). **Known issue:** the active item's label is "DASHBOARD" but a 1:1:1:1 flex split clips it to **"DASH"** on screen (the source comment at `app_bottom_nav.dart:52-53` calls this out; the 3:1 active-flex fix exists but can still clip on narrow devices). The other 3 labels are intentionally hidden until active/pressed.
+
+> **Diagnostic tip:** If the footer you see on a device doesn't match local source, check (1) which package is in the foreground (`adb shell dumpsys activity activities | grep ResumedActivity`), (2) for the WebView app, whether it points at `openplan.work` (production) vs local MAMP, (3) for Flutter, the `app_bottom_nav.dart` clipping behavior.
+
+### Other surface-specific folders
+
+- **MCP server** — `mcp-server/index.js` (Node 18+ ESM, stdio, `@modelcontextprotocol/sdk`). `package.json` name: `openplan-work-mcp-server`. A PHP-side bridge also exists at `api/mcp-server.php`.
+- **Alexa skill** — `alexa-skill/` (`interaction-model.json` + `ALEXA-CONSOLE-HANDOFF.md`); backend endpoint `api/alexa.php`.
+- **Backend** — `api/*.php` (52 endpoint files) + `includes/` (43 PHP classes). Tasks are embedded in the `projects` collection, not separate — see TRD data model.
+- **Data** — `data/users/{userId}/*.json.enc` (encrypted, gitignored). Never touch directly; always go through `Database`.
+
 ## Quick Reference
+
+### Authoritative Spec Documents (start here for any non-trivial task)
+- **`docs/PRD.md`** — product requirements, personas, scope (what & why)
+- **`docs/TRD.md`** — technical contract: classes, schemas, APIs, encryption, request lifecycle (how & where; **file:line evidence**)
+- **`docs/DESIGN.md`** — UX flows, routing, layout, theming
+- **`docs/OpenPlan-Work-Complete-Documentation.md`** — auto-generated reference (data models, MCP config sample)
+- **`docs/OpenPlan-Work-User-Guide.md`** — end-user instructions
+- **`project_status.md`** — latest audit score (84/100) + smoke test results + open risks
+
+When PRD/TRD/DESIGN disagrees with this file, the spec docs win — they are evidence-based and re-derivable from code. Update them when behavior changes.
 
 ### Critical Recovery Fixes
 - **Notes Tag Manager Fix**: See `## Recovery Fixes` section below
@@ -30,58 +69,42 @@ LazyMan Tools is a PHP-based task management system with encrypted JSON storage.
 
 ## Common Development Commands
 
-### Setup & Installation
+### Setup & Running
 ```bash
-# Project requires PHP 8.0+ with openssl, json, mbstring, zip extensions
-# No package managers needed - pure PHP + vanilla JS
-
-# Ensure data directory is writable
-chmod 755 data/
-chmod 644 data/*.json.enc  # If they exist
-
-# Configure Apache/Nginx to use .htaccess for routing
-# Ensure mod_rewrite is enabled
+# PHP 8.0+ with openssl, json, mbstring, curl, zip. Local PHP: /c/MAMP/bin/php/php8.3.1/php
+# Runtime has no Composer deps; composer.json exists only for dev tooling (PHPUnit/PHPStan/php-cs-fixer in vendor/)
+# Local URL via MAMP: http://localhost/taskmanager/   (mobile: /taskmanager/mobile/)
+php start_server.php          # alternative: built-in server on http://localhost:8000 (start_server.bat / stop_server.bat)
+# Secrets/config come from .env (gitignored), loaded by config.php. First run: ?page=setup
 ```
 
-### Testing
+### Testing & Verification
 ```bash
-# Run all tests
-php test/run_all_tests.php
+php -l path/to/file.php                       # syntax check after every PHP edit
 
-# Run encryption test only
-php test/encryption_test.php
+# Script-style characterization tests in tests/ (e.g. tests/notes_checklist_test.php) run via php-guardian:
+php ~/.claude/skills/php-guardian/scripts/test_runner.php C:/MAMP/htdocs/taskmanager
 
-# Manual testing checklist:
-# 1. Navigate to /?page=setup for first-time setup
-# 2. Create user account
-# 3. Login with created credentials
-# 4. Test all CRUD operations in dashboard
-# 5. Verify data encryption by checking /data/ directory
-# 6. Test API endpoints directly
+composer qa:test     # PHPUnit (scripts/run_phpunit.php picks a PHP binary with openssl).
+                     # phpunit.xml only scans test/*Test.php — currently none exist, so it reports "No tests executed!"
+composer qa:stan     # PHPStan per phpstan.neon
+composer qa:cs       # php-cs-fixer dry-run on an allowlist of files
+node scripts/mcp_test_all_tools.mjs          # exercises every MCP tool against api/mcp-server.php
 ```
-
-### Development Workflow
-```bash
-# No build process required
-# Simply edit files and refresh browser
-
-# To reset system (clear all data):
-rm -f data/*.json.enc
-rm -rf data/backups/*
-
-# To test encryption functionality:
-php test/encryption_test.php
-```
+`test/`, `phpunit.xml`, `phpstan.neon` are gitignored (local only). php-guardian's `smoke_test.php` always exits 1 here from pre-existing fixture/backup include failures — judge by your own files.
 
 ### Debugging
-```bash
-# Enable debug mode in config.php:
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+- `config.php` sets `display_errors=0` and logs to **`data/php_error.log`** — check it first for any 500.
+- Data lives per user at `data/users/{userId}/*.json.enc`; never hand-edit or delete it — go through `Database`.
 
-# Check PHP error logs
-tail -f /path/to/php/error.log
-```
+## Request Lifecycle & Auth (big picture)
+
+- Every entry point `require_once config.php` first (loads `.env`, defines `APP_*`/path constants, starts the session).
+- **Pages**: `index.php?page=X` (desktop → `views/X.php` inside `views/layouts/main.php`) and `mobile/index.php?page=X` (→ `mobile/views/X.php`). `index.php` owns auth gating and the two-step login → master-password flow.
+- **API**: `api/*.php` are thin: `Auth::check()` → `new Database(getMasterPassword(), Auth::userId())` → `new XxxAPI($db, 'collection')` (extends `includes/BaseAPI.php`) → switch on `requestMethod()` / `?action=` → `successResponse()` / `errorResponse()`.
+- **Three auth modes** all resolve inside `Auth` (`includes/Auth.php`): browser session cookie; MCP token (`X-MCP-Api-Token`, `Auth::isMcp()`); native-device bearer token (`Authorization: Bearer`, `DeviceTokens`). Token-auth requests carry no CSRF token, so endpoints must skip CSRF using **`Auth::isTokenAuth()`** (covers both token modes) — gating on `isMcp()` alone 403s the Flutter app.
+- The master password never sits on disk in plaintext for token auth: tokens wrap it, and `getMasterPassword()` (`includes/Helpers.php`) unwraps it per request.
+- MCP: `api/mcp-server.php` (PHP-native MCP over HTTP, dispatches tools by calling the app's own API) and `mcp-server/index.js` (Node stdio bridge).
 
 ## Core Class Usage
 
@@ -597,7 +620,7 @@ csrf_token: CSRF_TOKEN
 ## Important Notes
 
 - **No build system**: Direct file editing, refresh browser to see changes
-- **No package.json/composer.json**: Pure PHP + vanilla JS
+- **No runtime package managers**: Pure PHP + vanilla JS (`composer.json` is dev tooling only; `mcp-server/` and `flutter_app/` have their own package files)
 - **Data encryption**: All data in `/data/` is encrypted with master password
 - **Session dependency**: Requires active PHP session for authentication
 - **CSRF required**: All non-GET API requests must include CSRF token
@@ -605,23 +628,23 @@ csrf_token: CSRF_TOKEN
 - **Embedded tasks**: Tasks are stored within project records, not separate entities
 - **Multi-currency**: Support for USD, EUR, GBP, ZAR with automatic symbol formatting
 
-## FTP Upload (CRITICAL — Read Before Every Upload)
+## Deploying to openplan.work (FTP)
 
-**FTP root IS the web root.** The FTP login drops you directly into the document root where `index.php`, `views/`, `mobile/`, `api/` live.
+Host, username, password and SMTP settings live in **`CLAUDE.local.md`** (gitignored, auto-loaded). Never copy them back into this file — this file is pushed to the public repo.
 
-- **WRONG**: `ftp://141.136.39.117/public_html/views/file.php`
-- **CORRECT**: `ftp://141.136.39.117/views/file.php`
+- **FTP root IS the web root** (chrooted account). Upload to `ftp://<host>/views/file.php`, never `ftp://<host>/public_html/...`, and never create a `public_html/` directory.
 - **NEVER** use `--ftp-create-dirs` for directories that already exist. Always **LIST** the target directory first to confirm it exists before uploading.
-- **ALWAYS** verify uploads by listing the directory afterward to confirm the file timestamp updated.
-- **NEVER** create a `public_html/` directory — it does not exist and is not served by the web server.
+- **ALWAYS** verify uploads by listing the directory afterward (and fetching the file back) to confirm the timestamp/bytes updated.
 
-### FTP Credentials
-| Field | Value |
-|-------|-------|
-| FTP IP | `ftp://141.136.39.117` |
-| Username | `u397530364.openplan.work` |
-| Password | Use the password from the `ftp-upload` skill |
-| Port | 21 |
+## Pushing to GitHub (public repo — read before every push)
+
+`origin` = `https://github.com/naijagamerx/openplan.work.git` is **public** (the self-hosted/OSS edition). Production runs the same code on openplan.work.
+
+- Never commit user data: `data/`, `data_backups/`, `data_backup_*`, `uploads/`, `release-artifacts/`, `.env*`, `.mcp.json*`, `*.log`. Stage files by name — never `git add -A` / `git add .` in this repo (the working tree holds backups, test FTP scripts, and screenshots).
+- Before pushing, scan the outgoing diff for secrets and require zero hits — the API-key patterns below **plus** the master password and FTP username from `CLAUDE.local.md`:
+  `git diff origin/main..HEAD | grep -E 'gsk_|sk-or-|sk-ant-|AIza'`
+- Known files that have held the master password: `mcp-server/index.js` (header comment), `flutter_app/MAC_SETUP.md`, `flutter_app/README.md`, `test_ftp_diagnostic.py`.
+- Push the feature branch onto main with `git push origin <branch>:main` (fast-forward only).
 
 ## Project Version
 

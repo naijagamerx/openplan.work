@@ -18,27 +18,69 @@ $hasOpenRouterKey  = !empty($config['openrouterApiKey']);
 $hasGeminiKey      = !empty($config['geminiApiKey']);
 $ollamaUrl         = $config['ollamaUrl'] ?? 'http://localhost:11434';
 $hasOllama         = !empty($models['ollama']); // Ollama available if models have been detected
-$hasAnyKey         = $hasGroqKey || $hasOpenRouterKey || $hasGeminiKey || $hasOllama;
+// `$hasAnyKey` is finalised below once we know whether the user is on shared
+// admin keys with an active subscription.
 
-// Filter enabled models from database
-$groqModels        = array_values(array_filter($models['groq'] ?? [],        fn($m) => $m['enabled'] ?? true));
-$openRouterModels  = array_values(array_filter($models['openrouter'] ?? [],   fn($m) => $m['enabled'] ?? true));
-$geminiModels      = array_values(array_filter($models['gemini'] ?? [],       fn($m) => $m['enabled'] ?? true));
-$ollamaModels      = array_values(array_filter($models['ollama'] ?? [],       fn($m) => $m['enabled'] ?? true));
+// Plan-tier provider allowlist. When the user runs on the platform's shared keys
+// the active subscription's `providers` array is the source of truth and the
+// model list comes from the admin's shared record (NOT the user's own
+// model-settings or a hardcoded fallback). Otherwise every provider is allowed
+// and we load the user's own model list with the static-class fallback.
+require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+$aiUseShared = !empty($config['useAdminSharedAiKeys']);
+$aiActiveSub = $aiUseShared ? getActiveSubscription(Auth::userId() ?? '') : null;
 
-// Per-provider fallback: only use static list for providers that have NO DB models
-if (empty($groqModels)) {
-    $groqModels = array_map(fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
-        array_keys(GroqAPI::getModels()), GroqAPI::getModels());
+if ($aiUseShared) {
+    require_once INCLUDES_PATH . '/AISharedKeysAPI.php';
+    $sharedKeysApi = new AISharedKeysAPI();
+    $groqModels       = $sharedKeysApi->getSharedModels('groq');
+    $openRouterModels = $sharedKeysApi->getSharedModels('openrouter');
+    $geminiModels     = $sharedKeysApi->getSharedModels('gemini');
+    // Ollama is local-only; not part of the shared pool.
+    $ollamaModels     = [];
+} else {
+    // Own-keys path: only render models the user has explicitly enabled in
+    // ?page=model-settings. No hardcoded fallback — if the user hasn't added
+    // a model, the dropdown is empty and they're prompted to configure.
+    $groqModels        = array_values(array_filter($models['groq'] ?? [],        fn($m) => $m['enabled'] ?? true));
+    $openRouterModels  = array_values(array_filter($models['openrouter'] ?? [],   fn($m) => $m['enabled'] ?? true));
+    $geminiModels      = array_values(array_filter($models['gemini'] ?? [],       fn($m) => $m['enabled'] ?? true));
+    $ollamaModels      = array_values(array_filter($models['ollama'] ?? [],       fn($m) => $m['enabled'] ?? true));
 }
-if (empty($openRouterModels)) {
-    $openRouterModels = array_map(fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
-        array_keys(OpenRouterAPI::getModels()), OpenRouterAPI::getModels());
+if ($aiUseShared) {
+    $allowedProviders = ($aiActiveSub && is_array($aiActiveSub['providers'] ?? null))
+        ? $aiActiveSub['providers']
+        : [];
+} else {
+    $allowedProviders = ['groq', 'openrouter', 'gemini', 'ollama'];
 }
-if (empty($geminiModels) && $hasGeminiKey) {
-    $geminiModels = array_map(fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
-        array_keys(GeminiAPI::getModels()), GeminiAPI::getModels());
-}
+$providerAllowed = [
+    'groq'       => in_array('groq', $allowedProviders, true),
+    'openrouter' => in_array('openrouter', $allowedProviders, true),
+    'gemini'     => in_array('gemini', $allowedProviders, true),
+    'ollama'     => in_array('ollama', $allowedProviders, true)
+];
+if (!$providerAllowed['groq'])       { $groqModels = []; }
+if (!$providerAllowed['openrouter']) { $openRouterModels = []; }
+if (!$providerAllowed['gemini'])     { $geminiModels = []; }
+if (!$providerAllowed['ollama'])     { $ollamaModels = []; }
+
+// A subscriber on shared keys counts as "having a key" — the platform supplies
+// it server-side, so the input must not be disabled and the "API Key Required"
+// banner must not block them.
+$hasAnyKey = $hasGroqKey || $hasOpenRouterKey || $hasGeminiKey || $hasOllama
+    || ($aiUseShared && $aiActiveSub);
+
+// Hide Agent Mode + Auto-Confirm controls when every provider the user is
+// entitled to is chat-only (e.g. Groq-only plans). Keeps the UI honest about
+// what the plan actually does. Must mirror CHAT_ONLY_PROVIDERS in the JS below.
+$chatOnlySet = ['groq'];
+$enabledProviders = array_values(array_filter(
+    $allowedProviders,
+    fn($p) => $providerAllowed[$p] ?? false
+));
+$hideAgentControls = !empty($enabledProviders)
+    && count(array_diff($enabledProviders, $chatOnlySet)) === 0;
 ?>
 
 <style>
@@ -114,6 +156,7 @@ if (empty($geminiModels) && $hasGeminiKey) {
                         </svg>
                         Generate PRD
                     </button>
+                    <?php if (!$aiUseShared): ?>
                     <button onclick="openModelSettingsSidebar()" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 border-t border-gray-100">
                         <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
@@ -121,6 +164,7 @@ if (empty($geminiModels) && $hasGeminiKey) {
                         </svg>
                         Configure Models
                     </button>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -169,7 +213,8 @@ if (empty($geminiModels) && $hasGeminiKey) {
                 </div>
             </div>
 
-            <!-- Agent Mode Controls -->
+            <!-- Agent Mode Controls (hidden for chat-only plans) -->
+            <?php if (!$hideAgentControls): ?>
             <div class="flex flex-wrap items-center gap-3 p-3 bg-gray-50 rounded-lg">
                 <div class="flex items-center gap-2">
                     <label class="relative inline-flex items-center cursor-pointer">
@@ -189,6 +234,7 @@ if (empty($geminiModels) && $hasGeminiKey) {
                     <span class="text-xs text-gray-500">(Always on in current agent mode)</span>
                 </div>
             </div>
+            <?php endif; ?>
         </div>
 
         <div class="flex flex-1 overflow-hidden">
@@ -212,13 +258,29 @@ if (empty($geminiModels) && $hasGeminiKey) {
                 <!-- AI Provider and Model Selection -->
                 <div class="p-3 border-b border-gray-200 flex items-center gap-2 flex-wrap bg-gray-50 flex-shrink-0">
                     <select id="ai-provider" onchange="updateModelList(); applyProviderConstraints(); updateConversationState()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm">
-                        <?php $configuredCount = ($hasGroqKey?1:0)+($hasOpenRouterKey?1:0)+($hasGeminiKey?1:0)+($hasOllama?1:0); ?>
+                        <?php
+                        $configuredCount = (($providerAllowed['groq'] && $hasGroqKey)?1:0)
+                            + (($providerAllowed['openrouter'] && $hasOpenRouterKey)?1:0)
+                            + (($providerAllowed['gemini'] && $hasGeminiKey)?1:0)
+                            + (($providerAllowed['ollama'] && $hasOllama)?1:0);
+                        ?>
                         <?php if ($configuredCount >= 2): ?><option value="smart">⚡ Smart (Auto-select)</option><?php endif; ?>
-                        <option value="groq"><?= $hasGroqKey ? 'Groq' : 'Groq (key needed)' ?></option>
-                        <option value="openrouter"><?= $hasOpenRouterKey ? 'OpenRouter' : 'OpenRouter (key needed)' ?></option>
-                        <option value="gemini"><?= $hasGeminiKey ? 'Google Gemini' : 'Google Gemini (key needed)' ?></option>
-                        <option value="ollama"><?= $hasOllama ? 'Ollama (Local)' : 'Ollama (not detected)' ?></option>
+                        <?php if ($providerAllowed['groq']): ?>
+                            <option value="groq"><?= $hasGroqKey || $aiUseShared ? 'Groq' : 'Groq (key needed)' ?></option>
+                        <?php endif; ?>
+                        <?php if ($providerAllowed['openrouter']): ?>
+                            <option value="openrouter"><?= $hasOpenRouterKey || $aiUseShared ? 'OpenRouter' : 'OpenRouter (key needed)' ?></option>
+                        <?php endif; ?>
+                        <?php if ($providerAllowed['gemini']): ?>
+                            <option value="gemini"><?= $hasGeminiKey || $aiUseShared ? 'Google Gemini' : 'Google Gemini (key needed)' ?></option>
+                        <?php endif; ?>
+                        <?php if ($providerAllowed['ollama']): ?>
+                            <option value="ollama"><?= $hasOllama ? 'Ollama (Local)' : 'Ollama (not detected)' ?></option>
+                        <?php endif; ?>
                     </select>
+                    <?php if ($aiUseShared && empty($allowedProviders)): ?>
+                        <span class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">No subscription — buy a plan to use platform AI.</span>
+                    <?php endif; ?>
                     <select id="ai-model" onchange="updateConversationState()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm">
                         <!-- Populated by JS -->
                     </select>
@@ -593,8 +655,8 @@ function _persistConvId() {
         }
     } catch (_) { /* localStorage may be unavailable in private mode */ }
 }
-let agentModeEnabled = true;
-let autoConfirmEnabled = true;
+let agentModeEnabled = <?= $hideAgentControls ? 'false' : 'true' ?>;
+let autoConfirmEnabled = <?= $hideAgentControls ? 'false' : 'true' ?>;
 let pendingActions = [];
 let eventCursor = 0;
 let timelineEvents = [];

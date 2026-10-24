@@ -10,6 +10,13 @@ import '../widgets/form_widgets.dart';
 import '../widgets/hero_icon.dart';
 import '../widgets/skeleton.dart';
 
+/// Fixed transaction categories — matches the web `<select>` in
+/// mobile/views/transaction-form.php (order + default 'General').
+const _kFinanceCategories = <String>[
+  'General', 'Sales', 'Services', 'Subscription', 'Marketing',
+  'Hardware', 'Software', 'Rent', 'Utilities', 'Taxes', 'Other',
+];
+
 /// Create or edit a finance transaction. Mirrors mobile/views/transaction-form.php.
 /// Pass [transactionId] to edit; omit to create.
 class TransactionFormScreen extends ConsumerStatefulWidget {
@@ -25,10 +32,11 @@ class TransactionFormScreen extends ConsumerStatefulWidget {
 
 class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
   final _amount = TextEditingController();
-  final _category = TextEditingController();
   final _description = TextEditingController();
+  final _notes = TextEditingController();
 
   String _type = 'expense'; // income|expense
+  String _category = 'General';
   DateTime? _date;
   bool _loading = false;
   bool _saving = false;
@@ -49,8 +57,9 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
       if (t != null && mounted) {
         _type = t.type;
         _amount.text = t.amount == 0 ? '' : _formatAmount(t.amount);
-        _category.text = t.category;
+        _category = t.category.trim().isEmpty ? 'General' : t.category.trim();
         _description.text = t.description;
+        _notes.text = t.notes;
         _date = t.date;
         setState(() {});
       }
@@ -69,8 +78,8 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
   @override
   void dispose() {
     _amount.dispose();
-    _category.dispose();
     _description.dispose();
+    _notes.dispose();
     super.dispose();
   }
 
@@ -92,9 +101,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
           behavior: SnackBarBehavior.floating));
       return;
     }
-    final category = _category.text.trim().isEmpty
-        ? 'General'
-        : _category.text.trim();
+    final category = _category.trim().isEmpty ? 'General' : _category.trim();
     final description = _description.text.trim();
     if (description.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -102,6 +109,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
           behavior: SnackBarBehavior.floating));
       return;
     }
+    final notes = _notes.text.trim();
 
     setState(() => _saving = true);
     final repo = ref.read(financeRepositoryProvider);
@@ -114,6 +122,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
           date: _date,
           category: category,
           description: description,
+          notes: notes,
         );
       } else {
         await repo.create(
@@ -122,6 +131,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
           date: _date ?? DateTime.now(),
           category: category,
           description: description,
+          notes: notes,
         );
       }
       ref.invalidate(financeProvider);
@@ -211,11 +221,20 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
                     onClear: () => setState(() => _date = null),
                   ),
                   const SizedBox(height: 20),
-                  LabeledField(
+                  LabeledDropdown<String>(
                     label: 'Category',
-                    controller: _category,
-                    hint: 'e.g. Sales',
-                    textInputAction: TextInputAction.next,
+                    value: _category,
+                    // Fold in any legacy free-text category so the dropdown
+                    // never asserts on a value outside the fixed list.
+                    items: [
+                      for (final c in <String>{
+                        ..._kFinanceCategories,
+                        if (_category.isNotEmpty) _category,
+                      })
+                        DropdownMenuItem(value: c, child: Text(c)),
+                    ],
+                    onChanged: (v) =>
+                        setState(() => _category = v ?? 'General'),
                   ),
                   const SizedBox(height: 20),
                   LabeledField(
@@ -223,6 +242,13 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
                     controller: _description,
                     hint: 'Transaction description',
                     maxLines: 3,
+                  ),
+                  const SizedBox(height: 20),
+                  LabeledField(
+                    label: 'Notes',
+                    controller: _notes,
+                    hint: 'Additional details, tax references, etc.',
+                    maxLines: 4,
                   ),
                   if (widget.isEdit) ...[
                     const SizedBox(height: AppSpacing.gap),

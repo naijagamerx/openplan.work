@@ -1120,6 +1120,183 @@ const App = (function() {
         },
 
         /**
+         * Notification Center — in-app dropdown driven by live task data.
+         * Reuses App.notifications.determineAlertType + getAlertMessage so the
+         * dropdown shows the same items the browser-notification system fires.
+         */
+        notificationCenter: {
+            POLL_MS: 60000,
+            pollHandle: null,
+            items: [],
+            _initialized: false,
+
+            _escape(str) {
+                return String(str ?? '').replace(/[&<>"']/g, c => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                })[c]);
+            },
+
+            async fetchItems() {
+                const items = [];
+                try {
+                    const response = await App.api.get('api/tasks.php');
+                    const tasks = response.data || [];
+                    const now = new Date();
+
+                    tasks.forEach(task => {
+                        if (task.status !== 'done' && task.status !== 'cancelled' && task.dueDate) {
+                            const timeDiff = new Date(task.dueDate).getTime() - now.getTime();
+                            const alertType = App.notifications.determineAlertType(timeDiff, false);
+                            if (alertType) {
+                                const msg = App.notifications.getAlertMessage(task, alertType, timeDiff);
+                                if (msg) {
+                                    items.push({
+                                        kind: 'task',
+                                        id: task.id,
+                                        taskId: task.id,
+                                        type: alertType,
+                                        title: msg.title,
+                                        body: msg.body,
+                                        dueDate: task.dueDate,
+                                        href: `?page=tasks&task=${encodeURIComponent(task.id)}`
+                                    });
+                                }
+                            }
+                        }
+                        (task.subtasks || []).forEach(sub => {
+                            if (sub.completed || !sub.dueDate) return;
+                            const timeDiff = new Date(sub.dueDate).getTime() - now.getTime();
+                            const alertType = App.notifications.determineAlertType(timeDiff, false);
+                            if (!alertType) return;
+                            const msg = App.notifications.getAlertMessage(sub, alertType, timeDiff);
+                            if (!msg) return;
+                            items.push({
+                                kind: 'subtask',
+                                id: sub.id,
+                                taskId: task.id,
+                                type: alertType,
+                                title: msg.title,
+                                body: msg.body,
+                                dueDate: sub.dueDate,
+                                href: `?page=tasks&task=${encodeURIComponent(task.id)}`
+                            });
+                        });
+                    });
+                } catch (err) {
+                    console.warn('[notificationCenter] fetchItems failed', err);
+                }
+
+                const order = { OVERDUE: 0, DUE_SOON: 1, NOT_STARTED: 2 };
+                items.sort((a, b) => {
+                    const ot = (order[a.type] ?? 9) - (order[b.type] ?? 9);
+                    if (ot !== 0) return ot;
+                    return new Date(a.dueDate) - new Date(b.dueDate);
+                });
+                this.items = items;
+                return items;
+            },
+
+            async refreshBadge() {
+                const items = await this.fetchItems();
+                document.querySelectorAll('[data-notif-badge]').forEach(b => {
+                    if (items.length === 0) {
+                        b.classList.add('hidden');
+                        b.textContent = '';
+                    } else {
+                        b.classList.remove('hidden');
+                        b.textContent = items.length > 9 ? '9+' : String(items.length);
+                    }
+                });
+            },
+
+            _styleForType(type) {
+                const ALERT = App.notifications.ALERT_TYPES;
+                if (type === ALERT.OVERDUE) return { color: 'text-red-600', bg: 'bg-red-50' };
+                if (type === ALERT.DUE_SOON) return { color: 'text-amber-600', bg: 'bg-amber-50' };
+                return { color: 'text-blue-600', bg: 'bg-blue-50' };
+            },
+
+            renderEmpty() {
+                return `
+                    <div class="p-8 text-center">
+                        <svg class="w-10 h-10 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <p class="text-sm font-medium text-gray-700">All caught up</p>
+                        <p class="text-xs text-gray-500 mt-1">No overdue or upcoming tasks.</p>
+                    </div>
+                `;
+            },
+
+            renderList(items) {
+                if (items.length === 0) return this.renderEmpty();
+                return items.map(item => {
+                    const style = this._styleForType(item.type);
+                    return `
+                        <a href="${this._escape(item.href)}" class="block px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition">
+                            <div class="flex items-start gap-3">
+                                <div class="w-8 h-8 rounded-full ${style.bg} flex items-center justify-center flex-shrink-0">
+                                    <svg class="w-4 h-4 ${style.color}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-medium text-gray-900 truncate">${this._escape(item.title)}</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">${this._escape(item.body)}</p>
+                                </div>
+                            </div>
+                        </a>
+                    `;
+                }).join('');
+            },
+
+            async openDropdown(panelEl) {
+                if (!panelEl) return;
+                const listEl = panelEl.querySelector('[data-notif-list]');
+                if (listEl) listEl.innerHTML = '<div class="p-6 text-center text-sm text-gray-500">Loading…</div>';
+                panelEl.classList.remove('hidden');
+                const items = await this.fetchItems();
+                if (listEl) listEl.innerHTML = this.renderList(items);
+                this.refreshBadge();
+            },
+
+            closeAll() {
+                document.querySelectorAll('[data-notif-panel]').forEach(p => p.classList.add('hidden'));
+            },
+
+            initialize() {
+                if (this._initialized) return;
+                this._initialized = true;
+
+                document.querySelectorAll('[data-notif-toggle]').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const panelId = btn.getAttribute('data-notif-toggle');
+                        const panel = document.getElementById(panelId);
+                        if (!panel) return;
+                        const wasHidden = panel.classList.contains('hidden');
+                        this.closeAll();
+                        if (wasHidden) this.openDropdown(panel);
+                    });
+                });
+
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('[data-notif-panel]') && !e.target.closest('[data-notif-toggle]')) {
+                        this.closeAll();
+                    }
+                });
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') this.closeAll();
+                });
+
+                this.refreshBadge();
+                if (this.pollHandle) clearInterval(this.pollHandle);
+                this.pollHandle = setInterval(() => this.refreshBadge(), this.POLL_MS);
+            }
+        },
+
+        /**
          * Water Plan Notifications Module
          * Manages cross-page hydration reminders.
          */

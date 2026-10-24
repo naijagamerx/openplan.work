@@ -20,7 +20,7 @@
  *
  * Environment Variables:
  *   API_URL         - Base URL of the OpenPlan.work API (default: http://localhost/taskmanager/api)
- *   MASTER_PASSWORD - Master password for authentication (default: Money2026@Demo#)
+ *   MASTER_PASSWORD - Master password for authentication (no default — set via env)
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -665,6 +665,91 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             habitId: { type: "string", description: "The habit ID (UUID, required)" },
           },
           required: ["habitId"],
+        },
+      },
+
+      // ======================================================================
+      // MEETINGS TOOLS (calendar meetings, distinct from tasks)
+      // ======================================================================
+      {
+        name: "list_meetings",
+        description: "List calendar meetings. Optional filters: month + year (1-12, 4-digit), date (YYYY-MM-DD), projectId, clientId.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            month: { type: "number", description: "Month 1-12 (requires year)" },
+            year: { type: "number", description: "4-digit year (requires month)" },
+            date: { type: "string", description: "Exact date YYYY-MM-DD" },
+            projectId: { type: "string", description: "Filter by project" },
+            clientId: { type: "string", description: "Filter by client" },
+          },
+        },
+      },
+      {
+        name: "get_meeting",
+        description: "Get a single meeting by ID.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            meetingId: { type: "string", description: "Meeting ID (required)" },
+          },
+          required: ["meetingId"],
+        },
+      },
+      {
+        name: "add_meeting",
+        description: "Create a new calendar meeting. Title and date required; everything else optional.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            title: { type: "string", description: "Meeting title (required)" },
+            date: { type: "string", description: "Date YYYY-MM-DD (required)" },
+            startTime: { type: "string", description: "Start time HH:MM (24h)" },
+            endTime: { type: "string", description: "End time HH:MM (24h)" },
+            location: { type: "string", description: "Room / Zoom link / address" },
+            attendees: {
+              type: "array",
+              items: { type: "string" },
+              description: "Attendee names or emails"
+            },
+            description: { type: "string", description: "Agenda or notes" },
+            color: { type: "string", description: "Hex color (default: #000000)" },
+            projectId: { type: "string", description: "Linked project ID" },
+            clientId: { type: "string", description: "Linked client ID" },
+          },
+          required: ["title", "date"],
+        },
+      },
+      {
+        name: "update_meeting",
+        description: "Update fields of an existing meeting. Pass only fields to change.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            meetingId: { type: "string", description: "Meeting ID (required)" },
+            title: { type: "string" },
+            date: { type: "string", description: "YYYY-MM-DD" },
+            startTime: { type: "string", description: "HH:MM" },
+            endTime: { type: "string", description: "HH:MM" },
+            location: { type: "string" },
+            attendees: { type: "array", items: { type: "string" } },
+            description: { type: "string" },
+            color: { type: "string" },
+            projectId: { type: "string" },
+            clientId: { type: "string" },
+          },
+          required: ["meetingId"],
+        },
+      },
+      {
+        name: "delete_meeting",
+        description: "Permanently delete a meeting.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            meetingId: { type: "string", description: "Meeting ID (required)" },
+          },
+          required: ["meetingId"],
         },
       },
 
@@ -1775,6 +1860,68 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "delete_habit": {
         const result = await apiCall(`habits.php?id=${args.habitId}`, "DELETE");
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      // ======================================================================
+      // MEETING HANDLERS
+      // ======================================================================
+      case "list_meetings": {
+        const params = new URLSearchParams();
+        if (args.month) params.set("month", String(args.month));
+        if (args.year) params.set("year", String(args.year));
+        if (args.date) params.set("date", args.date);
+        if (args.projectId) params.set("projectId", args.projectId);
+        if (args.clientId) params.set("clientId", args.clientId);
+        const qs = params.toString();
+        const result = await apiCall(`meetings.php${qs ? "?" + qs : ""}`);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "get_meeting": {
+        const result = await apiCall(`meetings.php?id=${encodeURIComponent(args.meetingId)}`);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "add_meeting": {
+        const body = {
+          title: args.title,
+          date: args.date,
+          startTime: args.startTime || "",
+          endTime: args.endTime || "",
+          location: args.location || "",
+          attendees: Array.isArray(args.attendees) ? args.attendees : [],
+          description: args.description || "",
+          color: args.color || "#000000",
+          projectId: args.projectId || "",
+          clientId: args.clientId || "",
+        };
+        const result = await apiCall("meetings.php", "POST", body);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "update_meeting": {
+        const body = {};
+        const fields = ["title", "date", "startTime", "endTime", "location", "attendees", "description", "color", "projectId", "clientId"];
+        fields.forEach((f) => {
+          if (args[f] !== undefined) body[f] = args[f];
+        });
+        const result = await apiCall(`meetings.php?id=${encodeURIComponent(args.meetingId)}`, "PUT", body);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "delete_meeting": {
+        const result = await apiCall(`meetings.php?id=${encodeURIComponent(args.meetingId)}`, "DELETE");
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };

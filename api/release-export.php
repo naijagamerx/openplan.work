@@ -39,7 +39,7 @@ if ($method === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
     $csrfToken = $input['csrf_token'] ?? $_POST['csrf_token'] ?? '';
 
-    if (!Auth::validateCsrf($csrfToken)) {
+    if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
         http_response_code(403);
         echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
         exit;
@@ -111,7 +111,7 @@ if ($method === 'POST') {
         $excludePatterns = [
             '/^\.(auto-claude|claude|kiro|qoder|serena|trae)$/',
             '/^doc\//', '/^sample\//', '/^test\//', '/^tests\//', '/^test_delete\//',
-            '/AGENTS\.md$/', '/CLAUDE\.md$/',
+            '/AGENTS\.md$/', '/CLAUDE(\.local)?\.md$/',
             '/includes\/master_password\.php/', '/includes\/master_password\.php\.backup/',
             '/api\/ai-test\.php$/',
             '/views\/notes-backup/', '/views\/view-notes-backup/',
@@ -249,7 +249,7 @@ if ($method === 'POST') {
         echo json_encode([
             'success' => true,
             'message' => 'Export generated successfully',
-            'download_url' => APP_URL . '/release-artifacts/' . basename($zipPath),
+            'download_url' => APP_URL . '/api/release-download.php?file=' . urlencode(basename($zipPath)),
             'file_count' => $fileCount,
             'filename' => basename($zipPath)
         ]);
@@ -271,7 +271,7 @@ if ($method === 'DELETE') {
     $input = json_decode(file_get_contents('php://input'), true);
     $csrfToken = $input['csrf_token'] ?? '';
 
-    if (!Auth::validateCsrf($csrfToken)) {
+    if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
         http_response_code(403);
         echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
         exit;
@@ -321,7 +321,7 @@ if ($method === 'GET' && $action === 'list') {
                 'size_formatted' => releaseExportFormatSize(filesize($filepath)),
                 'date' => filemtime($filepath),
                 'date_formatted' => date('M j, Y g:i A', filemtime($filepath)),
-                'url' => APP_URL . '/release-artifacts/' . $file
+                'url' => APP_URL . '/api/release-download.php?file=' . urlencode($file)
             ];
         }
     }

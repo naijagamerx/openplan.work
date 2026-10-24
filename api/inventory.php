@@ -6,15 +6,17 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../includes/BaseAPI.php';
 
+// Keep errors out of the JSON response, but DO keep logging on (config.php
+// sets E_ALL + log_errors to data/php_error.log). error_reporting(0) would
+// silently swallow warnings/errors in this endpoint, defeating diagnosis.
 ini_set('display_errors', 0);
-error_reporting(0);
 
 if (!Auth::check()) {
     errorResponse('Unauthorized', 401);
 }
 
 // CSRF validation for non-GET requests
-if (requestMethod() !== 'GET' && !Auth::isMcp()) {
+if (requestMethod() !== 'GET' && !Auth::isTokenAuth()) {
     $body = getJsonBody();
     $token = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if (!Auth::validateCsrf($token)) {

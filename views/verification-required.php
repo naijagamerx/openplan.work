@@ -77,8 +77,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canResend) {
 </div>
 
 <div class="mt-10 pt-8 border-t border-gray-100 flex flex-col items-center gap-4">
-    <a href="api/auth.php?action=logout" class="text-[11px] font-bold uppercase tracking-[0.2em] border border-black text-black px-6 py-2 rounded hover:bg-black hover:text-white transition-all">
-        Sign Out
+    <a href="api/auth.php?action=logout" class="text-[11px] font-bold uppercase tracking-[0.2em] border border-black text-black px-6 py-2 rounded hover:bg-black hover:text-white transition-all inline-flex items-center gap-2">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        Back to Sign In
     </a>
 </div>
 

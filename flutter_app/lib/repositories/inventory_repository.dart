@@ -13,6 +13,14 @@ final inventoryProvider =
   return ref.watch(inventoryRepositoryProvider).list();
 });
 
+/// Cross-product movement summary + recent activity feed
+/// (api/inventory.php?action=summary). Watched independently of
+/// [inventoryProvider] so the product list never blocks on it.
+final inventorySummaryProvider =
+    FutureProvider<Map<String, dynamic>>((ref) async {
+  return ref.watch(inventoryRepositoryProvider).summary();
+});
+
 class InventoryRepository {
   InventoryRepository(this._api);
   final ApiClient _api;
@@ -103,6 +111,16 @@ class InventoryRepository {
       if (note.isNotEmpty) 'note': note,
       if (unitCost != null) 'unitCost': unitCost,
     });
+  }
+
+  /// Cross-product summary: `{total_in, total_out, total_expense, recent[]}`
+  /// where each `recent` entry is a transaction
+  /// `{productName, type('in'|'out'), quantity, unitCost, totalCost, note,
+  /// createdAt}` (newest first, capped at 10 by the backend).
+  Future<Map<String, dynamic>> summary() async {
+    final data =
+        await _api.get('/api/inventory.php', query: {'action': 'summary'});
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
   }
 
   /// Raw transaction history for a product (newest first).

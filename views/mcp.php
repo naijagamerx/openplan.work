@@ -1,7 +1,10 @@
 <?php
 $currentUser = Auth::user();
 $apiUrl = APP_URL . '/api';
-$mcpScriptPath = str_replace('\\', '/', ROOT_PATH) . '/mcp-server/index.js';
+// MCP-over-HTTP endpoint — the single remote-friendly transport. Any MCP client
+// (Claude Code, Hermes, hosted agents) connects here with its token. No local
+// Node bridge, no localhost backend, no master password in the config.
+$mcpEndpoint = APP_URL . '/api/mcp-server.php';
 $csrfToken = Auth::csrfToken();
 ?>
 <div class="p-6">
@@ -75,8 +78,8 @@ $csrfToken = Auth::csrfToken();
                         </svg>
                     </div>
                     <div>
-                        <h3 class="font-semibold text-gray-900 mb-1">Auto-Started by Claude Code</h3>
-                        <p class="text-sm text-gray-600">Claude Code automatically starts the MCP server when it detects your mcp.json configuration.</p>
+                        <h3 class="font-semibold text-gray-900 mb-1">Works From Anywhere</h3>
+                        <p class="text-sm text-gray-600">Hosted agents like Hermes connect directly over HTTPS — no local install, no Node, no cloned repo. Just a URL and your token.</p>
                     </div>
                 </div>
             </div>
@@ -89,8 +92,8 @@ $csrfToken = Auth::csrfToken();
                         </svg>
                     </div>
                     <div>
-                        <h3 class="font-semibold text-gray-900 mb-1">Stdio Communication</h3>
-                        <p class="text-sm text-gray-600">MCP uses standard input/output - not HTTP. The server reads JSON commands from stdin.</p>
+                        <h3 class="font-semibold text-gray-900 mb-1">HTTPS Transport (JSON-RPC)</h3>
+                        <p class="text-sm text-gray-600">Speaks Model Context Protocol over HTTPS POST — <code class="bg-gray-100 px-1 rounded">initialize</code>, <code class="bg-gray-100 px-1 rounded">tools/list</code>, <code class="bg-gray-100 px-1 rounded">tools/call</code>. Standard MCP, any compliant client.</p>
                     </div>
                 </div>
             </div>
@@ -162,8 +165,8 @@ $csrfToken = Auth::csrfToken();
             <div class="flex gap-4">
                 <div class="w-8 h-8 bg-black text-white rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm">2</div>
                 <div class="flex-1">
-                    <h3 class="font-semibold text-gray-900 mb-1">Create MCP Config File</h3>
-                    <p class="text-sm text-gray-600 mb-3">Create <code class="bg-gray-100 px-2 py-0.5 rounded text-sm">mcp.json</code> in <code class="bg-gray-100 px-1 rounded">~/.claude/</code> and copy the pre-filled configuration below.</p>
+                    <h3 class="font-semibold text-gray-900 mb-1">Add the HTTP Server Config</h3>
+                    <p class="text-sm text-gray-600 mb-3">Copy the pre-filled configuration below into your agent's MCP settings (e.g. Claude Code <code class="bg-gray-100 px-2 py-0.5 rounded text-sm">.mcp.json</code>, or Hermes' MCP server list). It's a remote HTTP server entry — no files to install.</p>
                 </div>
             </div>
 
@@ -171,8 +174,8 @@ $csrfToken = Auth::csrfToken();
             <div class="flex gap-4">
                 <div class="w-8 h-8 bg-black text-white rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm">3</div>
                 <div class="flex-1">
-                    <h3 class="font-semibold text-gray-900 mb-1">Restart Claude Code</h3>
-                    <p class="text-sm text-gray-600">Restart Claude Code so it detects the MCP server and loads the tools.</p>
+                    <h3 class="font-semibold text-gray-900 mb-1">Reload Your Agent</h3>
+                    <p class="text-sm text-gray-600">Restart / reconnect your agent so it performs the MCP handshake and loads the tools.</p>
                 </div>
             </div>
 
@@ -197,12 +200,10 @@ $csrfToken = Auth::csrfToken();
             <pre id="mcpConfig">{
   "mcpServers": {
     "openplan-work": {
-      "command": "node",
-      "args": ["<?php echo $mcpScriptPath; ?>"],
-      "env": {
-        "API_URL": "<?php echo $apiUrl; ?>",
-        "MCP_API_TOKEN": "YOUR_TOKEN_HERE",
-        "LAZYMAN_MASTER_PASSWORD": "YOUR_MASTER_PASSWORD"
+      "type": "http",
+      "url": "<?php echo $mcpEndpoint; ?>",
+      "headers": {
+        "X-MCP-Api-Token": "YOUR_TOKEN_HERE"
       }
     }
   }
@@ -221,22 +222,17 @@ $csrfToken = Auth::csrfToken();
         <div class="mt-3 p-4 bg-green-50 border border-green-200 rounded-lg">
             <h4 class="font-semibold text-green-800 mb-2">✅ Configuration Notes</h4>
             <ul class="text-sm text-green-700 space-y-1">
-                <li>• <strong>Auto-filled:</strong> Generate your token above - this config will automatically include it</li>
-                <li>• <strong>Master Password:</strong> Replace <code class="bg-green-100 px-1">YOUR_MASTER_PASSWORD</code> with your actual login password</li>
-                <li>• <strong>API URL:</strong> Change only if OpenPlan runs on different domain/port</li>
-                <li>• <strong>Windows paths:</strong> Use forward slashes: <code class="bg-green-100 px-1">C:/MAMP/htdocs/...</code></li>
+                <li>• <strong>Token only:</strong> Generate your token above and paste it in place of <code class="bg-green-100 px-1">YOUR_TOKEN_HERE</code> — that's the only value you set.</li>
+                <li>• <strong>No master password:</strong> The server derives your data key from the token itself. Never put your login password in the config.</li>
+                <li>• <strong>URL:</strong> Use the address shown — change it only if you run OpenPlan on a different domain.</li>
+                <li>• <strong>Works remotely:</strong> Hosted agents (Hermes) use this exact same config — no local files.</li>
             </ul>
-        </div>
-
-        <div class="mt-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-            <h4 class="font-semibold text-amber-800 mb-2">⚠️ Important: Replace Your Master Password</h4>
-            <p class="text-sm text-amber-700">Replace <code class="bg-amber-100 px-1">YOUR_MASTER_PASSWORD</code> above with your actual OpenPlan login password. This is required to decrypt your encrypted data files.</p>
         </div>
     </div>
 
     <!-- Available Tools -->
     <div class="mb-8">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Available MCP Tools (70+)</h2>
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Available MCP Tools (86)</h2>
         <p class="text-sm text-gray-600 mb-4">The MCP server exposes all OpenPlan features as tools. Here's what you can do:</p>
 
         <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -437,41 +433,46 @@ $csrfToken = Auth::csrfToken();
 
         <div class="space-y-3">
             <div class="bg-gray-50 rounded-xl p-4">
-                <h3 class="font-semibold text-gray-900 mb-2">🔴 MCP Server Not Starting</h3>
+                <h3 class="font-semibold text-gray-900 mb-2">🔴 401 Unauthorized</h3>
                 <ul class="text-sm text-gray-600 space-y-1">
-                    <li>• Verify Node.js: <code class="bg-gray-200 px-1 rounded">node --version</code></li>
-                    <li>• Check the path to <code class="bg-gray-200 px-1 rounded">mcp-server/index.js</code></li>
-                    <li>• Ensure OpenPlan is accessible via browser</li>
+                    <li>• The token in the config doesn't match your account — regenerate above and paste the new value</li>
+                    <li>• Confirm the header name is exactly <code class="bg-gray-200 px-1 rounded">X-MCP-Api-Token</code></li>
+                    <li>• If you regenerated, every agent using the old token must be updated</li>
                 </ul>
             </div>
 
             <div class="bg-gray-50 rounded-xl p-4">
-                <h3 class="font-semibold text-gray-900 mb-2">🔴 Authentication Failed</h3>
+                <h3 class="font-semibold text-gray-900 mb-2">🔴 Connection / 405 Errors</h3>
                 <ul class="text-sm text-gray-600 space-y-1">
-                    <li>• Verify your MCP API token is current (generate a new one if needed)</li>
-                    <li>• Ensure OpenPlan is running (MAMP/XAMPP/etc.)</li>
-                    <li>• Check the API URL matches your OpenPlan location</li>
+                    <li>• Verify the URL is the full endpoint ending in <code class="bg-gray-200 px-1 rounded">/api/mcp-server.php</code></li>
+                    <li>• MCP requires <strong>POST</strong> — use an MCP-compliant client, not a browser GET</li>
+                    <li>• Set <code class="bg-gray-200 px-1 rounded">"type": "http"</code> in the server entry</li>
                 </ul>
             </div>
 
             <div class="bg-gray-50 rounded-xl p-4">
                 <h3 class="font-semibold text-gray-900 mb-2">🔴 Tools Not Available</h3>
                 <ul class="text-sm text-gray-600 space-y-1">
-                    <li>• Restart Claude Code after adding mcp.json</li>
-                    <li>• Verify mcp.json is in correct location (<code class="bg-gray-200 px-1 rounded">~/.claude/</code>)</li>
-                    <li>• Check Claude Code logs for MCP errors</li>
+                    <li>• Reload / reconnect your agent after adding the server entry</li>
+                    <li>• Confirm <code class="bg-gray-200 px-1 rounded">tools/list</code> returns 86 tools (test with the example below)</li>
+                    <li>• Check your agent's MCP logs for handshake errors</li>
                 </ul>
             </div>
         </div>
     </div>
 
-    <!-- Server Location -->
+    <!-- Server Endpoint -->
     <div class="bg-gray-900 text-white rounded-xl p-6">
-        <h3 class="font-semibold mb-3">📂 MCP Server Location</h3>
-        <p class="text-gray-400 text-sm mb-3">The MCP server is located at:</p>
-        <code class="bg-gray-800 px-4 py-2 rounded-lg block text-green-400 font-mono text-sm">
-            <?php echo $mcpScriptPath; ?>
+        <h3 class="font-semibold mb-3">🌐 MCP Server Endpoint</h3>
+        <p class="text-gray-400 text-sm mb-3">All clients connect over HTTPS to:</p>
+        <code class="bg-gray-800 px-4 py-2 rounded-lg block text-green-400 font-mono text-sm break-all">
+            <?php echo $mcpEndpoint; ?>
         </code>
+        <p class="text-gray-400 text-sm mt-4 mb-2">Quick sanity check from a terminal (replace the token):</p>
+        <pre class="bg-gray-800 px-4 py-3 rounded-lg text-green-400 font-mono text-xs overflow-x-auto whitespace-pre">curl -X POST <?php echo $mcpEndpoint; ?> \
+  -H "Content-Type: application/json" \
+  -H "X-MCP-Api-Token: YOUR_TOKEN_HERE" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'</pre>
     </div>
 </div>
 
@@ -651,12 +652,10 @@ function updateConfigDisplay(token) {
         configElement.textContent = `{
   "mcpServers": {
     "openplan-work": {
-      "command": "node",
-      "args": ["<?= str_replace('\\', '/', ROOT_PATH) ?>/mcp-server/index.js"],
-      "env": {
-        "API_URL": "<?= $apiUrl ?>",
-        "MCP_API_TOKEN": "${token}",
-        "LAZYMAN_MASTER_PASSWORD": "YOUR_MASTER_PASSWORD"
+      "type": "http",
+      "url": "<?= $mcpEndpoint ?>",
+      "headers": {
+        "X-MCP-Api-Token": "${token}"
       }
     }
   }

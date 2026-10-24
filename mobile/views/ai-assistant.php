@@ -33,35 +33,57 @@ $hasGroqKey       = !empty($config['groqApiKey']);
 $hasOpenRouterKey  = !empty($config['openrouterApiKey']);
 $hasGeminiKey      = !empty($config['geminiApiKey']);
 $hasOllama         = !empty($models['ollama']);
-$hasAnyKey         = $hasGroqKey || $hasOpenRouterKey || $hasGeminiKey || $hasOllama;
+// `$hasAnyKey` is finalised below once we know whether the user is on shared
+// admin keys with an active subscription.
 
-$groqModels       = array_values(array_filter($models['groq'] ?? [],       static fn($m) => $m['enabled'] ?? true));
-$openRouterModels = array_values(array_filter($models['openrouter'] ?? [], static fn($m) => $m['enabled'] ?? true));
-$geminiModels     = array_values(array_filter($models['gemini'] ?? [],     static fn($m) => $m['enabled'] ?? true));
-$ollamaModels     = array_values(array_filter($models['ollama'] ?? [],     static fn($m) => $m['enabled'] ?? true));
+require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+$aiUseShared = !empty($config['useAdminSharedAiKeys']);
+$aiActiveSub = $aiUseShared ? getActiveSubscription(Auth::userId() ?? '') : null;
 
-// Per-provider fallback: only use static list for providers that have NO DB models
-if (empty($groqModels)) {
-    $groqModels = array_map(
-        static fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
-        array_keys(GroqAPI::getModels()),
-        GroqAPI::getModels()
-    );
+if ($aiUseShared) {
+    require_once INCLUDES_PATH . '/AISharedKeysAPI.php';
+    $sharedKeysApi    = new AISharedKeysAPI();
+    $groqModels       = $sharedKeysApi->getSharedModels('groq');
+    $openRouterModels = $sharedKeysApi->getSharedModels('openrouter');
+    $geminiModels     = $sharedKeysApi->getSharedModels('gemini');
+    $ollamaModels     = [];
+} else {
+    // Own-keys path: only render models curated in ?page=model-settings.
+    $groqModels       = array_values(array_filter($models['groq'] ?? [],       static fn($m) => $m['enabled'] ?? true));
+    $openRouterModels = array_values(array_filter($models['openrouter'] ?? [], static fn($m) => $m['enabled'] ?? true));
+    $geminiModels     = array_values(array_filter($models['gemini'] ?? [],     static fn($m) => $m['enabled'] ?? true));
+    $ollamaModels     = array_values(array_filter($models['ollama'] ?? [],     static fn($m) => $m['enabled'] ?? true));
 }
-if (empty($openRouterModels)) {
-    $openRouterModels = array_map(
-        static fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
-        array_keys(OpenRouterAPI::getModels()),
-        OpenRouterAPI::getModels()
-    );
+if ($aiUseShared) {
+    $allowedProviders = ($aiActiveSub && is_array($aiActiveSub['providers'] ?? null))
+        ? $aiActiveSub['providers']
+        : [];
+} else {
+    $allowedProviders = ['groq', 'openrouter', 'gemini', 'ollama'];
 }
-if (empty($geminiModels) && $hasGeminiKey) {
-    $geminiModels = array_map(
-        static fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
-        array_keys(GeminiAPI::getModels()),
-        GeminiAPI::getModels()
-    );
-}
+$providerAllowed = [
+    'groq'       => in_array('groq', $allowedProviders, true),
+    'openrouter' => in_array('openrouter', $allowedProviders, true),
+    'gemini'     => in_array('gemini', $allowedProviders, true),
+    'ollama'     => in_array('ollama', $allowedProviders, true)
+];
+if (!$providerAllowed['groq'])       { $groqModels = []; }
+if (!$providerAllowed['openrouter']) { $openRouterModels = []; }
+if (!$providerAllowed['gemini'])     { $geminiModels = []; }
+if (!$providerAllowed['ollama'])     { $ollamaModels = []; }
+
+// Subscribers on shared keys still "have a key" — server supplies it.
+$hasAnyKey = $hasGroqKey || $hasOpenRouterKey || $hasGeminiKey || $hasOllama
+    || ($aiUseShared && $aiActiveSub);
+
+// Hide Agent Mode + Auto-Confirm when every entitled provider is chat-only.
+$chatOnlySet = ['groq'];
+$enabledProviders = array_values(array_filter(
+    $allowedProviders,
+    fn($p) => $providerAllowed[$p] ?? false
+));
+$hideAgentControls = !empty($enabledProviders)
+    && count(array_diff($enabledProviders, $chatOnlySet)) === 0;
 
 $siteName = getSiteName() ?? 'LazyMan';
 ?>
@@ -158,6 +180,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
   </section>
 
   <section class="mt-4 px-4 space-y-3">
+    <?php if (!$hideAgentControls): ?>
     <div class="flex border border-black overflow-hidden min-w-0">
       <div class="flex-1 min-w-0 flex items-center justify-between px-2 py-2 border-r border-black">
         <span class="text-[9px] font-bold uppercase tracking-wider truncate">Agent</span>
@@ -168,14 +191,28 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
         <input id="auto-confirm" type="checkbox" class="w-4 h-4 accent-black" checked disabled>
       </div>
     </div>
+    <?php endif; ?>
     <div class="grid grid-cols-2 gap-2">
-      <?php $mobileConfiguredCount = ($hasGroqKey?1:0)+($hasOpenRouterKey?1:0)+($hasGeminiKey?1:0)+($hasOllama?1:0); ?>
+      <?php
+      $mobileConfiguredCount = (($providerAllowed['groq'] && $hasGroqKey)?1:0)
+          + (($providerAllowed['openrouter'] && $hasOpenRouterKey)?1:0)
+          + (($providerAllowed['gemini'] && $hasGeminiKey)?1:0)
+          + (($providerAllowed['ollama'] && $hasOllama)?1:0);
+      ?>
       <select id="ai-provider" class="w-full min-w-0 bg-white border border-black px-2 py-2 text-[10px] font-bold uppercase tracking-widest focus:ring-0 focus:outline-none truncate" <?= !$hasAnyKey ? 'disabled' : '' ?>>
         <?php if ($mobileConfiguredCount >= 2): ?><option value="smart">⚡ Smart</option><?php endif; ?>
-        <option value="groq"><?= $hasGroqKey ? 'Groq' : 'Groq*' ?></option>
-        <option value="openrouter"><?= $hasOpenRouterKey ? 'OpenRouter' : 'OpenRouter*' ?></option>
-        <option value="gemini"><?= $hasGeminiKey ? 'Gemini' : 'Gemini*' ?></option>
-        <option value="ollama"><?= $hasOllama ? 'Ollama' : 'Ollama*' ?></option>
+        <?php if ($providerAllowed['groq']): ?>
+          <option value="groq"><?= $hasGroqKey || $aiUseShared ? 'Groq' : 'Groq*' ?></option>
+        <?php endif; ?>
+        <?php if ($providerAllowed['openrouter']): ?>
+          <option value="openrouter"><?= $hasOpenRouterKey || $aiUseShared ? 'OpenRouter' : 'OpenRouter*' ?></option>
+        <?php endif; ?>
+        <?php if ($providerAllowed['gemini']): ?>
+          <option value="gemini"><?= $hasGeminiKey || $aiUseShared ? 'Gemini' : 'Gemini*' ?></option>
+        <?php endif; ?>
+        <?php if ($providerAllowed['ollama']): ?>
+          <option value="ollama"><?= $hasOllama ? 'Ollama' : 'Ollama*' ?></option>
+        <?php endif; ?>
       </select>
       <select id="ai-model" class="w-full min-w-0 bg-white border border-black px-2 py-2 text-[10px] font-bold uppercase tracking-widest focus:ring-0 focus:outline-none truncate" <?= !$hasAnyKey ? 'disabled' : '' ?>></select>
     </div>
@@ -277,7 +314,7 @@ function _persistConvId() {
     else localStorage.removeItem(AI_CONVERSATION_STORAGE_KEY);
   } catch (_) {}
 }
-let agentModeEnabled = true;
+let agentModeEnabled = <?= $hideAgentControls ? 'false' : 'true' ?>;
 let selectedKbFolderId = '';
 let kbFolders = [];
 let isSending = false;
@@ -946,13 +983,12 @@ async function runAIVerification() {
   const model = selectedProvider === 'smart'
     ? (ALL_MODELS[provider]?.find?.(m => m.isDefault)?.modelId || ALL_MODELS[provider]?.[0]?.modelId || 'auto')
     : getModel();
-  const action = provider === 'openrouter' ? 'test_openrouter' : 'test_groq';
   openModal('AI Verification', '<div class="text-sm text-gray-600">Running verification...</div>');
   try {
-    const r = await App.api.post('api/ai-test.php?action=' + action, { model, csrf_token: CSRF_TOKEN });
+    const r = await App.api.post('api/ai.php?action=test_connection', { provider, model, csrf_token: CSRF_TOKEN });
     if (!r.success || !r.data) { document.getElementById('ai-modal-content').innerHTML = '<div class="text-sm text-red-600">Verification failed.</div>'; return; }
     const d = r.data;
-    const ok = !!d.success || !!d.connected;
+    const ok = !!d.connected;
     document.getElementById('ai-modal-content').innerHTML = `<div class="border border-black p-3"><p class="text-[10px] font-black uppercase tracking-widest mb-2">${escapeHtml(provider)} Connection</p><p class="text-sm font-bold ${ok ? 'text-green-700' : 'text-red-600'}">${ok ? 'Connected' : 'Failed'}</p>${d.response ? '<pre class="mt-2 text-xs whitespace-pre-wrap">' + escapeHtml(d.response) + '</pre>' : ''}${d.error ? '<p class="mt-2 text-xs text-red-600">' + escapeHtml(d.error) + '</p>' : ''}</div>`;
   } catch (e) { document.getElementById('ai-modal-content').innerHTML = '<div class="text-sm text-red-600">Verification failed.</div>'; }
 }
@@ -962,7 +998,7 @@ const autoConfirmToggle = document.getElementById('auto-confirm');
 if (autoConfirmToggle) {
   autoConfirmToggle.checked = true;
 }
-document.getElementById('agent-mode').addEventListener('change', (e) => {
+document.getElementById('agent-mode')?.addEventListener('change', (e) => {
   agentModeEnabled = !!e.target.checked;
   if (autoConfirmToggle) {
     autoConfirmToggle.checked = true;

@@ -305,40 +305,6 @@ $success = $_GET['success'] ?? '';
                     </div>
                 </div>
 
-                <div class="flex flex-col">
-                    <label for="master_password" class="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 mb-1">
-                        Master Password
-                    </label>
-                    <div class="relative flex items-center">
-                        <input
-                            id="master_password"
-                            name="master_password"
-                            type="password"
-                            required
-                            autocomplete="current-password"
-                            class="underlined-input w-full bg-transparent text-[#111317] dark:text-white h-12 text-base font-normal placeholder:text-gray-300 dark:placeholder:text-gray-500 pr-10"
-                            placeholder="Enter security key"
-                        >
-                        <button
-                            type="button"
-                            onclick="togglePasswordVisibility('master_password', this)"
-                            class="auth-visibility-toggle"
-                            data-visible="false"
-                            aria-label="Show value"
-                        >
-                            <svg class="icon-show h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 7a3 3 0 10-6 0v3"></path>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M7 10h10a1 1 0 011 1v7a1 1 0 01-1 1H7a1 1 0 01-1-1v-7a1 1 0 011-1Z"></path>
-                            </svg>
-                            <svg class="icon-hide h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 3l18 18"></path>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 7.5a3 3 0 015.16-2.1"></path>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 10h2m4.59 0H17a1 1 0 011 1v7a1 1 0 01-1 1H7a1 1 0 01-1-1v-7a1 1 0 011-1"></path>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-
                 <label class="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.15em] text-gray-500 dark:text-gray-400">
                     <span>Remember Me</span>
                     <input
@@ -355,7 +321,7 @@ $success = $_GET['success'] ?? '';
                         type="submit"
                         class="w-full bg-black text-white h-14 rounded-full font-black text-sm uppercase tracking-[0.3em] hover:opacity-90 transition-all flex items-center justify-center gap-2 dark:border dark:border-white/30"
                     >
-                        <span>Sign In</span>
+                        <span>Continue</span>
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
                         </svg>
@@ -503,68 +469,32 @@ $success = $_GET['success'] ?? '';
 
                 const loginForm = document.getElementById('login-form');
             if (loginForm) {
-                loginForm.addEventListener('submit', async (e) => {
+                loginForm.addEventListener('submit', (e) => {
                     e.preventDefault();
 
-                    const submitBtn = loginForm.querySelector('button[type="submit"]');
-                    const originalText = submitBtn.innerHTML;
-                    submitBtn.disabled = true;
-                    submitBtn.innerHTML = '<span class="inline-flex items-center gap-2"><svg class="h-4 w-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12a8 8 0 018-8"></path></svg><span>Signing In...</span></span>';
+                    const email = (document.getElementById('email').value || '').trim();
+                    const password = document.getElementById('password').value || '';
+                    const rememberMe = document.getElementById('remember_me').checked;
+
+                    if (email === '' || password === '') {
+                        showNotification('Email and password are required.', 'error');
+                        return;
+                    }
 
                     try {
-                        const formData = new FormData(loginForm);
-                        const data = Object.fromEntries(formData.entries());
-
-                        console.log('Login attempt:', { email: data.email, csrf_token: data.csrf_token ? 'present' : 'missing' });
-                        
-                        const response = await fetch(`${APP_URL}/api/auth.php?action=login`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRF-Token': CSRF_TOKEN
-                            },
-                            body: JSON.stringify(data)
-                        });
-
-                        // Check content type before parsing
-                        const contentType = response.headers.get('content-type');
-                        let result;
-                        
-                        if (contentType && contentType.includes('application/json')) {
-                            result = await response.json();
-                        } else {
-                            // If not JSON, it might be a PHP error or unexpected HTML
-                            const text = await response.text();
-                            console.error('Non-JSON response:', text);
-                            throw new Error('Server returned an unexpected response format');
-                        }
-
-                        if (response.ok && result.success) {
-                            showNotification('Login successful!', 'success');
-                            const destination = result.data?.destination || 'dashboard';
-                            // Add a small delay for the user to see the success message
-                            setTimeout(() => {
-                                window.location.href = `?page=${destination}`;
-                            }, 500);
-                        } else {
-                            const msg = result.error?.message || result.message || 'Login failed. Please try again.';
-                            throw new Error(msg);
-                        }
-
-                    } catch (error) {
-                        console.error('Login error:', error);
-                        
-                        // Clear any previous error messages
-                        const existingError = document.getElementById('login-error-message');
-                        if (existingError) existingError.remove();
-
-                        // Show error in banner
-                        showNotification(error.message || 'An error occurred. Please try again.', 'error');
-                        
-                        // Reset button
-                        submitBtn.disabled = false;
-                        submitBtn.innerHTML = originalText;
+                        sessionStorage.setItem('pending_login', JSON.stringify({
+                            email,
+                            password,
+                            remember_me: rememberMe,
+                            expires: Date.now() + 5 * 60 * 1000
+                        }));
+                    } catch (err) {
+                        console.error('Unable to store pending login:', err);
+                        showNotification('Your browser blocks session storage. Sign in unavailable.', 'error');
+                        return;
                     }
+
+                    window.location.href = '?page=master-code';
                 });
             }
 

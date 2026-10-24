@@ -31,7 +31,7 @@ $action = $_GET['action'] ?? $_POST['action'] ?? 'list';
 $writeActions = ['clear'];
 if (in_array($action, $writeActions)) {
     $csrfToken = $_GET['csrf_token'] ?? $_POST['csrf_token'] ?? '';
-    if (!Auth::validateCsrf($csrfToken)) {
+    if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
         errorResponse('Invalid CSRF token', 403);
     }
 }

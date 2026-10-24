@@ -29,6 +29,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   @override
   Widget build(BuildContext context) {
     final inventory = ref.watch(inventoryProvider);
+    // Movement totals + recent feed. Degrades to zeros/empty while loading or
+    // on error so the product list still renders (non-blocking).
+    final summary = ref.watch(inventorySummaryProvider).valueOrNull ?? const {};
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -101,9 +104,20 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
               list.fold<double>(0, (sum, i) => sum + i.value);
           final totalProfit =
               list.fold<double>(0, (sum, i) => sum + i.potentialProfit);
+          final totalIn = (summary['total_in'] as num?)?.toInt() ?? 0;
+          final totalOut = (summary['total_out'] as num?)?.toInt() ?? 0;
+          final totalExpense =
+              (summary['total_expense'] as num?)?.toDouble() ?? 0;
+          final recent = ((summary['recent'] as List?) ?? const [])
+              .whereType<Map>()
+              .map((m) => Map<String, dynamic>.from(m))
+              .toList();
 
           return RefreshIndicator(
-            onRefresh: () => ref.refresh(inventoryProvider.future),
+            onRefresh: () async {
+              ref.invalidate(inventorySummaryProvider);
+              await ref.refresh(inventoryProvider.future);
+            },
             child: ListView(
               padding: const EdgeInsets.fromLTRB(
                   AppSpacing.page, 12, AppSpacing.page, 120),
@@ -137,6 +151,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                   child: _SummaryCard(
                     totalValue: totalValue,
                     totalProfit: totalProfit,
+                    productsAvailable: list.length,
+                    totalIn: totalIn,
+                    totalOut: totalOut,
+                    totalExpense: totalExpense,
+                    recent: recent,
                   ),
                 ),
               ],
@@ -379,7 +398,10 @@ class _ProductCard extends ConsumerWidget {
         direction: direction,
       ),
     );
-    if (context.mounted) ref.invalidate(inventoryProvider);
+    if (context.mounted) {
+      ref.invalidate(inventoryProvider);
+      ref.invalidate(inventorySummaryProvider);
+    }
   }
 }
 
@@ -400,6 +422,8 @@ class _Stat extends StatelessWidget {
             style: AppType.label(context, color: p.textFaint, size: 9)),
         const SizedBox(height: 2),
         Text(value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -696,9 +720,22 @@ class _DialogField extends StatelessWidget {
 }
 
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.totalValue, required this.totalProfit});
+  const _SummaryCard({
+    required this.totalValue,
+    required this.totalProfit,
+    required this.productsAvailable,
+    required this.totalIn,
+    required this.totalOut,
+    required this.totalExpense,
+    required this.recent,
+  });
   final double totalValue;
   final double totalProfit;
+  final int productsAvailable;
+  final int totalIn;
+  final int totalOut;
+  final double totalExpense;
+  final List<Map<String, dynamic>> recent;
 
   @override
   Widget build(BuildContext context) {
@@ -755,6 +792,124 @@ class _SummaryCard extends StatelessWidget {
                       color: p.onInk)),
             ],
           ),
+          const SizedBox(height: 18),
+          Divider(height: 1, color: p.onInk.withValues(alpha: 0.15)),
+          const SizedBox(height: 16),
+          // Movement totals (from api/inventory.php?action=summary).
+          Row(
+            children: [
+              Expanded(
+                  child: _InkStat(
+                      label: 'Products', value: '$productsAvailable')),
+              Expanded(child: _InkStat(label: 'Stock In', value: '$totalIn')),
+              Expanded(child: _InkStat(label: 'Stock Out', value: '$totalOut')),
+              Expanded(
+                  child: _InkStat(
+                      label: 'Expense',
+                      value: currency.format(totalExpense))),
+            ],
+          ),
+          if (recent.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Text('RECENT ACTIVITY',
+                style: TextStyle(
+                    fontFamily: 'Geist',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.5,
+                    color: p.onInk.withValues(alpha: 0.7))),
+            const SizedBox(height: 10),
+            for (final tx in recent.take(5)) _RecentRow(tx: tx),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// A compact stat for the dark summary card (light-on-ink).
+class _InkStat extends StatelessWidget {
+  const _InkStat({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(),
+            style: TextStyle(
+                fontFamily: 'Geist',
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+                color: p.onInk.withValues(alpha: 0.55))),
+        const SizedBox(height: 3),
+        Text(value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                fontFamily: 'GeistMono',
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: p.onInk)),
+      ],
+    );
+  }
+}
+
+/// One recent stock movement on the dark summary card.
+class _RecentRow extends StatelessWidget {
+  const _RecentRow({required this.tx});
+  final Map<String, dynamic> tx;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    final isIn = (tx['type'] ?? '').toString() == 'in';
+    final name = (tx['productName'] ?? 'Item').toString();
+    final qty = (tx['quantity'] as num?)?.toInt() ?? 0;
+    final created = DateTime.tryParse((tx['createdAt'] ?? '').toString());
+    // Lighter green/red for contrast on the dark ink background.
+    final moveColor =
+        isIn ? const Color(0xFF4ADE80) : const Color(0xFFF87171);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: moveColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: p.onInk)),
+          ),
+          const SizedBox(width: 8),
+          Text('${isIn ? '+' : '−'}$qty',
+              style: TextStyle(
+                  fontFamily: 'GeistMono',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: moveColor)),
+          if (created != null) ...[
+            const SizedBox(width: 10),
+            Text(DateFormat('MMM d').format(created),
+                style: TextStyle(
+                    fontFamily: 'Geist',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: p.onInk.withValues(alpha: 0.5))),
+          ],
         ],
       ),
     );

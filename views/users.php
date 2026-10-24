@@ -150,6 +150,9 @@ async function loadUsers() {
                 : `<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-50 text-yellow-700 border border-yellow-200">Unverified</span>`;
 
             const verificationHtml = <?= json_encode($verificationEnabled) ?> ? verificationBadge : `<span class="text-xs text-gray-400">N/A</span>`;
+            const resendBtn = (!isVerified && <?= json_encode($verificationEnabled) ?>)
+                ? `<button type="button" onclick='resendVerification(${JSON.stringify(user.id).replace(/'/g, "&#39;")})' class="text-xs underline text-blue-600 hover:text-blue-800">Resend</button>`
+                : '';
 
             return `
             <tr>
@@ -165,10 +168,11 @@ async function loadUsers() {
                     </select>
                 </td>
                 <td class="px-5 py-4">
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 flex-wrap">
                         ${verificationHtml}
-                        ${user.isBanned 
-                            ? `<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">Banned</span>` 
+                        ${resendBtn}
+                        ${user.isBanned
+                            ? `<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">Banned</span>`
                             : ''}
                     </div>
                 </td>
@@ -208,6 +212,21 @@ async function loadUsers() {
     } catch (error) {
         table.innerHTML = `<tr><td colspan="6" class="px-5 py-10 text-center text-red-500">${escapeHtml(error.message || 'Failed to load users')}</td></tr>`;
         showNotification(error.message || 'Failed to load users', 'error');
+    }
+}
+
+async function resendVerification(userId) {
+    try {
+        const response = await api.post('api/users.php?action=resend_verification', {
+            user_id: userId,
+            csrf_token: CSRF_TOKEN
+        });
+        if (!response.success) {
+            throw new Error(response.error?.message || response.message || 'Failed to resend verification email');
+        }
+        showNotification('Verification email sent.', 'success');
+    } catch (error) {
+        showNotification(error.message || 'Failed to resend verification email', 'error');
     }
 }
 

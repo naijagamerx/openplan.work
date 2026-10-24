@@ -43,6 +43,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
                 $success = 'API keys saved';
                 break;
 
+            case 'ai-quota':
+                $config['useAdminSharedAiKeys'] = isset($_POST['useAdminSharedAiKeys']);
+                $db->save('config', $config);
+                $success = 'AI quota settings saved';
+                break;
+
             case 'water':
                 $config['waterGoal'] = (int)($_POST['waterGoal'] ?? 8);
                 $config['waterReminderInterval'] = (int)($_POST['waterReminderInterval'] ?? 60);
@@ -89,8 +95,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
         <div class="bg-red-50 text-red-700 p-4 rounded-lg"><?php echo e($error); ?></div>
     <?php endif; ?>
 
+    <!-- Settings Hub (auto-generated from the sections below by JS) -->
+    <div id="settings-hub" class="hidden">
+        <div class="mb-8">
+            <h2 class="text-3xl font-bold text-gray-900">Settings</h2>
+            <p class="text-gray-500 font-medium tracking-tight">Customize your workspace, integrations, and security.</p>
+        </div>
+        <div id="settings-hub-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+    </div>
+
+    <!-- Back-to-hub link (shown by JS when viewing a single section) -->
+    <a id="settings-back" href="?page=settings" class="hidden items-center gap-2 text-sm font-medium text-gray-500 hover:text-black transition mb-2 w-max">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        All settings
+    </a>
+
     <!-- Site Settings -->
-    <div class="bg-white rounded-xl border border-gray-200">
+    <div class="settings-section bg-white rounded-xl border border-gray-200" data-ss="site" data-ss-label="Site">
         <div class="p-5 border-b border-gray-200">
             <h3 class="font-semibold text-gray-900">Site Settings</h3>
             <p class="text-sm text-gray-500">Customize the workspace name shown after you sign in. Public auth pages use the environment fallback brand.</p>
@@ -112,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
     </div>
 
     <!-- Business Settings -->
-    <div class="bg-white rounded-xl border border-gray-200">
+    <div class="settings-section bg-white rounded-xl border border-gray-200" data-ss="business" data-ss-label="Business">
         <div class="p-5 border-b border-gray-200">
             <h3 class="font-semibold text-gray-900">Business Information</h3>
             <p class="text-sm text-gray-500">Used on invoices and client communications</p>
@@ -169,7 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
     </div>
 
     <!-- Favicon Settings -->
-    <div class="bg-white rounded-xl border border-gray-200">
+    <div class="settings-section bg-white rounded-xl border border-gray-200" data-ss="appearance" data-ss-label="Appearance">
         <div class="p-5 border-b border-gray-200">
             <h3 class="font-semibold text-gray-900">Favicon</h3>
             <p class="text-sm text-gray-500">Upload a custom favicon for browser tabs and bookmarks</p>
@@ -233,7 +254,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
     </div>
 
     <!-- API Keys -->
-    <div class="bg-white rounded-xl border border-gray-200">
+    <?php if (!empty($config['useAdminSharedAiKeys'])): ?>
+    <div class="settings-section bg-blue-50 border border-blue-200 rounded-xl p-5 text-sm text-blue-900" data-ss="ai-keys" data-ss-label="AI API Keys">
+        <p class="font-semibold mb-1">Using shared platform AI keys</p>
+        <p>Your own provider API keys are hidden because they are not in use. To paste your own keys, toggle <em>Shared Admin Keys</em> off in the section below.</p>
+    </div>
+    <?php else: ?>
+    <div class="settings-section bg-white rounded-xl border border-gray-200" data-ss="ai-keys" data-ss-label="AI API Keys">
         <div class="p-5 border-b border-gray-200">
             <h3 class="font-semibold text-gray-900">AI API Keys</h3>
             <p class="text-sm text-gray-500">Required for AI features (task generation, PRD creation)</p>
@@ -294,9 +321,168 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
             </a>
         </form>
     </div>
+    <?php endif; ?>
+
+    <!-- AI Quota / Shared Admin Keys (regular users only — admins manage shared keys via Admin Hub) -->
+    <?php if (!Auth::isAdmin()): ?>
+    <?php
+    require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+    $activeSub = getActiveSubscription(Auth::userId() ?? '');
+    $usage = getMonthlyUsage(Auth::userId() ?? '');
+    $usageTotal = (int)($usage['totalRequests'] ?? 0);
+    $cap = (int)($activeSub['monthlyRequestCap'] ?? 0);
+    $usagePct = ($cap > 0) ? min(100, ($usageTotal / $cap) * 100) : 0;
+    $useShared = !empty($config['useAdminSharedAiKeys']);
+    ?>
+    <div class="settings-section bg-white rounded-xl border border-gray-200" data-ss="ai-quota" data-ss-label="AI Quota">
+        <div class="p-5 border-b border-gray-200">
+            <h3 class="font-semibold text-gray-900">AI Quota &middot; Shared Admin Keys</h3>
+            <p class="text-sm text-gray-500">Use the admin's shared AI keys instead of your own (requires an active subscription).</p>
+        </div>
+        <form method="POST" class="p-5 space-y-4">
+            <input type="hidden" name="section" value="ai-quota">
+            <input type="hidden" name="csrf_token" value="<?php echo Auth::csrfToken(); ?>">
+
+            <?php if (!$activeSub): ?>
+                <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <p class="text-sm text-gray-700 font-medium mb-2">No active subscription</p>
+                    <p class="text-xs text-gray-500 mb-3">Buy a plan to consume the admin's shared AI quota.</p>
+                    <a href="?page=subscription" class="inline-block px-4 py-2 bg-black text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-800 transition">Browse Plans</a>
+                </div>
+            <?php else: ?>
+                <div class="p-4 bg-green-50 border border-green-200 rounded-lg space-y-2">
+                    <div class="flex items-center justify-between">
+                        <p class="text-sm font-bold text-green-800"><?php echo e($activeSub['planSnapshot']['name'] ?? 'Active plan'); ?></p>
+                        <span class="text-xs text-green-700">Expires <?php echo e(date('M j, Y', strtotime((string)($activeSub['expiresAt'] ?? '')))); ?></span>
+                    </div>
+                    <?php if ($cap > 0): ?>
+                        <div>
+                            <div class="flex items-center justify-between text-xs text-green-800 mb-1">
+                                <span><?php echo number_format($usageTotal); ?> / <?php echo number_format($cap); ?> requests this month</span>
+                                <span><?php echo round($usagePct); ?>%</span>
+                            </div>
+                            <div class="h-2 bg-green-100 rounded-full overflow-hidden">
+                                <div class="h-full bg-green-600" style="width: <?php echo (int)$usagePct; ?>%"></div>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <p class="text-xs text-green-700">Unlimited requests this month &middot; used <?php echo number_format($usageTotal); ?> so far</p>
+                    <?php endif; ?>
+                    <?php if (!empty($activeSub['providers'])): ?>
+                        <p class="text-xs text-green-700">Providers unlocked: <?php echo e(implode(', ', $activeSub['providers'])); ?></p>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+
+            <label class="flex items-start gap-3 p-4 border-2 border-gray-100 rounded-lg cursor-pointer hover:border-gray-300">
+                <input type="checkbox" name="useAdminSharedAiKeys" value="1" <?php echo $useShared ? 'checked' : ''; ?> <?php echo !$activeSub ? 'disabled' : ''; ?> class="mt-1 h-4 w-4 rounded border-gray-300 text-black focus:ring-black">
+                <span>
+                    <span class="block text-sm font-bold text-gray-800">Use admin's shared AI keys</span>
+                    <span class="block text-xs text-gray-500 mt-1">
+                        When on, AI requests for unlocked providers will consume the admin's quota instead of your own keys. When off, your own keys (configured above) are used. Falls back to your keys if the admin hasn't configured a particular provider.
+                    </span>
+                </span>
+            </label>
+
+            <button type="submit" class="px-4 py-2 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition" <?php echo !$activeSub ? 'disabled' : ''; ?>>
+                Save AI Quota Settings
+            </button>
+            <a href="?page=my-subscription" class="inline-block ml-4 text-sm text-blue-600 hover:underline">
+                View Subscription →
+            </a>
+        </form>
+    </div>
+    <?php endif; ?>
+
+    <!-- Voice Assistants (Alexa account linking) -->
+    <?php
+    require_once INCLUDES_PATH . '/AlexaOAuth.php';
+    $alexaLinks = [];
+    try { $alexaLinks = AlexaOAuth::listLinksForUser(Auth::userId() ?? ''); } catch (Throwable $e) {}
+    $hasAlexa = !empty($alexaLinks);
+    ?>
+    <div class="settings-section bg-white rounded-xl border border-gray-200" data-ss="voice" data-ss-label="Voice Assistant">
+        <div class="p-5 border-b border-gray-200 flex items-center justify-between">
+            <div>
+                <h3 class="font-semibold text-gray-900">Voice Assistants</h3>
+                <p class="text-sm text-gray-500">Link Amazon Alexa to control OpenPlan with voice.</p>
+            </div>
+            <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest <?= $hasAlexa ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600' ?>">
+                Alexa: <?= $hasAlexa ? 'Linked' : 'Not linked' ?>
+            </span>
+        </div>
+
+        <div class="p-5 space-y-4">
+            <?php if ($hasAlexa): ?>
+                <?php foreach ($alexaLinks as $link): ?>
+                <div class="border border-gray-200 rounded-lg p-3 flex items-start justify-between gap-3">
+                    <div class="text-xs space-y-1">
+                        <p class="font-bold text-gray-800">Amazon ID: <code class="font-mono"><?= htmlspecialchars($link['amazonUserIdMasked'] ?: 'pending first request') ?></code></p>
+                        <p class="text-gray-500">Token …<?= htmlspecialchars($link['accessTokenLast4']) ?> &middot; Linked <?= htmlspecialchars(date('M j, Y', strtotime($link['createdAt']))) ?></p>
+                        <?php if (!empty($link['lastUsedAt'])): ?>
+                        <p class="text-gray-500">Last used <?= htmlspecialchars(date('M j H:i', strtotime($link['lastUsedAt']))) ?></p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <button type="button" id="btn-unlink-alexa"
+                        class="px-4 py-2 border-2 border-red-300 text-red-700 rounded-lg text-sm font-bold hover:bg-red-50 transition">
+                    Unlink all Alexa accounts
+                </button>
+            <?php else: ?>
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm space-y-2">
+                    <p class="font-bold text-gray-800">How to link Alexa:</p>
+                    <ol class="list-decimal list-inside text-xs text-gray-600 space-y-1">
+                        <li>Open the Alexa mobile app</li>
+                        <li>Tap More &rarr; Skills &amp; Games &rarr; Your Skills &rarr; Dev</li>
+                        <li>Tap <strong>OpenPlan</strong> &rarr; <strong>Link Account</strong></li>
+                        <li>Sign in here, approve consent</li>
+                        <li>Say <em>"Alexa, open my plan"</em> on any Echo</li>
+                    </ol>
+                </div>
+            <?php endif; ?>
+
+            <details class="text-xs">
+                <summary class="cursor-pointer text-gray-500 hover:text-gray-700">Technical details</summary>
+                <div class="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-1 font-mono text-[10px]">
+                    <p>Skill endpoint: <?= htmlspecialchars(rtrim(APP_URL, '/') . '/api/alexa.php') ?></p>
+                    <p>Authorize URL: <?= htmlspecialchars(rtrim(APP_URL, '/') . '/api/oauth/authorize.php') ?></p>
+                    <p>Token URL: <?= htmlspecialchars(rtrim(APP_URL, '/') . '/api/oauth/token.php') ?></p>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        const btn = document.getElementById('btn-unlink-alexa');
+        if (!btn) return;
+        btn.addEventListener('click', async () => {
+            if (!confirm('Unlink ALL Alexa accounts from OpenPlan? Voice commands will return a link-account card until you re-link.')) return;
+            try {
+                const res = await fetch('api/oauth/revoke.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({csrf_token: '<?= Auth::csrfToken() ?>'})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (typeof showToast === 'function') showToast(data.message || 'Unlinked', 'success');
+                    else alert(data.message || 'Unlinked');
+                    setTimeout(() => location.reload(), 600);
+                } else {
+                    if (typeof showToast === 'function') showToast(data.message || 'Unlink failed', 'error');
+                    else alert(data.message || 'Unlink failed');
+                }
+            } catch (e) {
+                alert('Network error: ' + e.message);
+            }
+        });
+    })();
+    </script>
 
     <!-- Water Tracker Settings -->
-    <div class="bg-white rounded-xl border border-gray-200">
+    <div class="settings-section bg-white rounded-xl border border-gray-200" data-ss="water" data-ss-label="Water Tracker">
         <div class="p-5 border-b border-gray-200">
             <h3 class="font-semibold text-gray-900">Water Tracker Settings</h3>
             <p class="text-sm text-gray-500">Configure your daily hydration reminders</p>
@@ -333,7 +519,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
     </div>
 
     <!-- Notification Sound Settings -->
-    <div class="bg-white rounded-xl border border-gray-200">
+    <div class="settings-section bg-white rounded-xl border border-gray-200" data-ss="notifications" data-ss-label="Notifications">
         <div class="p-5 border-b border-gray-200">
             <h3 class="font-semibold text-gray-900">Task Notification Sounds</h3>
             <p class="text-sm text-gray-500">Configure alert sounds for task deadlines and reminders</p>
@@ -414,7 +600,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
     </div>
 
     <!-- Session Timeout -->
-    <div class="bg-white rounded-xl border border-gray-200">
+    <div class="settings-section bg-white rounded-xl border border-gray-200" data-ss="session" data-ss-label="Session Timeout">
         <div class="p-5 border-b border-gray-200">
             <h3 class="font-semibold text-gray-900">Session Timeout</h3>
             <p class="text-sm text-gray-500">Controls automatic sign-out behavior while you are inactive</p>
@@ -443,7 +629,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
     </div>
 
     <!-- Data Management Guide -->
-    <div class="bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200">
+    <div class="settings-section bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200" data-ss="data-guide" data-ss-label="Data Guide">
         <div class="p-5 border-b border-gray-200">
             <h3 class="font-semibold text-gray-900 flex items-center gap-2">
                 <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -524,7 +710,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
     </div>
 
     <!-- Backup Management -->
-    <div class="bg-white rounded-xl border border-gray-200">
+    <div class="settings-section bg-white rounded-xl border border-gray-200" data-ss="backup" data-ss-label="Backup">
         <div class="p-5 border-b border-gray-200 flex items-center justify-between">
             <div>
                 <h3 class="font-semibold text-gray-900">Backup Management</h3>
@@ -691,7 +877,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
     </div>
 
     <!-- Change Password -->
-    <div class="bg-white rounded-xl border border-gray-200">
+    <div class="settings-section bg-white rounded-xl border border-gray-200" data-ss="password" data-ss-label="Change Password">
         <div class="p-5 border-b border-gray-200">
             <h3 class="font-semibold text-gray-900">Change Password</h3>
             <p class="text-sm text-gray-500">Update your account password</p>
@@ -728,7 +914,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
     </div>
 
     <!-- Change Master Password -->
-    <div class="bg-white rounded-xl border border-red-200">
+    <div class="settings-section bg-white rounded-xl border border-red-200" data-ss="master-password" data-ss-label="Master Password">
         <div class="p-5 border-b border-red-200 bg-red-50">
             <h3 class="font-semibold text-gray-900">Change Master Password</h3>
             <p class="text-sm text-gray-500">Re-encrypts all your data with the new master password</p>
@@ -771,7 +957,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
     </div>
 
     <!-- Data Management -->
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden group hover:shadow-lg transition-all">
+    <div class="settings-section bg-white rounded-xl border border-gray-200 overflow-hidden group hover:shadow-lg transition-all" data-ss="data-security" data-ss-label="Data &amp; Security">
         <div class="p-8">
             <div class="flex items-center justify-between mb-6">
                 <div>
@@ -812,7 +998,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
     </div>
     
     <!-- Danger Zone -->
-    <div class="bg-white rounded-xl border border-red-200 overflow-hidden">
+    <div class="settings-section bg-white rounded-xl border border-red-200 overflow-hidden" data-ss="danger" data-ss-label="Danger Zone">
         <div class="p-5 border-b border-red-200 bg-red-50">
             <h3 class="font-semibold text-red-900">Danger Zone</h3>
             <p class="text-sm text-red-700">Irreversible actions regarding your account and data</p>
@@ -842,7 +1028,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
 
     
     <!-- Account -->
-    <div class="bg-white rounded-xl border border-gray-200">
+    <div class="settings-section bg-white rounded-xl border border-gray-200" data-ss="account" data-ss-label="Account">
         <div class="p-5 border-b border-gray-200">
             <h3 class="font-semibold text-gray-900">Account</h3>
         </div>
@@ -865,7 +1051,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
     </div>
 
     <!-- Developer Tools Quick Actions -->
-    <div class="bg-gradient-to-br from-gray-900 to-black rounded-2xl p-8 text-white">
+    <div class="settings-section bg-gradient-to-br from-gray-900 to-black rounded-2xl p-8 text-white" data-ss="dev-tools" data-ss-label="Developer Tools">
         <div class="flex items-center gap-3 mb-6">
             <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2133,5 +2319,127 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleSoundSettings(); // Initialize on page load
     }
 });
+</script>
+
+<script>
+/* Settings Hub navigation.
+ * The page renders every section in the DOM (so all existing JS keeps working
+ * unchanged). This script turns the page into a hub: with no ?section= it shows
+ * a card grid and hides the sections; with ?section=<slug> it shows just that one.
+ * FAIL-OPEN: if the hub/grid is missing, no sections are tagged, an unknown slug
+ * is requested, or anything throws, every section stays visible (original page).
+ */
+(function () {
+    try {
+        var hub = document.getElementById('settings-hub');
+        var grid = document.getElementById('settings-hub-grid');
+        var back = document.getElementById('settings-back');
+        var sections = Array.prototype.slice.call(document.querySelectorAll('.settings-section[data-ss]'));
+        if (!hub || !grid || !sections.length) return; // fail-open
+
+        var ICONS = {
+            site: 'M4 6h16M4 12h16M4 18h7',
+            business: 'M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01',
+            appearance: 'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 15l-6-6M14 21h7v-7',
+            'ai-keys': 'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z',
+            'ai-quota': 'M9 17V9m4 8V5m4 12v-4M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z',
+            voice: 'M19 11a7 7 0 01-14 0m7 7v3m-4 0h8m-4-6a3 3 0 01-3-3V5a3 3 0 016 0v4a3 3 0 01-3 3z',
+            water: 'M12 2.25C8.25 5.625 6 8.58 6 11.625A6 6 0 0018 11.625C18 8.58 15.75 5.625 12 2.25z',
+            notifications: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
+            session: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+            'data-guide': 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+            backup: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12',
+            password: 'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z',
+            'master-password': 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
+            'data-security': 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z',
+            danger: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
+            account: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
+            'dev-tools': 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4'
+        };
+        var GENERIC = 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z';
+
+        var DESCRIPTIONS = {
+            site: 'Workspace name shown after you sign in.',
+            business: 'Used on invoices and client communications.',
+            appearance: 'Favicon and theme color.',
+            'ai-keys': 'Your own keys for Groq, OpenRouter, Gemini, Ollama.',
+            'ai-quota': 'Use admin-shared AI keys if you have a plan.',
+            voice: 'Link your Alexa skill to this workspace.',
+            water: 'Daily hydration goal and reminders.',
+            notifications: 'Sounds, volume, and alert types.',
+            session: 'How long before automatic sign out.',
+            'data-guide': 'How encryption and backups work.',
+            backup: 'Create and restore encrypted backups.',
+            password: 'Update your sign-in password.',
+            'master-password': 'Rotate the password that unlocks your data.',
+            'data-security': 'Per-user encryption status.',
+            danger: 'Wipe data or delete account.',
+            account: 'Email, role, and member since.',
+            'dev-tools': 'MCP config and advanced tools.'
+        };
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+
+        // First occurrence of each slug defines its hub card (handles if/else duplicates).
+        var seen = {}, order = [];
+        sections.forEach(function (el) {
+            var slug = el.getAttribute('data-ss');
+            if (slug && !seen[slug]) {
+                seen[slug] = true;
+                order.push({ slug: slug, label: el.getAttribute('data-ss-label') || slug });
+            }
+        });
+
+        grid.innerHTML = order.map(function (o) {
+            var icon = ICONS[o.slug] || GENERIC;
+            var desc = DESCRIPTIONS[o.slug] || '';
+            return '<a href="?page=settings&section=' + encodeURIComponent(o.slug) + '"' +
+                ' class="group bg-white border-2 border-gray-200 rounded-2xl p-6 hover:border-black hover:shadow-md transition-all flex flex-col gap-4">' +
+                '<div class="flex items-start justify-between gap-3">' +
+                    '<div class="w-10 h-10 rounded-xl bg-black flex items-center justify-center">' +
+                        '<svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+                            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="' + icon + '"></path>' +
+                        '</svg>' +
+                    '</div>' +
+                '</div>' +
+                '<div>' +
+                    '<h3 class="text-lg font-bold text-gray-900 group-hover:text-black">' + escapeHtml(o.label) + '</h3>' +
+                    (desc ? '<p class="text-sm text-gray-500 mt-1">' + escapeHtml(desc) + '</p>' : '') +
+                '</div>' +
+                '<div class="mt-auto flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 group-hover:text-black">' +
+                    'Open' +
+                    '<svg class="w-3 h-3 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+                        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>' +
+                    '</svg>' +
+                '</div>' +
+                '</a>';
+        }).join('');
+
+        function showHub() {
+            hub.classList.remove('hidden');
+            if (back) { back.classList.add('hidden'); back.classList.remove('flex'); }
+            sections.forEach(function (el) { el.classList.add('hidden'); });
+        }
+        function showSection(slug) {
+            var matched = sections.filter(function (el) { return el.getAttribute('data-ss') === slug; });
+            if (!matched.length) { showHub(); return; } // unknown slug -> hub (fail-open)
+            hub.classList.add('hidden');
+            if (back) { back.classList.remove('hidden'); back.classList.add('flex'); }
+            sections.forEach(function (el) {
+                el.classList.toggle('hidden', el.getAttribute('data-ss') !== slug);
+            });
+        }
+
+        var params = new URLSearchParams(window.location.search);
+        var active = params.get('section');
+        if (active) { showSection(active); } else { showHub(); }
+    } catch (e) {
+        if (window.console) { console.warn('Settings hub init skipped:', e); }
+    }
+})();
 </script>
 

@@ -5,7 +5,7 @@ if (!Auth::check()) {
     errorResponse('Unauthorized', 401);
 }
 
-if (requestMethod() !== 'GET' && !Auth::isMcp()) {
+if (requestMethod() !== 'GET' && !Auth::isTokenAuth()) {
     $body = getJsonBody();
     $token = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
     if (!Auth::validateCsrf($token)) {
@@ -299,6 +299,29 @@ switch (requestMethod()) {
                     $dayCompletions = array_filter($habitCompletions, fn($c) => $c['date'] === $date && $c['status'] === 'complete');
                     $habits[$key]['weeklyProgress'][] = count($dayCompletions) > 0 ? 100 : 0;
                 }
+
+                // Per-day tap counts for the current ISO week (Mon-Sun). Used by the
+                // weekly count-box UI. Legacy completions without a `count` field but
+                // status='complete' are reported as 1.
+                $weekStart = new DateTime($today);
+                $weekStart->modify('-' . ((int)$weekStart->format('N') - 1) . ' days');
+                $habits[$key]['weekCounts'] = [];
+                $habits[$key]['weekDates'] = [];
+                for ($i = 0; $i < 7; $i++) {
+                    $dayDate = $weekStart->format('Y-m-d');
+                    $habits[$key]['weekDates'][] = $dayDate;
+                    $dayRecords = array_filter($habitCompletions, fn($c) => ($c['date'] ?? '') === $dayDate);
+                    $dayCount = 0;
+                    foreach ($dayRecords as $rec) {
+                        if (array_key_exists('count', $rec)) {
+                            $dayCount += max(0, (int)$rec['count']);
+                        } elseif (($rec['status'] ?? '') === 'complete') {
+                            $dayCount += 1;
+                        }
+                    }
+                    $habits[$key]['weekCounts'][] = $dayCount;
+                    $weekStart->modify('+1 day');
+                }
             }
 
             // Calculate aggregated stats for grid view
@@ -364,10 +387,34 @@ switch (requestMethod()) {
             }
             $completions = $filteredCompletions;
 
+            // Resolve the count for this completion (per-day tap counter).
+            // - If client passes an explicit count, use it.
+            // - Otherwise keep existing count (legacy records: infer 1 when status=complete).
+            // - status='incomplete' forces count back to 0.
+            $providedCount = array_key_exists('count', $body) ? max(0, (int)$body['count']) : null;
+            $existingCount = 0;
+            if ($existingRecord) {
+                if (array_key_exists('count', $existingRecord)) {
+                    $existingCount = max(0, (int)$existingRecord['count']);
+                } elseif (($existingRecord['status'] ?? '') === 'complete') {
+                    $existingCount = 1;
+                }
+            }
+            $count = $providedCount !== null ? $providedCount : ($status === 'complete' ? max(1, $existingCount) : 0);
+            if ($status === 'incomplete') {
+                $count = 0;
+            }
+            if ($count >= 1) {
+                $status = 'complete';
+            } else {
+                $status = 'incomplete';
+            }
+
             $completionData = [
                 'habitId' => $habitId,
                 'date' => $date,
                 'status' => $status,
+                'count' => $count,
                 'completedAt' => $status === 'complete' ? date('c') : null,
                 'createdAt' => date('c'),
                 'updatedAt' => date('c')
@@ -391,6 +438,7 @@ switch (requestMethod()) {
             if ($existingRecord) {
                 $updatedCompletion = array_merge($existingRecord, [
                     'status' => $status,
+                    'count' => $count,
                     'date' => $date,
                     'completedAt' => $status === 'complete' ? date('c') : null,
                     'updatedAt' => date('c')
@@ -413,6 +461,71 @@ switch (requestMethod()) {
 
             $db->save('habit_completions', $completions);
             successResponse($updatedCompletion, 'Habit updated' . ($timerDuration > 0 ? " with {$timerDuration}s timer" : ''));
+        } elseif (($action === 'increment_count' || $action === 'decrement_count') && isset($body['habitId']) && isset($body['date'])) {
+            $completions = $db->load('habit_completions', true);
+            $habitId = (string)$body['habitId'];
+            $date = substr((string)$body['date'], 0, 10);
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                errorResponse('Invalid date format', 400, ERROR_VALIDATION);
+            }
+
+            $existingRecord = null;
+            $filteredCompletions = [];
+            foreach ($completions as $comp) {
+                $compHabitId = (string)($comp['habitId'] ?? '');
+                $compDate = substr((string)($comp['date'] ?? ''), 0, 10);
+                if ($compHabitId === $habitId && $compDate === $date) {
+                    $existingRecord = $comp;
+                    continue;
+                }
+                $filteredCompletions[] = $comp;
+            }
+            $completions = $filteredCompletions;
+
+            $currentCount = 0;
+            if ($existingRecord) {
+                if (array_key_exists('count', $existingRecord)) {
+                    $currentCount = max(0, (int)$existingRecord['count']);
+                } elseif (($existingRecord['status'] ?? '') === 'complete') {
+                    $currentCount = 1; // legacy migration
+                }
+            }
+
+            if ($action === 'increment_count') {
+                $newCount = $currentCount + 1;
+            } else {
+                $newCount = max(0, $currentCount - 1);
+            }
+            $newStatus = $newCount >= 1 ? 'complete' : 'incomplete';
+
+            if ($existingRecord) {
+                $updated = array_merge($existingRecord, [
+                    'count' => $newCount,
+                    'status' => $newStatus,
+                    'completedAt' => $newStatus === 'complete' ? date('c') : null,
+                    'updatedAt' => date('c')
+                ]);
+                if (empty($updated['id'])) {
+                    $updated['id'] = $db->generateId();
+                }
+                if (empty($updated['createdAt'])) {
+                    $updated['createdAt'] = date('c');
+                }
+            } else {
+                $updated = [
+                    'id' => $db->generateId(),
+                    'habitId' => $habitId,
+                    'date' => $date,
+                    'status' => $newStatus,
+                    'count' => $newCount,
+                    'completedAt' => $newStatus === 'complete' ? date('c') : null,
+                    'createdAt' => date('c'),
+                    'updatedAt' => date('c')
+                ];
+            }
+            $completions[] = $updated;
+            $db->save('habit_completions', $completions);
+            successResponse($updated, 'Habit count updated');
         } elseif ($action === 'start_timer' && isset($body['habitId'])) {
             $timerSessions = $db->load('habit_timer_sessions', true);
             $habitId = $body['habitId'];
@@ -632,7 +745,10 @@ switch (requestMethod()) {
                 }
             }
 
-            $goal = (int)$body['goal'];
+            $goal = (int)($body['goal'] ?? 0);
+            if ($goal <= 0) {
+                errorResponse('A positive goal is required', 400, ERROR_VALIDATION);
+            }
 
             if ($todayIndex !== null) {
                 $waterTracker[$todayIndex]['goal'] = $goal;
@@ -908,9 +1024,15 @@ PROMPT;
             $waterTracker[$planIndex]['schedule'][$index]['completedAt'] = date('c');
             $waterTracker[$planIndex]['updatedAt'] = date('c');
 
-            // Also update the daily water tracker
+            // Also update the daily water tracker. Convert ml to glasses using
+            // the plan's configured glass size (fall back to 250) — hardcoding
+            // 250 mis-counted progress for plans with a different glass size.
             $amount = $waterTracker[$planIndex]['schedule'][$index]['amount'] ?? 250;
-            $glassesCount = $amount / 250; // Convert ml to glasses
+            $planGlassSize = (int)($waterTracker[$planIndex]['glassSize'] ?? 250);
+            if ($planGlassSize <= 0) {
+                $planGlassSize = 250;
+            }
+            $glassesCount = $amount / $planGlassSize; // Convert ml to glasses
 
             $today = date('Y-m-d');
             $todayIndex = null;
@@ -968,8 +1090,26 @@ PROMPT;
                 }
             }
 
+            // Fall back to the water_plans collection (manual + AI-generated plans
+            // live here). Lets a plan from generate_water_plan / create_manual_plan
+            // be archived to history too.
+            if (!$plan) {
+                $waterPlans = $db->load('water_plans', true);
+                foreach ($waterPlans as $entry) {
+                    if (isset($entry['id']) && $entry['id'] === $planId) {
+                        $plan = $entry;
+                        break;
+                    }
+                }
+            }
+
             if (!$plan) {
                 errorResponse('Plan not found', 404, ERROR_NOT_FOUND);
+            }
+
+            // Derive total glasses for plans that store only a schedule.
+            if (!isset($plan['totalGlasses']) && isset($plan['schedule']) && is_array($plan['schedule'])) {
+                $plan['totalGlasses'] = count($plan['schedule']);
             }
 
             // Create history entry
@@ -1056,6 +1196,95 @@ PROMPT;
 
             $db->save('water_plan_history', array_values($waterPlanHistory));
             successResponse(null, 'Water plan history deleted');
+        } elseif ($action === 'generate_water_plan') {
+            // Auto-generate a hydration plan from body metrics and save it as the
+            // active plan. Distributes the daily goal across evenly-spaced times
+            // between wake and sleep. Mirrors the create_manual_plan persistence.
+            $weight    = (float)($body['weight'] ?? 70);
+            $activity  = strtolower((string)($body['activity'] ?? 'moderate'));
+            $climate   = strtolower((string)($body['climate'] ?? 'temperate'));
+            $glassSize = max(50, (int)($body['glassSize'] ?? 250));
+            $wakeTime  = (string)($body['wakeTime'] ?? '07:00');
+            $sleepTime = (string)($body['sleepTime'] ?? '23:00');
+
+            // Recommended intake: ~35 ml/kg, adjusted for activity and climate.
+            $activityMult = ['sedentary' => 0.9, 'moderate' => 1.0, 'active' => 1.15, 'athlete' => 1.3][$activity] ?? 1.0;
+            $climateMult  = ['cold' => 0.95, 'temperate' => 1.0, 'hot' => 1.15, 'humid' => 1.15][$climate] ?? 1.0;
+            $recommended  = (int)round($weight * 35 * $activityMult * $climateMult);
+
+            // Honour an explicit goal but never go below the health-based estimate.
+            $requestedGoal = (int)($body['goal'] ?? 0);
+            $dailyGoal = max($requestedGoal, $recommended);
+            if ($dailyGoal < $glassSize) {
+                $dailyGoal = $glassSize;
+            }
+
+            // Parse wake/sleep into minutes; treat sleep <= wake as next-day.
+            $toMin = function (string $hhmm): int {
+                $parts = explode(':', $hhmm);
+                $h = isset($parts[0]) ? (int)$parts[0] : 0;
+                $m = isset($parts[1]) ? (int)$parts[1] : 0;
+                return max(0, min(23, $h)) * 60 + max(0, min(59, $m));
+            };
+            $wakeMin = $toMin($wakeTime);
+            $sleepMin = $toMin($sleepTime);
+            if ($sleepMin <= $wakeMin) {
+                $sleepMin += 24 * 60;
+            }
+
+            $glasses = max(1, (int)round($dailyGoal / $glassSize));
+            $span = $sleepMin - $wakeMin;
+            $step = $glasses > 1 ? $span / ($glasses - 1) : 0;
+
+            $schedule = [];
+            $allocated = 0;
+            for ($i = 0; $i < $glasses; $i++) {
+                $minute = (int)round($wakeMin + ($step * $i)) % (24 * 60);
+                $amount = ($i === $glasses - 1) ? max(0, $dailyGoal - $allocated) : $glassSize;
+                $allocated += $glassSize;
+                $schedule[] = [
+                    'id' => $db->generateId(),
+                    'time' => sprintf('%02d:%02d', intdiv($minute, 60), $minute % 60),
+                    'amount' => normalizeWaterAmountMl($amount, $glassSize),
+                    'completed' => false,
+                    'completedAt' => null,
+                    'missed' => false,
+                    'lastNotifiedAt' => null,
+                ];
+            }
+
+            $plan = [
+                'id' => $db->generateId(),
+                'type' => 'manual',
+                'name' => $body['name'] ?? 'AI Hydration Plan',
+                'dailyGoal' => $dailyGoal,
+                'glassSize' => $glassSize,
+                'isActive' => true,
+                'meta' => [
+                    'generatedFrom' => [
+                        'weight' => $weight,
+                        'activity' => $activity,
+                        'climate' => $climate,
+                        'wakeTime' => $wakeTime,
+                        'sleepTime' => $sleepTime,
+                        'recommendedMl' => $recommended,
+                    ],
+                ],
+                'schedule' => $schedule,
+                'createdAt' => date('c'),
+                'updatedAt' => date('c'),
+            ];
+
+            $waterPlans = $db->load('water_plans', true);
+            foreach ($waterPlans as &$p) {
+                $p['isActive'] = false;
+                $p['updatedAt'] = date('c');
+            }
+            unset($p);
+            $waterPlans[] = $plan;
+            $db->save('water_plans', $waterPlans);
+
+            successResponse($plan, 'Water plan generated');
         } elseif ($action === 'create_manual_plan') {
             // Create manual water plan with time schedule
             $name = $body['name'] ?? 'My Water Plan';

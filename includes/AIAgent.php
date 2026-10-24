@@ -1379,6 +1379,47 @@ PROMPT;
     }
 
     /**
+     * Resolve the API key to use for a provider. Subscribed users with the
+     * "use admin shared keys" toggle on get the admin's key (subject to plan
+     * provider whitelist + monthly quota). Everyone else falls back to their
+     * own per-user key. When admin key resolution fails (not configured), we
+     * silently fall back to the user's own key rather than blocking the call.
+     *
+     * @return array{key: ?string, shared: bool}
+     */
+    private function resolveProviderApiKey(string $provider): array {
+        require_once __DIR__ . '/SubscriptionHelper.php';
+        $userId = Auth::userId() ?? '';
+        $subscription = $userId !== '' ? getActiveSubscription($userId) : null;
+        $useShared = !empty($this->config['useAdminSharedAiKeys'])
+            && $subscription
+            && subscriptionUnlocksProvider($subscription, $provider);
+
+        if ($useShared) {
+            if (overQuota($userId, $subscription)) {
+                throw new APIException(
+                    'Monthly AI request quota exceeded for your subscription plan. Upgrade or wait for the next month.',
+                    'QUOTA_EXCEEDED',
+                    429
+                );
+            }
+            $adminKey = getAdminSharedKey($provider);
+            if (!empty($adminKey)) {
+                incrementUsage($userId, $provider);
+                return ['key' => $adminKey, 'shared' => true];
+            }
+        }
+
+        $fieldMap = [
+            'groq' => 'groqApiKey',
+            'openrouter' => 'openrouterApiKey',
+            'gemini' => 'geminiApiKey'
+        ];
+        $field = $fieldMap[$provider] ?? null;
+        return ['key' => $field ? ($this->config[$field] ?? null) : null, 'shared' => false];
+    }
+
+    /**
      * Get AI provider instance
      *
      * @param string $provider
@@ -1388,21 +1429,21 @@ PROMPT;
     private function getAIProvider(string $provider) {
         switch ($provider) {
             case 'groq':
-                $apiKey = $this->config['groqApiKey'] ?? null;
+                $apiKey = $this->resolveProviderApiKey('groq')['key'];
                 if (empty($apiKey)) {
                     throw new APIException('Groq API key not configured', 'API_KEY_MISSING', 500);
                 }
                 return new GroqAPI($apiKey);
 
             case 'openrouter':
-                $apiKey = $this->config['openrouterApiKey'] ?? null;
+                $apiKey = $this->resolveProviderApiKey('openrouter')['key'];
                 if (empty($apiKey)) {
                     throw new APIException('OpenRouter API key not configured', 'API_KEY_MISSING', 500);
                 }
                 return new OpenRouterAPI($apiKey, getSiteName());
 
             case 'gemini':
-                $apiKey = $this->config['geminiApiKey'] ?? null;
+                $apiKey = $this->resolveProviderApiKey('gemini')['key'];
                 if (empty($apiKey)) {
                     throw new APIException('Google Gemini API key not configured. Add it in Settings → AI API Keys.', 'API_KEY_MISSING', 500);
                 }
@@ -1428,12 +1469,29 @@ PROMPT;
      * Get all enabled model IDs for a provider to support auto-failover.
      */
     private function getEnabledModels(string $provider): array {
+        // If the caller is on the SaaS shared-keys path, prefer admin's shared
+        // models so model IDs match the admin's account where the key is valid.
+        require_once __DIR__ . '/SubscriptionHelper.php';
+        $userId = Auth::userId() ?? '';
+        $sub = $userId !== '' ? getActiveSubscription($userId) : null;
+        $useShared = !empty($this->config['useAdminSharedAiKeys'])
+            && $sub
+            && subscriptionUnlocksProvider($sub, $provider);
+        if ($useShared) {
+            require_once __DIR__ . '/AISharedKeysAPI.php';
+            $shared = new AISharedKeysAPI();
+            $sharedIds = $shared->getSharedModelIds($provider);
+            if (!empty($sharedIds)) {
+                return $sharedIds;
+            }
+        }
+
         $models = $this->db->load('models') ?? [];
         $enabled = [];
-        
+
         // Models are stored as: ['groq' => [...], 'openrouter' => [...]]
         $providerModels = $models[$provider] ?? [];
-        
+
         foreach ($providerModels as $m) {
             if ($m['enabled'] ?? true) {
                 $enabled[] = $m['modelId'];

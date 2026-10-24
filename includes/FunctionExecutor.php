@@ -147,6 +147,15 @@ class FunctionExecutor {
                 }
                 break;
 
+            case 'create_kb_note':
+                if (empty($parameters['title'])) {
+                    $errors[] = "KB note title is required";
+                }
+                if (empty($parameters['content'])) {
+                    $errors[] = "KB note content is required";
+                }
+                break;
+
             case 'create_transaction':
                 if (empty($parameters['type'])) {
                     $errors[] = "Transaction type is required";
@@ -2026,24 +2035,41 @@ class FunctionExecutor {
                 if (strtolower($f['name'] ?? '') === 'notes') { $folderId = $f['id']; break; }
             }
             if (!$folderId) {
-                $newFolder = ['id' => $this->db->generateId(), 'name' => 'Notes',
-                    'description' => 'AI-created notes', 'createdAt' => date('c')];
+                $newFolder = [
+                    'id' => $this->db->generateId(),
+                    'name' => 'Notes',
+                    'parentId' => null,
+                    'userId' => $this->userId,
+                    'createdAt' => date('c'),
+                    'updatedAt' => date('c')
+                ];
                 $kbData['folders'][] = $newFolder;
                 $folderId = $newFolder['id'];
             }
         }
 
+        $title = trim((string)($params['title'] ?? ''));
+        if (!preg_match('/\.(md|txt|xml)$/i', $title)) {
+            $title .= '.md';
+        }
+
         $file = [
             'id'        => $this->db->generateId(),
             'folderId'  => $folderId,
-            'name'      => $params['title'],
-            'type'      => 'text',
+            'name'      => $title,
+            'type'      => str_ends_with(strtolower($title), '.xml') ? 'xml' : 'markdown',
             'content'   => base64_encode($params['content']),
+            'size'      => strlen($params['content']),
+            'userId'    => $this->userId,
             'createdAt' => date('c'),
             'updatedAt' => date('c')
         ];
         $kbData['files'][] = $file;
-        $this->db->save('knowledge-base', $kbData);
+
+        if (!$this->db->save('knowledge-base', $kbData)) {
+            throw new APIException('Failed to save knowledge base note', ERROR_SERVER, 500);
+        }
+
         return ['success' => true, 'file' => $file,
             'message' => "KB note '{$file['name']}' created"];
     }

@@ -17,7 +17,7 @@ if (!Auth::check()) {
 }
 
 // Validate CSRF for non-GET requests (bypass for MCP)
-if (requestMethod() !== 'GET' && !Auth::isMcp()) {
+if (requestMethod() !== 'GET' && !Auth::isTokenAuth()) {
     // For multipart/form-data (file uploads), check $_POST
     // For JSON requests, check the JSON body or header
     if (requestMethod() === 'POST' && isset($_FILES['file'])) {
@@ -193,8 +193,11 @@ function handleCreateFolder($db) {
         errorResponse('Folder name must be 100 characters or less', 400, ERROR_VALIDATION);
     }
 
-    if (!preg_match('/^[a-zA-Z0-9_-]+$/', $name)) {
-        errorResponse('Folder name must contain only letters, numbers, hyphens, and underscores', 400, ERROR_VALIDATION);
+    // Folder names are metadata labels keyed by UUID (never used as a filesystem
+    // path or URL), so spaces and common punctuation are safe. Block only the
+    // characters that could be abused for path traversal or markup injection.
+    if (preg_match('#[/\\\\<>:*?"|]#', $name) || preg_match('/[\x00-\x1f]/', $name)) {
+        errorResponse('Folder name cannot contain / \\ < > : * ? " | or control characters', 400, ERROR_VALIDATION);
     }
 
     $parentId = $body['parentId'] ?? null;
@@ -269,8 +272,11 @@ function handleUpdateFolder($db) {
         errorResponse('Folder name must be 100 characters or less', 400, ERROR_VALIDATION);
     }
 
-    if (!preg_match('/^[a-zA-Z0-9_-]+$/', $name)) {
-        errorResponse('Folder name must contain only letters, numbers, hyphens, and underscores', 400, ERROR_VALIDATION);
+    // Folder names are metadata labels keyed by UUID (never used as a filesystem
+    // path or URL), so spaces and common punctuation are safe. Block only the
+    // characters that could be abused for path traversal or markup injection.
+    if (preg_match('#[/\\\\<>:*?"|]#', $name) || preg_match('/[\x00-\x1f]/', $name)) {
+        errorResponse('Folder name cannot contain / \\ < > : * ? " | or control characters', 400, ERROR_VALIDATION);
     }
 
     // Load knowledge base data

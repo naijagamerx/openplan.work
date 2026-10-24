@@ -35,7 +35,7 @@ switch ($action) {
         $rememberMe = !empty($body['remember_me']);
 
         // CSRF validation
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 
@@ -126,7 +126,100 @@ switch ($action) {
             errorResponse($result['error'], 401);
         }
         break;
-        
+
+    case 'device_login':
+        // Native mobile login: returns a per-device bearer token so the app can
+        // call the API WITHOUT sending the master password on every request.
+        // No CSRF (credential bootstrap with no ambient cookie, like OAuth /token);
+        // protected by the same rate limiter as web login.
+        if (requestMethod() !== 'POST') {
+            errorResponse('Method not allowed', 405);
+        }
+
+        $body = getJsonBody();
+        $email = trim($body['email'] ?? '');
+        $password = $body['password'] ?? '';
+        $masterPassword = $body['master_password'] ?? '';
+        $deviceName = (string)($body['device_name'] ?? 'Mobile device');
+        $platform = (string)($body['platform'] ?? 'unknown');
+
+        if (empty($email) || empty($password) || empty($masterPassword)) {
+            errorResponse('All fields are required');
+        }
+
+        $db = new Database($masterPassword);
+        $rateLimiter = new RateLimiter($db);
+        $clientIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        $identifier = 'device|' . $email . '|' . $clientIp;
+
+        if ($rateLimiter->isLoginBlocked($identifier)) {
+            $unlockTime = $rateLimiter->getUnlockTime($identifier);
+            $minutes = ceil($unlockTime / 60);
+            errorResponse(
+                "Too many login attempts. Please try again in {$minutes} minutes.",
+                429,
+                'RATE_LIMIT_EXCEEDED'
+            );
+        }
+
+        $auth = new Auth($db);
+        $step1 = $auth->verifyEmailPasswordOnly($email, $password);
+        $masterOk = false;
+        if ($step1['success']) {
+            $masterOk = $auth->validateUserMasterPassword((string)($step1['user']['id'] ?? ''), $masterPassword);
+        }
+
+        if (!$step1['success'] || !$masterOk) {
+            $rateLimiter->recordFailedAttempt($identifier);
+            $remaining = $rateLimiter->getRemainingAttempts($identifier);
+            $reason = !$step1['success'] ? ($step1['error'] ?? 'Invalid credentials') : 'Invalid master password';
+
+            $rateLimiter->logAudit(
+                null, 'device_login', 'auth', null,
+                $clientIp, $_SERVER['HTTP_USER_AGENT'] ?? null,
+                false, "Failed device login: {$reason}. {$remaining} attempts remaining."
+            );
+
+            if ($rateLimiter->isLoginBlocked($identifier)) {
+                errorResponse(
+                    'Invalid credentials. Temporarily locked due to too many failed attempts.',
+                    429,
+                    'RATE_LIMIT_EXCEEDED'
+                );
+            }
+            errorResponse($reason, 401);
+        }
+
+        $user = $step1['user'];
+        $rateLimiter->clearLoginAttempts($identifier);
+
+        try {
+            $issued = $auth->createDeviceToken((string)$user['id'], $masterPassword, $deviceName, $platform);
+        } catch (Exception $e) {
+            error_log('device_login token issue failed: ' . $e->getMessage());
+            errorResponse('Failed to register device', 500);
+        }
+
+        $rateLimiter->logAudit(
+            $user['id'], 'device_login', 'auth', null,
+            $clientIp, $_SERVER['HTTP_USER_AGENT'] ?? null,
+            true, 'Device token issued: ' . ($issued['device']['name'] ?? '')
+        );
+
+        successResponse([
+            'device_token' => $issued['device_token'],
+            'token_type' => 'Bearer',
+            'expires_in' => null,
+            'device' => $issued['device'],
+            'user' => [
+                'id' => $user['id'],
+                'email' => $user['email'],
+                'name' => $user['name'],
+                'role' => Auth::normalizeRole($user['role'] ?? null)
+            ]
+        ], 'Device registered');
+        break;
+
     case 'logout':
         // Log logout to audit
         $db = new Database(getMasterPassword());
@@ -229,7 +322,7 @@ switch ($action) {
         $csrfToken = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
 
         // CSRF validation
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 
@@ -361,7 +454,7 @@ switch ($action) {
         $csrfToken = $body['csrf_token'] ?? '';
 
         // CSRF validation
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 
@@ -426,7 +519,7 @@ switch ($action) {
         $csrfToken = $body['csrf_token'] ?? '';
 
         // CSRF validation
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 
@@ -506,6 +599,10 @@ switch ($action) {
         // Update session with new master password
         $_SESSION[SESSION_MASTER_KEY] = $newMasterPassword;
 
+        // Existing device-token wraps still decrypt to the OLD master, which no
+        // longer opens the re-encrypted data. Revoke them so devices re-login.
+        DeviceTokens::revokeAllForUser($currentUserId);
+
         successResponse(null, 'Master password changed and your encrypted data was re-encrypted successfully');
         break;
         
@@ -523,7 +620,7 @@ switch ($action) {
         $csrfToken = $body['csrf_token'] ?? '';
 
         // CSRF validation
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 
@@ -575,7 +672,7 @@ switch ($action) {
         $csrfToken = $body['csrf_token'] ?? '';
 
         // CSRF validation
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
         
@@ -625,7 +722,7 @@ switch ($action) {
         $body = getJsonBody();
         $csrfToken = $body['csrf_token'] ?? '';
         
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
         

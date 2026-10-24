@@ -12,7 +12,7 @@ try {
     }
 
     $isWriteRequest = requestMethod() !== 'GET';
-    if ($isWriteRequest && !Auth::isMcp()) {
+    if ($isWriteRequest && !Auth::isTokenAuth()) {
         $body = getJsonBody();
         $csrfToken = $body['csrf_token'] ?? $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
         if (!Auth::validateCsrf($csrfToken)) {

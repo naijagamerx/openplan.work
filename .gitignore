@@ -75,3 +75,21 @@ android/app/build/
 android/build/
 android/local.properties
 android/web-source/
+
+# Private Claude Code notes (deploy credentials)
+CLAUDE.local.md
+
+# Data backups and user uploads (payment proofs, QR images) — never commit user data
+data_backups/
+data_backup_*/
+uploads/**
+!uploads/payment-proofs/
+!uploads/payment-proofs/.htaccess
+
+# Local agent/tool state, FTP test scripts, screenshots
+.agents/
+.zcode/
+.mcp.json*
+skills-lock.json
+test_ftp*
+user-manual-*.png

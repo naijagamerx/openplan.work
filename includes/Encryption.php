@@ -12,6 +12,20 @@ class Encryption {
     public function __construct(string $masterPassword) {
         $this->key = hash('sha256', $masterPassword, true);
     }
+
+    /**
+     * Factory: build an Encryption instance from an already-derived 32-byte raw key,
+     * bypassing the password→SHA256 step. Used by AlexaHandler multi-user mode where
+     * the data key is unwrapped from a platform-encrypted blob, not derived live.
+     */
+    public static function fromRawKey(string $rawKey): self {
+        if (strlen($rawKey) !== 32) {
+            throw new Exception('Raw key must be exactly 32 bytes');
+        }
+        $instance = new self('');         // dummy password; key overwritten below
+        $instance->key = $rawKey;
+        return $instance;
+    }
     
     /**
      * Encrypt data

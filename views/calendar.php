@@ -80,6 +80,29 @@ foreach ($projects as $project) {
     }
 }
 
+// Load meetings for the current month (reuses the per-user $db instance — no extra key derivation).
+$meetingsByDate = [];
+try {
+    $allMeetings = $db->load('meetings');
+    foreach ($allMeetings as $meeting) {
+        $meetingDate = substr((string)($meeting['date'] ?? ''), 0, 10);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $meetingDate)) {
+            continue;
+        }
+        $mYear = (int)substr($meetingDate, 0, 4);
+        $mMonth = (int)substr($meetingDate, 5, 2);
+        if ($mYear === $year && $mMonth === $month) {
+            $day = (int)substr($meetingDate, 8, 2);
+            if (!isset($meetingsByDate[$day])) {
+                $meetingsByDate[$day] = [];
+            }
+            $meetingsByDate[$day][] = $meeting;
+        }
+    }
+} catch (Exception $e) {
+    error_log('Failed to load meetings for calendar: ' . $e->getMessage());
+}
+
 // Get today's date for highlighting
 $today = date('Y-m-d');
 $todayDay = (int)date('j');
@@ -122,6 +145,13 @@ $isTodayMonth = ($todayMonth === $month && $todayYear === $year);
                class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition text-sm font-medium">
                 Today
             </a>
+            <a href="?page=meeting-form"
+               class="px-4 py-2 bg-black hover:bg-gray-800 text-white rounded-lg transition text-sm font-medium inline-flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                New Meeting
+            </a>
         </div>
     </div>
 
@@ -142,6 +172,10 @@ $isTodayMonth = ($todayMonth === $month && $todayYear === $year);
         <div class="flex items-center gap-2">
             <span class="w-3 h-3 rounded-full bg-red-500"></span>
             <span class="text-sm text-gray-600">Overdue</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-purple-500"></span>
+            <span class="text-sm text-gray-600">Meeting</span>
         </div>
     </div>
 
@@ -168,7 +202,10 @@ $isTodayMonth = ($todayMonth === $month && $todayYear === $year);
             for ($day = 1; $day <= $daysInMonth; $day++) {
                 $isToday = $isTodayMonth && ($day === $todayDay);
                 $dayTasks = $tasksByDate[$day] ?? [];
+                $dayMeetings = $meetingsByDate[$day] ?? [];
                 $hasTasks = !empty($dayTasks);
+                $hasMeetings = !empty($dayMeetings);
+                $totalEvents = count($dayTasks) + count($dayMeetings);
 
                 $cellClass = 'min-h-[100px] p-2 border-b border-r border-gray-100';
                 if ($isToday) {
@@ -185,8 +222,8 @@ $isTodayMonth = ($todayMonth === $month && $todayYear === $year);
                     echo ' <span class="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded ml-1">Today</span>';
                 }
                 echo '</span>';
-                if ($hasTasks) {
-                    echo '<span class="text-xs text-gray-400">' . count($dayTasks) . ' task' . (count($dayTasks) > 1 ? 's' : '') . '</span>';
+                if ($totalEvents > 0) {
+                    echo '<span class="text-xs text-gray-400">' . $totalEvents . ' event' . ($totalEvents > 1 ? 's' : '') . '</span>';
                 }
                 echo '</div>';
 
@@ -227,6 +264,32 @@ $isTodayMonth = ($todayMonth === $month && $todayYear === $year);
 
                     if (count($dayTasks) > 3) {
                         echo '<div class="text-xs text-gray-500 pl-2">+' . (count($dayTasks) - 3) . ' more</div>';
+                    }
+                    echo '</div>';
+                }
+
+                // Meeting pills
+                if ($hasMeetings) {
+                    echo '<div class="space-y-1 mt-1">';
+                    foreach (array_slice($dayMeetings, 0, 2) as $meeting) {
+                        $meetingId = htmlspecialchars((string)($meeting['id'] ?? ''), ENT_QUOTES);
+                        $meetingTitle = (string)($meeting['title'] ?? 'Meeting');
+                        $shortTitle = htmlspecialchars(strlen($meetingTitle) > 20 ? substr($meetingTitle, 0, 20) . '...' : $meetingTitle);
+                        $timeText = '';
+                        if (!empty($meeting['startTime'])) {
+                            $timeText = htmlspecialchars((string)$meeting['startTime']);
+                        }
+                        echo '<a href="?page=meeting-form&id=' . $meetingId . '"';
+                        echo ' class="block text-xs px-2 py-1 rounded border bg-purple-100 text-purple-800 border-purple-200 truncate hover:opacity-80 transition"';
+                        echo ' title="' . htmlspecialchars($meetingTitle) . '">';
+                        if ($timeText !== '') {
+                            echo '<span class="font-semibold mr-1">' . $timeText . '</span>';
+                        }
+                        echo $shortTitle;
+                        echo '</a>';
+                    }
+                    if (count($dayMeetings) > 2) {
+                        echo '<div class="text-xs text-gray-500 pl-2">+' . (count($dayMeetings) - 2) . ' more</div>';
                     }
                     echo '</div>';
                 }

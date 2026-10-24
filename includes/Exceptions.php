@@ -38,3 +38,6 @@ class APIException extends Exception {
     }
 }
 
+class ValidationException extends Exception {
+}
+

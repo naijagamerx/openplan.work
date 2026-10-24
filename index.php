@@ -12,11 +12,15 @@ require_once __DIR__ . '/includes/DeviceDetector.php';
 // Get the requested page
 $rawPage = $_GET['page'] ?? 'homepage';
 $page = preg_replace('/[^a-z0-9_-]/i', '', $rawPage);
-$publicPages = ['homepage', 'docs', 'login', 'setup', 'register', 'thank-you', 'forgot-password', 'reset-password', 'verify-email', 'privacy', 'terms'];
+$publicPages = ['homepage', 'docs', 'login', 'master-code', 'setup', 'register', 'thank-you', 'forgot-password', 'reset-password', 'verify-email', 'privacy', 'terms'];
 $verificationAllowedPages = ['verification-required', 'verify-email', 'logout'];
 
-// Check if should show mobile version
-if (DeviceDetector::shouldShowMobile()) {
+// Mobile routing: phones get the dedicated mobile design (login, register,
+// dashboard, etc.) EXCEPT the homepage, which always uses the responsive
+// desktop design (the desktop index shrunk to fit mobile). Desktop browsers
+// are served the desktop site everywhere. The Android APK loads /mobile/
+// directly (mobile/index.php) and is unaffected by this check.
+if (DeviceDetector::shouldShowMobile() && $page !== 'homepage') {
     // For public pages (login, setup), include mobile views directly
     if (in_array($page, $publicPages)) {
         $mobileViewFile = __DIR__ . '/mobile/views/' . $page . '.php';
@@ -36,6 +40,15 @@ $action = $_GET['action'] ?? null;
 
 // Check authentication for protected pages
 $isAuthenticated = Auth::check();
+
+// Capture ?redirect=... param for post-login bounce-back (e.g. Alexa OAuth flow).
+// Stored in session so it survives the 2-step (password → master code) login.
+if ($page === 'login' && !empty($_GET['redirect'])) {
+    $candidate = (string)$_GET['redirect'];
+    if (strpos($candidate, '/') === 0 && strpos($candidate, '//') !== 0 && strpos($candidate, '://') === false) {
+        $_SESSION['post_login_redirect'] = $candidate;
+    }
+}
 
 // Redirect to login if not authenticated
 if (!in_array($page, $publicPages) && !$isAuthenticated) {
@@ -174,8 +187,15 @@ if ($page === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Redirect to dashboard if authenticated and on login page
+// Redirect to dashboard if authenticated and on login page.
+// Honor stored ?redirect=... target if present (used by Alexa OAuth flow).
 if (in_array($page, ['login', 'register', 'thank-you', 'forgot-password', 'reset-password'], true) && $isAuthenticated) {
+    if (!empty($_SESSION['post_login_redirect'])) {
+        $target = (string)$_SESSION['post_login_redirect'];
+        unset($_SESSION['post_login_redirect']);
+        header('Location: ' . $target);
+        exit;
+    }
     header('Location: ' . APP_URL . '?page=' . Auth::getPostLoginDestination());
     exit;
 }
@@ -203,52 +223,48 @@ if (empty($_SESSION['csrf_token'])) {
 }
 
 // IMPORTANT: Process login form BEFORE any HTML output to allow cookies to be set
-// This must happen before the layout is included
+// Step 1 of the 2-step login flow: validate email + password only, then redirect to master-code page.
 if ($page === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Start output buffering to capture any HTML output from login processing
     ob_start();
 
-    // Process login form
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
-    $masterPassword = $_POST['master_password'] ?? '';
     $csrfToken = $_POST['csrf_token'] ?? '';
     $rememberMe = !empty($_POST['remember_me']);
 
     if (!Auth::validateCsrf($csrfToken)) {
+        ob_end_clean();
         header('Location: ' . APP_URL . '?page=login&reason=invalid_csrf');
         exit;
     }
 
-    if (!empty($email) && !empty($password) && !empty($masterPassword)) {
-        // Store master password for this session
-        $_SESSION[SESSION_MASTER_KEY] = $masterPassword;
-
-        // Attempt login
+    if ($email === '' || $password === '') {
+        $_SESSION['login_step1_error'] = 'Email and password are required';
+        $_SESSION['login_step1_email'] = $email;
+    } else {
         require_once INCLUDES_PATH . '/Database.php';
         require_once INCLUDES_PATH . '/Encryption.php';
         require_once INCLUDES_PATH . '/Auth.php';
 
-        $db = new Database($masterPassword);
+        $db = new Database(APP_NAME);
         $auth = new Auth($db);
-        $result = $auth->login($email, $password, $rememberMe);
+        $result = $auth->verifyEmailPasswordOnly($email, $password);
 
         if ($result['success']) {
-            // Clear output buffer
+            $_SESSION['pending_master_user_id'] = $result['user']['id'];
+            $_SESSION['pending_master_email'] = $result['user']['email'];
+            $_SESSION['pending_master_remember'] = $rememberMe;
+            $_SESSION['pending_master_expires'] = time() + 300;
+            unset($_SESSION['login_step1_error'], $_SESSION['login_step1_email']);
+
             ob_end_clean();
-
-            // Write session data before redirect
             session_write_close();
-
-            // Output redirect page
             ?>
             <!DOCTYPE html>
             <html>
             <head>
-                <meta http-equiv="refresh" content="0;url=<?php echo APP_URL; ?>?page=<?php echo e(Auth::getPostLoginDestination()); ?>&login=success">
-                <script>
-                    window.location.href = '<?php echo APP_URL; ?>?page=<?php echo e(Auth::getPostLoginDestination()); ?>&login=success';
-                </script>
+                <meta http-equiv="refresh" content="0;url=<?php echo APP_URL; ?>?page=master-code">
+                <script>window.location.href = '<?php echo APP_URL; ?>?page=master-code';</script>
                 <style>
                     body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #fff; }
                     .loader { text-align: center; }
@@ -259,17 +275,165 @@ if ($page === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             <body>
                 <div class="loader">
                     <div class="spinner"></div>
-                    <p>Signing in...</p>
+                    <p>One more step...</p>
                 </div>
             </body>
             </html>
             <?php
             exit;
+        } else {
+            $_SESSION['login_step1_error'] = $result['error'];
+            $_SESSION['login_step1_email'] = $email;
         }
     }
 
-    // Clear output buffer and continue with normal page rendering
     ob_end_clean();
+}
+
+// Step 2 of the 2-step login flow: master code page guard + POST handler.
+// Runs BEFORE the layout so header()/Location redirects work cleanly.
+if ($page === 'master-code') {
+    $pendingUserId = (string)($_SESSION['pending_master_user_id'] ?? '');
+    $pendingExpires = (int)($_SESSION['pending_master_expires'] ?? 0);
+
+    if ($pendingUserId === '' || $pendingExpires < time()) {
+        unset(
+            $_SESSION['pending_master_user_id'],
+            $_SESSION['pending_master_email'],
+            $_SESSION['pending_master_remember'],
+            $_SESSION['pending_master_expires']
+        );
+        header('Location: ' . APP_URL . '?page=login&reason=session_expired');
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        ob_start();
+
+        require_once INCLUDES_PATH . '/Database.php';
+        require_once INCLUDES_PATH . '/Encryption.php';
+        require_once INCLUDES_PATH . '/Auth.php';
+        require_once INCLUDES_PATH . '/RateLimiter.php';
+
+        $csrfToken = $_POST['csrf_token'] ?? '';
+        $masterPasswordInput = $_POST['master_password'] ?? '';
+        $pendingEmail = (string)($_SESSION['pending_master_email'] ?? '');
+
+        $stepError = '';
+
+        if (!Auth::validateCsrf($csrfToken)) {
+            $stepError = 'Invalid request token. Please refresh and try again.';
+        } elseif ($masterPasswordInput === '') {
+            $stepError = 'Master password is required';
+        } else {
+            $usersDb = new Database(APP_NAME);
+            $rateLimiter = new RateLimiter($usersDb);
+            $clientIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+            $identifier = $pendingEmail . '|' . $clientIp;
+
+            if ($rateLimiter->isLoginBlocked($identifier)) {
+                $unlockMinutes = ceil($rateLimiter->getUnlockTime($identifier) / 60);
+                $stepError = "Too many failed attempts. Please try again in {$unlockMinutes} minutes.";
+            } else {
+                $auth = new Auth($usersDb);
+
+                if ($auth->validateUserMasterPassword($pendingUserId, $masterPasswordInput)) {
+                    $users = $usersDb->load('users', true);
+                    $matchedUser = null;
+                    foreach ($users as $candidate) {
+                        if (($candidate['id'] ?? '') === $pendingUserId) {
+                            $matchedUser = $candidate;
+                            break;
+                        }
+                    }
+
+                    if ($matchedUser) {
+                        $_SESSION[SESSION_MASTER_KEY] = $masterPasswordInput;
+                        $rememberMe = !empty($_SESSION['pending_master_remember']);
+
+                        $auth->completeLogin($matchedUser, $rememberMe);
+                        $rateLimiter->clearLoginAttempts($identifier);
+                        $rateLimiter->logAudit(
+                            $matchedUser['id'],
+                            'login',
+                            'auth',
+                            null,
+                            $clientIp,
+                            $_SERVER['HTTP_USER_AGENT'] ?? null,
+                            true,
+                            'Login successful (2-step)'
+                        );
+
+                        unset(
+                            $_SESSION['pending_master_user_id'],
+                            $_SESSION['pending_master_email'],
+                            $_SESSION['pending_master_remember'],
+                            $_SESSION['pending_master_expires'],
+                            $_SESSION['master_code_error']
+                        );
+
+                        // Resolve final redirect destination — honor pre-login redirect target if set.
+                        $finalRedirect = APP_URL . '?page=' . Auth::getPostLoginDestination() . '&login=success';
+                        if (!empty($_SESSION['post_login_redirect'])) {
+                            $finalRedirect = (string)$_SESSION['post_login_redirect'];
+                            unset($_SESSION['post_login_redirect']);
+                        }
+
+                        ob_end_clean();
+                        session_write_close();
+                        ?>
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta http-equiv="refresh" content="0;url=<?php echo htmlspecialchars($finalRedirect, ENT_QUOTES); ?>">
+                            <script>window.location.href = '<?php echo htmlspecialchars($finalRedirect, ENT_QUOTES); ?>';</script>
+                            <style>
+                                body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #fff; }
+                                .loader { text-align: center; }
+                                .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #000; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px; }
+                                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="loader">
+                                <div class="spinner"></div>
+                                <p>Signing in...</p>
+                            </div>
+                        </body>
+                        </html>
+                        <?php
+                        exit;
+                    }
+
+                    $stepError = 'User account could not be loaded';
+                } else {
+                    $rateLimiter->recordFailedAttempt($identifier);
+                    $remaining = $rateLimiter->getRemainingAttempts($identifier);
+                    $rateLimiter->logAudit(
+                        $pendingUserId,
+                        'login',
+                        'auth',
+                        null,
+                        $clientIp,
+                        $_SERVER['HTTP_USER_AGENT'] ?? null,
+                        false,
+                        'Failed master password attempt'
+                    );
+                    if ($rateLimiter->isLoginBlocked($identifier)) {
+                        $stepError = "Too many failed attempts. Please try again in " . ceil(LOGIN_LOCKOUT_SECONDS / 60) . " minutes.";
+                    } else {
+                        $stepError = "Invalid master password. {$remaining} attempts remaining.";
+                    }
+                }
+            }
+        }
+
+        if ($stepError !== '') {
+            $_SESSION['master_code_error'] = $stepError;
+        }
+
+        ob_end_clean();
+    }
 }
 
 // Route to appropriate view
@@ -308,7 +472,7 @@ $pageTitle = ucfirst(str_replace('-', ' ', $page)) . ' | ' . getSiteName();
 $fullPageViews = ['homepage', 'docs', 'setup', 'notes-three-pane-sample'];
 
 // Include the appropriate layout
-$authLayoutPages = ['login', 'register', 'thank-you', 'forgot-password', 'reset-password', 'verify-email', 'verification-required', 'privacy', 'terms'];
+$authLayoutPages = ['login', 'master-code', 'register', 'thank-you', 'forgot-password', 'reset-password', 'verify-email', 'verification-required', 'privacy', 'terms'];
 if (in_array($page, $authLayoutPages, true)) {
     include VIEWS_PATH . '/layouts/auth.php';
 } elseif (in_array($page, $fullPageViews)) {

@@ -49,6 +49,56 @@ $projects = $db->load('projects');
 $habits = $db->load('habits');
 $habitCompletions = $db->load('habit_completions');
 
+// One-shot payment-approval flash (written by PaymentsAPI::approve on the admin side).
+$paymentApprovalFlash = null;
+try {
+    $flashConfig = $db->load('config', false);
+    if (is_array($flashConfig) && !empty($flashConfig['paymentApprovalFlash'])) {
+        $paymentApprovalFlash = $flashConfig['paymentApprovalFlash'];
+        $flashConfig['paymentApprovalFlash'] = null;
+        $db->save('config', $flashConfig);
+    }
+} catch (Throwable $e) {
+    error_log('mobile paymentApprovalFlash read failed: ' . $e->getMessage());
+}
+
+// Admin-only alert counts surfaced as a banner.
+$adminAlerts = null;
+if (Auth::isAdmin()) {
+    try {
+        require_once INCLUDES_PATH . '/PaymentsAPI.php';
+        require_once INCLUDES_PATH . '/TicketsAPI.php';
+
+        $pendingPaymentsCount = count((new PaymentsAPI())->getAll('pending'));
+        $awaitingTicketsCount = count(array_filter(
+            (new TicketsAPI())->getAll(),
+            fn($t) => ($t['status'] ?? '') === 'awaiting_admin'
+        ));
+
+        $cutoff = time() - (7 * 86400);
+        $newUsersCount = 0;
+        foreach (Auth::allUsers() as $u) {
+            if (!empty($u['emailVerifiedAt'])) {
+                continue;
+            }
+            $createdTs = strtotime((string)($u['createdAt'] ?? ''));
+            if ($createdTs !== false && $createdTs >= $cutoff) {
+                $newUsersCount++;
+            }
+        }
+
+        if ($pendingPaymentsCount > 0 || $newUsersCount > 0 || $awaitingTicketsCount > 0) {
+            $adminAlerts = [
+                'pendingPayments' => $pendingPaymentsCount,
+                'newUsers'        => $newUsersCount,
+                'openTickets'     => $awaitingTicketsCount
+            ];
+        }
+    } catch (Throwable $e) {
+        error_log('mobile dashboard admin alerts failed: ' . $e->getMessage());
+    }
+}
+
 // Get current date info
 $today = date('Y-m-d');
 $todayFormatted = date('l, F j, Y');
@@ -212,6 +262,47 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
         <h2 class="text-2xl font-bold">Welcome back, <?= htmlspecialchars(explode(' ', $userName)[0]) ?>!</h2>
         <p class="text-sm text-gray-500 dark:text-gray-400 font-medium mt-1 uppercase tracking-wider"><?= $todayFormatted ?></p>
     </section>
+
+    <?php if ($paymentApprovalFlash !== null): ?>
+        <section class="p-4 bg-green-50 dark:bg-green-950/30 border-2 border-green-300 dark:border-green-800 rounded-2xl space-y-2 text-sm">
+            <div class="flex items-start gap-2">
+                <svg class="w-5 h-5 text-green-700 dark:text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <div class="flex-1">
+                    <p class="font-bold text-green-900 dark:text-green-200">Payment approved &middot; <?= htmlspecialchars($paymentApprovalFlash['planName'] ?? 'Your plan') ?></p>
+                    <p class="text-xs text-green-800 dark:text-green-300 mt-1">
+                        <?php if (!empty($paymentApprovalFlash['expiresAt'])): ?>
+                            Active until <?= htmlspecialchars(date('M j, Y', strtotime((string)$paymentApprovalFlash['expiresAt']))) ?>.
+                        <?php endif; ?>
+                        Platform AI is now turned on.
+                    </p>
+                </div>
+            </div>
+            <a href="?page=ai-assistant" class="block w-full text-center bg-green-700 text-white py-2 rounded-xl font-medium text-xs">Open AI Assistant</a>
+        </section>
+    <?php endif; ?>
+
+    <?php if ($adminAlerts !== null): ?>
+        <section class="p-4 border-2 border-black dark:border-white rounded-2xl space-y-2 text-sm">
+            <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Needs attention</p>
+            <?php if ($adminAlerts['pendingPayments'] > 0): ?>
+                <a href="?page=admin-payments" class="block font-bold hover:underline">
+                    <?= $adminAlerts['pendingPayments'] ?> pending payment<?= $adminAlerts['pendingPayments'] === 1 ? '' : 's' ?>
+                </a>
+            <?php endif; ?>
+            <?php if ($adminAlerts['newUsers'] > 0): ?>
+                <a href="?page=users" class="block font-bold hover:underline">
+                    <?= $adminAlerts['newUsers'] ?> new unverified user<?= $adminAlerts['newUsers'] === 1 ? '' : 's' ?>
+                </a>
+            <?php endif; ?>
+            <?php if ($adminAlerts['openTickets'] > 0): ?>
+                <a href="?page=admin-tickets" class="block font-bold hover:underline">
+                    <?= $adminAlerts['openTickets'] ?> ticket<?= $adminAlerts['openTickets'] === 1 ? '' : 's' ?> awaiting reply
+                </a>
+            <?php endif; ?>
+        </section>
+    <?php endif; ?>
 
     <!-- 4-Stat Cards Grid -->
     <div class="grid grid-cols-2 gap-3">

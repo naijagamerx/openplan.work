@@ -18,7 +18,13 @@
 </FilesMatch>
 
 # 4. Block direct access to internal directories that shouldn't be served
-RedirectMatch 403 ^/(includes|data|cron|datass|migration_backups|release-artifacts|vendor|tests|test|scripts)(/|$)
+#    release-artifacts is handled separately below so its public android/
+#    subfolder (APK downloads) can stay web-accessible.
+RedirectMatch 403 ^/(includes|data|cron|datass|migration_backups|vendor|tests|test|scripts)(/|$)
+# 4a. Lock down release-artifacts EXCEPT the public Android APK folder.
+#     Negative lookahead keeps /release-artifacts/*.zip and /release-artifacts/data
+#     blocked while allowing /release-artifacts/android/<file>.apk.
+RedirectMatch 403 ^/release-artifacts(?!/android(/|$))
 
 # 5. Standard hardening: disable directory listing
 Options -Indexes

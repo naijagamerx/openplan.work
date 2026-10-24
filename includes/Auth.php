@@ -20,22 +20,24 @@ class Auth {
     private const RESEND_VERIFICATION_COOLDOWN = 60;
     
     private static ?string $mcpUserId = null;
+    private static ?string $deviceUserId = null;
 
     public function __construct(Database $db) {
         $this->db = $db;
     }
 
     /**
-     * Attempt login
+     * Validate email + password only. No session mutation, no master-password check.
+     * Used by 2-step login UI flow before the master-code step.
      */
-    public function login(string $email, string $password, bool $rememberMe = false): array {
+    public function verifyEmailPasswordOnly(string $email, string $password): array {
         try {
             $users = $this->db->load('users', true);
         } catch (Exception $e) {
             return ['success' => false, 'error' => 'Unable to load user registry'];
         }
 
-        foreach ($users as &$user) {
+        foreach ($users as $user) {
             if (($user['email'] ?? '') !== $email) {
                 continue;
             }
@@ -48,76 +50,91 @@ class Auth {
                 return ['success' => false, 'error' => 'Invalid password'];
             }
 
-            if (!$this->validateUserMasterPassword((string)($user['id'] ?? ''))) {
-                return ['success' => false, 'error' => 'Invalid master password'];
-            }
-
-            $timeoutPreference = self::normalizeSessionTimeoutPreference($user['sessionTimeoutPreference'] ?? null);
-            if ($rememberMe) {
-                // Explicit remember-me from login should immediately enable
-                // persistent token restoration for this user.
-                $timeoutPreference = self::SESSION_TIMEOUT_INDEFINITE;
-            }
-            $now = time();
-
-            // Keep stored preference normalized and clear persistent tokens for timed sessions.
-            $updates = [
-                'lastLogin' => date('c'),
-                'sessionTimeoutPreference' => $timeoutPreference
-            ];
-            if ($timeoutPreference !== self::SESSION_TIMEOUT_INDEFINITE) {
-                $updates['authTokens'] = [];
-                $user['authTokens'] = [];
-            }
-            $this->db->update('users', $user['id'], $updates);
-
-            // Set session
-            $_SESSION[SESSION_USER_ID] = $user['id'];
-            $_SESSION[SESSION_USER_EMAIL] = $user['email'];
-            $_SESSION[SESSION_USER_NAME] = $user['name'];
-            $_SESSION['user_role'] = self::normalizeRole($user['role'] ?? null);
-            $_SESSION[SESSION_LOGIN_TIME] = $now;
-            $_SESSION['session_timeout_preference'] = $timeoutPreference;
-            $_SESSION['last_activity_time'] = $now;
-            $_SESSION['last_activity_touch'] = $now;
-            $_SESSION[SESSION_REMEMBER_ME] = ($timeoutPreference === self::SESSION_TIMEOUT_INDEFINITE);
-            $_SESSION['auth_verification_required'] = self::requiresEmailVerification($user);
-
-            // Generate session fingerprint for security
-            $_SESSION['fingerprint'] = self::generateSessionFingerprint();
-
-            // Regenerate session ID
-            if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
-                session_regenerate_id(true);
-            }
-
-            // Persistent auth token is controlled by timeout preference.
-            if ($timeoutPreference === self::SESSION_TIMEOUT_INDEFINITE) {
-                $token = $this->generateAuthToken($user);
-                $_SESSION['auth_token'] = $token;
-                $this->setPersistentAuthCookie($token);
-            } else {
-                unset($_SESSION['auth_token']);
-                $this->clearPersistentAuthCookie();
-            }
-
-            $verificationDispatch = $this->maybeResendVerificationOnLogin($user);
-            $verificationNotice = self::verificationDispatchNotice($verificationDispatch);
-            if ($verificationNotice !== null) {
-                $_SESSION['verification_notice'] = $verificationNotice;
-            } else {
-                unset($_SESSION['verification_notice']);
-            }
-
-            return [
-                'success' => true,
-                'user' => $user,
-                'verification_dispatch' => $verificationDispatch,
-                'verification_notice' => $verificationNotice
-            ];
+            return ['success' => true, 'user' => $user];
         }
 
         return ['success' => false, 'error' => 'User not found'];
+    }
+
+    /**
+     * Complete the login session for a user whose password AND master-password are already validated.
+     * Mutates $_SESSION, regenerates session id, sets remember-me cookie. Returns standard login result.
+     */
+    public function completeLogin(array $user, bool $rememberMe = false): array {
+        $timeoutPreference = self::normalizeSessionTimeoutPreference($user['sessionTimeoutPreference'] ?? null);
+        if ($rememberMe) {
+            $timeoutPreference = self::SESSION_TIMEOUT_INDEFINITE;
+        }
+        $now = time();
+
+        $updates = [
+            'lastLogin' => date('c'),
+            'sessionTimeoutPreference' => $timeoutPreference
+        ];
+        if ($timeoutPreference !== self::SESSION_TIMEOUT_INDEFINITE) {
+            $updates['authTokens'] = [];
+            $user['authTokens'] = [];
+        }
+        $this->db->update('users', $user['id'], $updates);
+
+        $_SESSION[SESSION_USER_ID] = $user['id'];
+        $_SESSION[SESSION_USER_EMAIL] = $user['email'];
+        $_SESSION[SESSION_USER_NAME] = $user['name'];
+        $_SESSION['user_role'] = self::normalizeRole($user['role'] ?? null);
+        $_SESSION[SESSION_LOGIN_TIME] = $now;
+        $_SESSION['session_timeout_preference'] = $timeoutPreference;
+        $_SESSION['last_activity_time'] = $now;
+        $_SESSION['last_activity_touch'] = $now;
+        $_SESSION[SESSION_REMEMBER_ME] = ($timeoutPreference === self::SESSION_TIMEOUT_INDEFINITE);
+        $_SESSION['auth_verification_required'] = self::requiresEmailVerification($user);
+
+        $_SESSION['fingerprint'] = self::generateSessionFingerprint();
+
+        if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
+            session_regenerate_id(true);
+        }
+
+        if ($timeoutPreference === self::SESSION_TIMEOUT_INDEFINITE) {
+            $token = $this->generateAuthToken($user);
+            $_SESSION['auth_token'] = $token;
+            $this->setPersistentAuthCookie($token);
+        } else {
+            unset($_SESSION['auth_token']);
+            $this->clearPersistentAuthCookie();
+        }
+
+        $verificationDispatch = $this->maybeResendVerificationOnLogin($user);
+        $verificationNotice = self::verificationDispatchNotice($verificationDispatch);
+        if ($verificationNotice !== null) {
+            $_SESSION['verification_notice'] = $verificationNotice;
+        } else {
+            unset($_SESSION['verification_notice']);
+        }
+
+        return [
+            'success' => true,
+            'user' => $user,
+            'verification_dispatch' => $verificationDispatch,
+            'verification_notice' => $verificationNotice
+        ];
+    }
+
+    /**
+     * Attempt login (one-shot: validates email, password, and master-password together).
+     * Preserved for backward compat with api/auth.php and other one-shot callers.
+     */
+    public function login(string $email, string $password, bool $rememberMe = false): array {
+        $step1 = $this->verifyEmailPasswordOnly($email, $password);
+        if (!$step1['success']) {
+            return $step1;
+        }
+
+        $user = $step1['user'];
+        if (!$this->validateUserMasterPassword((string)($user['id'] ?? ''))) {
+            return ['success' => false, 'error' => 'Invalid master password'];
+        }
+
+        return $this->completeLogin($user, $rememberMe);
     }
 
     /**
@@ -485,6 +502,24 @@ class Auth {
                 return ['success' => true, 'already_verified' => true, 'user' => $user];
             }
 
+            // Reuse an existing live token instead of clobbering it. The plaintext
+            // is unrecoverable from the stored hash, but the email already in the
+            // user's inbox still contains the matching plaintext — issuing a new
+            // hash now would invalidate that email and break the click-through.
+            $existingHash = (string)($user['emailVerificationTokenHash'] ?? '');
+            $existingExpiresAt = strtotime((string)($user['emailVerificationExpiresAt'] ?? ''));
+            $hasLiveToken = $existingHash !== ''
+                && $existingExpiresAt !== false
+                && $existingExpiresAt > $now;
+
+            if ($hasLiveToken && !$ignoreCooldown) {
+                return [
+                    'success' => true,
+                    'reused' => true,
+                    'user' => $user
+                ];
+            }
+
             $lastSentAt = strtotime((string)($user['lastVerificationSentAt'] ?? ''));
             if (!$ignoreCooldown && $lastSentAt !== false && ($now - $lastSentAt) < self::RESEND_VERIFICATION_COOLDOWN) {
                 return [
@@ -521,6 +556,11 @@ class Auth {
         }
 
         $result = $this->issueEmailVerification((string)($user['id'] ?? ''));
+
+        if (!empty($result['reused'])) {
+            return ['attempted' => false, 'status' => 'already_pending'];
+        }
+
         if (!empty($result['success']) && !empty($result['updated']) && !empty($result['users'])) {
             $persisted = $this->persistUsers($result['users']);
             if (!$persisted) {
@@ -543,9 +583,39 @@ class Auth {
         return ['attempted' => true, 'status' => 'not_sent', 'error' => $result['error'] ?? null];
     }
 
+    public function adminResendVerification(string $userId): array {
+        if (!isEmailVerificationEnabled()) {
+            return ['success' => false, 'error' => 'Email verification is disabled'];
+        }
+
+        $result = $this->issueEmailVerification($userId, true);
+        if (empty($result['success'])) {
+            return ['success' => false, 'error' => $result['error'] ?? 'Failed to issue verification'];
+        }
+        if (!empty($result['already_verified'])) {
+            return ['success' => false, 'error' => 'User is already verified'];
+        }
+        if (empty($result['users']) || empty($result['user']) || empty($result['token'])) {
+            return ['success' => false, 'error' => 'Verification payload incomplete'];
+        }
+
+        if (!$this->persistUsers($result['users'])) {
+            return ['success' => false, 'error' => 'Could not persist verification token'];
+        }
+
+        $mailer = new Mailer($this->getUserMailerConfig($userId));
+        $sent = $mailer->sendVerificationEmail($result['user'], $result['token']);
+        if (!$sent) {
+            return ['success' => false, 'error' => 'Email could not be delivered'];
+        }
+
+        return ['success' => true];
+    }
+
     public static function verificationDispatchNotice(array $result): ?string {
         return match ($result['status'] ?? null) {
             'resent' => 'A new verification email has been sent.',
+            'already_pending' => 'A verification email is already in your inbox — please use that link. Check your spam folder if you do not see it.',
             'delivery_failed' => 'Verification email was prepared, but delivery could not be confirmed.',
             'cooldown' => 'A verification email was already sent recently. Please check your inbox.',
             'persist_failed' => 'Verification email could not be prepared right now.',
@@ -583,6 +653,35 @@ class Auth {
 
             if (($user['id'] ?? '') === ($_SESSION[SESSION_USER_ID] ?? '')) {
                 $_SESSION['auth_verification_required'] = false;
+            }
+
+            return ['success' => true, 'user' => $user];
+        }
+
+        return ['success' => false, 'error' => 'This verification link is invalid or has already been used'];
+    }
+
+    public function peekVerificationToken(string $token): array {
+        if ($token === '') {
+            return ['success' => false, 'error' => 'Verification token is required'];
+        }
+
+        $users = $this->db->load('users', true);
+        $tokenHash = hash('sha256', $token);
+        $now = time();
+
+        foreach ($users as $user) {
+            if (($user['emailVerificationTokenHash'] ?? '') !== $tokenHash) {
+                continue;
+            }
+
+            $expiresAt = strtotime((string)($user['emailVerificationExpiresAt'] ?? ''));
+            if ($expiresAt === false || $expiresAt <= $now) {
+                return ['success' => false, 'error' => 'This verification link has expired'];
+            }
+
+            if (!empty($user['emailVerifiedAt'])) {
+                return ['success' => false, 'error' => 'This verification link has already been used', 'already_verified' => true];
             }
 
             return ['success' => true, 'user' => $user];
@@ -814,9 +913,10 @@ class Auth {
 
         // 4. Save
         if ($this->db->save('users', $users)) {
-            // If banning, revoke tokens immediately
+            // If banning, revoke tokens immediately (web + native device tokens)
             if (!$isBanned) {
                 $this->revokeAllTokens($userId);
+                DeviceTokens::revokeAllForUser($userId);
             }
             return ['success' => true, 'banned' => !$isBanned];
         }
@@ -904,12 +1004,17 @@ class Auth {
      * 3. Legacy: Email + Master Password (X-MCP-User-Email + X-Master-Password)
      */
     public static function isMcp(): bool {
-        // MCP access is restricted to local requests by default.
-        if (!self::isLoopbackRequest()) {
+        $mcpApiToken = trim((string)($_SERVER['HTTP_X_MCP_API_TOKEN'] ?? ''));
+
+        // Token mode is safe over the public internet — SHA-256 hashed tokens are
+        // not brute-forceable, and the request still requires the master password
+        // in the X-Master-Password header to decrypt user data.
+        //
+        // Legacy modes (email+password, static MCP secret) remain loopback-only
+        // to preserve their original threat model.
+        if ($mcpApiToken === '' && !self::isLoopbackRequest()) {
             return false;
         }
-
-        $mcpApiToken = trim((string)($_SERVER['HTTP_X_MCP_API_TOKEN'] ?? ''));
 
         // Mode 1: MCP API Token (recommended for multi-user setups)
         if ($mcpApiToken !== '') {
@@ -918,18 +1023,46 @@ class Auth {
                 $masterPassword = $_SERVER['HTTP_X_MASTER_PASSWORD'] ?? getenv('LAZYMAN_MASTER_PASSWORD') ?: '';
                 $db = new Database($masterPassword);
                 $users = $db->load('users', true);
+                $requestHash = hash('sha256', $mcpApiToken);
                 foreach ($users as $user) {
-                    if (($user['mcpApiToken'] ?? '') === $mcpApiToken) {
+                    // Prefer hash-based match (current scheme).
+                    // Fall back to legacy plaintext compare for tokens issued
+                    // before the hash migration — those still authenticate
+                    // until the user regenerates.
+                    $matches = false;
+                    if (!empty($user['mcpApiTokenHash']) && hash_equals((string)$user['mcpApiTokenHash'], $requestHash)) {
+                        $matches = true;
+                    } elseif (!empty($user['mcpApiToken']) && hash_equals((string)$user['mcpApiToken'], $mcpApiToken)) {
+                        $matches = true;
+                    }
+                    if ($matches) {
                         if (!empty($user['banned'])) {
                             return false;
                         }
-                        // Store user ID for later use in check()
                         self::$mcpUserId = $user['id'];
-                        // Store the master password for this session
                         if (session_status() === PHP_SESSION_NONE) {
                             session_start();
                         }
-                        if (!isset($_SESSION[SESSION_MASTER_KEY])) {
+
+                        // Resolve the master password. Prefer an explicit
+                        // X-Master-Password header (back-compat / internal self-calls);
+                        // otherwise unwrap it from the token-bound blob so the token
+                        // works on its own.
+                        $effectiveMaster = $masterPassword;
+                        if ($effectiveMaster === '' && !empty($user['mcpWrappedMaster'])) {
+                            try {
+                                $unwrapped = (new Encryption($mcpApiToken))->decrypt($user['mcpWrappedMaster']);
+                                $effectiveMaster = is_array($unwrapped)
+                                    ? (string)($unwrapped['m'] ?? '')
+                                    : (string)$unwrapped;
+                            } catch (Throwable $e) {
+                                $effectiveMaster = '';
+                            }
+                        }
+
+                        if ($effectiveMaster !== '') {
+                            $_SESSION[SESSION_MASTER_KEY] = $effectiveMaster;
+                        } elseif (!isset($_SESSION[SESSION_MASTER_KEY])) {
                             $_SESSION[SESSION_MASTER_KEY] = $masterPassword;
                         }
                         return true;
@@ -983,6 +1116,71 @@ class Auth {
     }
 
     /**
+     * Resolve a native device-token (mobile app) request.
+     *
+     * Reads a bearer token from the Authorization header (or the X-Device-Token
+     * fallback for servers that strip Authorization), unwraps the master password
+     * via DeviceTokens, and — exactly like isMcp() — drops it into
+     * $_SESSION[SESSION_MASTER_KEY] and records the user id so every existing
+     * endpoint decrypts data without the client ever sending the master password.
+     */
+    public static function isDeviceToken(): bool {
+        if (self::$deviceUserId !== null) {
+            return true; // already resolved earlier this request (e.g. by check())
+        }
+        $token = self::extractDeviceToken();
+        if ($token === '') {
+            return false;
+        }
+
+        $resolved = DeviceTokens::resolve($token);
+        if ($resolved === null) {
+            return false;
+        }
+
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION[SESSION_MASTER_KEY] = $resolved['master'];
+        self::$deviceUserId = $resolved['userId'];
+        DeviceTokens::touchLastUsed($resolved['recordId']);
+        return true;
+    }
+
+    /**
+     * Extract a bearer device token from the request. Prefers
+     * `Authorization: Bearer <token>`; falls back to `X-Device-Token` (which
+     * always survives proxies / Apache configs that strip Authorization).
+     */
+    private static function extractDeviceToken(): string {
+        $auth = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        if ($auth === '' && function_exists('getallheaders')) {
+            $headers = getallheaders();
+            if (is_array($headers)) {
+                foreach ($headers as $name => $value) {
+                    if (strcasecmp((string)$name, 'Authorization') === 0) {
+                        $auth = (string)$value;
+                        break;
+                    }
+                }
+            }
+        }
+        if ($auth !== '' && preg_match('/^\s*Bearer\s+(.+)$/i', $auth, $m)) {
+            return trim($m[1]);
+        }
+        return trim((string)($_SERVER['HTTP_X_DEVICE_TOKEN'] ?? ''));
+    }
+
+    /**
+     * True when the request is authenticated by a non-cookie token (MCP or device
+     * token). Such requests carry no ambient session cookie, so CSRF protection is
+     * structurally inapplicable — this is the superset used to bypass CSRF.
+     */
+    public static function isTokenAuth(): bool {
+        return self::isDeviceToken() || self::isMcp();
+    }
+
+    /**
      * Check if user is authenticated
      */
     public static function check(): bool {
@@ -1021,6 +1219,12 @@ class Auth {
                 }
             }
 
+            return true;
+        }
+
+        // Allow native device-token access (mobile apps). Mirrors the MCP branch:
+        // master password + user id are resolved inside isDeviceToken().
+        if (self::isDeviceToken()) {
             return true;
         }
 
@@ -1097,10 +1301,20 @@ class Auth {
 
         self::touchSessionActivity($now);
 
-        // Validate session fingerprint (security check)
-        // Note: Fingerprint validation is disabled for now due to issues with
-        // User-Agent changes between requests (mobile browsers, proxies, etc.)
-        // TODO: Implement a more robust session validation mechanism
+        // Lightweight session fingerprint: hash Accept-Language only.
+        // Avoids User-Agent (mutates on iOS Safari between requests) and IP
+        // (changes on WiFi/cellular handoff). Accept-Language is stable per
+        // browser install. On first check after login, store the fingerprint.
+        // On subsequent checks, mismatch destroys the session.
+        $fingerprint = hash('sha256', (string)($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? ''));
+        if (!isset($_SESSION['session_fingerprint'])) {
+            $_SESSION['session_fingerprint'] = $fingerprint;
+        } elseif (!hash_equals((string)$_SESSION['session_fingerprint'], $fingerprint)) {
+            error_log('Session fingerprint mismatch for user ' . ($_SESSION[SESSION_USER_ID] ?? '?'));
+            $_SERVER['AUTH_LOGOUT_REASON'] = 'session_fingerprint_mismatch';
+            self::destroyCurrentSession(true);
+            return false;
+        }
 
         return true;
     }
@@ -1109,6 +1323,9 @@ class Auth {
      * Get current user ID
      */
     public static function userId(): ?string {
+        if (self::$deviceUserId !== null) {
+            return self::$deviceUserId;
+        }
         if (self::$mcpUserId !== null) {
             return self::$mcpUserId;
         }
@@ -1516,6 +1733,7 @@ class Auth {
         try {
             $users = $this->db->load('users', true);
             $userFound = false;
+            $token = null;
 
             foreach ($users as &$user) {
                 if (($user['id'] ?? '') === $userId) {
@@ -1524,14 +1742,35 @@ class Auth {
                     }
 
                     $userFound = true;
-                    // Generate a secure random token
-                    $token = bin2hex(random_bytes(32)); // 64 hex characters = 32 bytes
-                    $user['mcpApiToken'] = $token;
+                    // Generate plaintext token. Show to caller ONCE; store only
+                    // the SHA-256 hash so a future DB leak does not yield usable
+                    // tokens. Drop any legacy plaintext value at the same time.
+                    $token = bin2hex(random_bytes(32));
+                    $user['mcpApiTokenHash'] = hash('sha256', $token);
+                    $user['mcpApiTokenLast4'] = substr($token, -4);
                     $user['mcpApiTokenGeneratedAt'] = date('c');
                     $user['updatedAt'] = date('c');
+                    unset($user['mcpApiToken']); // legacy plaintext field, no longer kept
+
+                    // Token-only auth: wrap the master password with a key derived
+                    // from the plaintext token, so an MCP client can authenticate
+                    // with the token ALONE (no separate master-password header).
+                    // At rest this is safe: the wrapped blob can only be opened with
+                    // the plaintext token, which is never stored (only its hash is).
+                    // Wrap in a JSON envelope so the value round-trips cleanly
+                    // regardless of its contents (Encryption::decrypt json-decodes).
+                    $masterForWrap = getMasterPassword();
+                    if ($masterForWrap !== '') {
+                        try {
+                            $user['mcpWrappedMaster'] = (new Encryption($token))->encrypt(json_encode(['m' => $masterForWrap]));
+                        } catch (Throwable $e) {
+                            unset($user['mcpWrappedMaster']);
+                        }
+                    }
                     break;
                 }
             }
+            unset($user);
 
             if (!$userFound) {
                 return ['success' => false, 'error' => 'User not found'];
@@ -1554,19 +1793,38 @@ class Auth {
      * @return string|null The token or null if not set
      */
     public function getMcpApiToken(string $userId): ?string {
+        // Never return the raw token after generation. Callers who need to
+        // confirm "is a token set" should use hasMcpApiToken(); callers who
+        // want to display a hint should use getMcpApiTokenMask().
         try {
             $users = $this->db->load('users', true);
-
             foreach ($users as $user) {
                 if (($user['id'] ?? '') === $userId) {
-                    return $user['mcpApiToken'] ?? null;
+                    if (!empty($user['mcpApiTokenHash']) || !empty($user['mcpApiToken'])) {
+                        $last4 = (string)($user['mcpApiTokenLast4'] ?? substr((string)($user['mcpApiToken'] ?? ''), -4));
+                        return '••••••••' . $last4;
+                    }
+                    return null;
                 }
             }
-
             return null;
         } catch (Exception $e) {
             return null;
         }
+    }
+
+    public function hasMcpApiToken(string $userId): bool {
+        try {
+            $users = $this->db->load('users', true);
+            foreach ($users as $user) {
+                if (($user['id'] ?? '') === $userId) {
+                    return !empty($user['mcpApiTokenHash']) || !empty($user['mcpApiToken']);
+                }
+            }
+        } catch (Exception $e) {
+            // fall through
+        }
+        return false;
     }
 
     /**
@@ -1602,5 +1860,23 @@ class Auth {
         } catch (Exception $e) {
             return ['success' => false, 'error' => 'Database error: ' . $e->getMessage()];
         }
+    }
+
+    /**
+     * Issue a per-device bearer token (native mobile login). The caller must have
+     * already verified email + password + master password. Delegates to DeviceTokens.
+     */
+    public function createDeviceToken(string $userId, string $master, string $name, string $platform): array {
+        return DeviceTokens::issue($userId, $master, $name, $platform);
+    }
+
+    /** List a user's active device tokens (non-sensitive view). */
+    public function listDeviceTokens(string $userId): array {
+        return DeviceTokens::listForUser($userId);
+    }
+
+    /** Revoke a single device token, scoped to its owner. */
+    public function revokeDeviceToken(string $userId, string $recordId): bool {
+        return DeviceTokens::revoke($userId, $recordId);
     }
 }

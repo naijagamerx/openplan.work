@@ -34,7 +34,7 @@ if (!Auth::check()) {
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $writeActions = ['create', 'restore', 'upload_restore', 'delete', 'cleanup'];
 
-if (in_array($action, $writeActions) && !Auth::isMcp()) {
+if (in_array($action, $writeActions) && !Auth::isTokenAuth()) {
     // Check GET, POST, header, and JSON body for CSRF token
     $csrfToken = $_GET['csrf_token'] ?? $_POST['csrf_token'] ?? '';
 

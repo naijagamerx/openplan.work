@@ -291,7 +291,7 @@ if ($action === 'import') {
     // CSRF validation for import
     $body = getJsonBody();
     $csrfToken = $body['csrf_token'] ?? $_POST['csrf_token'] ?? '';
-    if (!Auth::isMcp() && !Auth::validateCsrf($csrfToken)) {
+    if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
         errorResponse('Invalid CSRF token', 403);
     }
 

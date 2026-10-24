@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Mailer Class
  * Handles sending emails for the application.
@@ -240,6 +240,82 @@ HTML;
         ';
 
         return $this->send((string)($user['email'] ?? ''), $subject, $message, [], 'Welcome', 'Your account is ready.');
+    }
+
+    public function sendPaymentApprovedEmail(array $user, array $payment): bool {
+        $appName = $this->resolveAppName();
+        $planName = (string)($payment['planSnapshot']['name'] ?? 'Your plan');
+        $amount = number_format((float)($payment['amount'] ?? 0), 2);
+        $currency = (string)($payment['currency'] ?? 'USD');
+        $subscriptionUrl = APP_URL . '?page=my-subscription';
+        $subject = 'Payment approved — your ' . $planName . ' subscription is active';
+        $message = '
+            <h2>Payment approved</h2>
+            <p>Your payment for <strong>' . e($planName) . '</strong> has been approved.</p>
+            <p class="pill">Amount: ' . e($currency . ' ' . $amount) . '</p>
+            <p>Your subscription is now active. Toggle "Use admin shared AI keys" in Settings to consume the shared quota.</p>
+            <p><a class="btn" href="' . e($subscriptionUrl) . '">View My Subscription</a></p>
+        ';
+        return $this->send((string)($user['email'] ?? ''), $subject, $message, [], 'Payment Approved', 'Your subscription is active.');
+    }
+
+    public function sendPaymentRejectedEmail(array $user, array $payment): bool {
+        $planName = (string)($payment['planSnapshot']['name'] ?? 'Your plan');
+        $reason = (string)($payment['rejectionReason'] ?? 'No reason provided');
+        $transactionsUrl = APP_URL . '?page=transactions';
+        $subject = 'Payment could not be approved';
+        $message = '
+            <h2>Payment rejected</h2>
+            <p>Your payment for <strong>' . e($planName) . '</strong> was not approved.</p>
+            <p class="pill">Reason: ' . e($reason) . '</p>
+            <p>Please review the reason above and submit a new payment when ready.</p>
+            <p><a class="btn" href="' . e($transactionsUrl) . '">View Transactions</a></p>
+        ';
+        return $this->send((string)($user['email'] ?? ''), $subject, $message, [], 'Payment Rejected', 'See the reason inside.');
+    }
+
+    public function sendSubscriptionExpiringEmail(array $user, array $subscription): bool {
+        $planName = (string)($subscription['planSnapshot']['name'] ?? 'Your plan');
+        $expiresAt = (string)($subscription['expiresAt'] ?? '');
+        $expiryLabel = $expiresAt !== '' ? date('M j, Y', strtotime($expiresAt)) : 'soon';
+        $subscriptionUrl = APP_URL . '?page=subscription';
+        $subject = 'Your subscription expires soon';
+        $message = '
+            <h2>Subscription expiring</h2>
+            <p>Your <strong>' . e($planName) . '</strong> subscription expires on ' . e($expiryLabel) . '.</p>
+            <p>Renew before then to keep using the admin&apos;s shared AI quota.</p>
+            <p><a class="btn" href="' . e($subscriptionUrl) . '">Renew Now</a></p>
+        ';
+        return $this->send((string)($user['email'] ?? ''), $subject, $message, [], 'Expiring Soon', 'Renew to keep your access.');
+    }
+
+    public function sendSubscriptionExpiredEmail(array $user, array $subscription): bool {
+        $planName = (string)($subscription['planSnapshot']['name'] ?? 'Your plan');
+        $subscriptionUrl = APP_URL . '?page=subscription';
+        $subject = 'Your subscription has expired';
+        $message = '
+            <h2>Subscription expired</h2>
+            <p>Your <strong>' . e($planName) . '</strong> subscription has ended. The app will fall back to your own AI API keys.</p>
+            <p>Renew at any time to restore shared-key access.</p>
+            <p><a class="btn" href="' . e($subscriptionUrl) . '">View Plans</a></p>
+        ';
+        return $this->send((string)($user['email'] ?? ''), $subject, $message, [], 'Subscription Expired', 'Renew to restore access.');
+    }
+
+    public function sendTicketReplyEmail(array $user, array $ticket, string $replyBody): bool {
+        $subject = (string)($ticket['subject'] ?? 'Support ticket update');
+        $ticketUrl = APP_URL . '?page=ticket-view&id=' . urlencode((string)($ticket['id'] ?? ''));
+        $excerpt = mb_substr($replyBody, 0, 300);
+        if (mb_strlen($replyBody) > 300) {
+            $excerpt .= '...';
+        }
+        $message = '
+            <h2>New reply on your ticket</h2>
+            <p>The admin has replied to your support ticket: <strong>' . e($subject) . '</strong></p>
+            <blockquote style="border-left:3px solid #e5e7eb;padding:8px 16px;color:#374151;margin:18px 0;">' . nl2br(e($excerpt)) . '</blockquote>
+            <p><a class="btn" href="' . e($ticketUrl) . '">View Ticket</a></p>
+        ';
+        return $this->send((string)($user['email'] ?? ''), 'Re: ' . $subject, $message, [], 'Support Reply', 'New reply from admin.');
     }
 
     private function sendViaSmtp(string $to, string $subject, string $htmlMessage, array $headers, string $fromEmail): bool {

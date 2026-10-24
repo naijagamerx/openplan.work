@@ -1,5 +1,16 @@
 <?php
 $user = Auth::user();
+
+require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+$headerSub = getActiveSubscription(Auth::userId() ?? '');
+$headerCap = $headerSub ? (int)($headerSub['monthlyRequestCap'] ?? 0) : 0;
+$headerUsed = 0;
+if ($headerSub) {
+    $headerUsage = getMonthlyUsage(Auth::userId() ?? '');
+    $headerUsed = (int)($headerUsage['totalRequests'] ?? 0);
+}
+$headerRemaining = $headerCap > 0 ? max(0, $headerCap - $headerUsed) : null;
+
 $pageLabels = [
     'dashboard' => 'Dashboard',
     'tasks' => 'Tasks',
@@ -44,14 +55,38 @@ if ($page === 'advanced-invoices') {
                 </svg>
                 <span class="hidden sm:inline">Quick Add</span>
             </button>
-            
+
+            <?php if ($headerSub): ?>
+                <a href="?page=settings#ai-quota"
+                   title="AI requests this month"
+                   class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:border-black transition">
+                    <svg class="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    <?php if ($headerRemaining !== null): ?>
+                        <span><?php echo number_format($headerRemaining); ?> left</span>
+                    <?php else: ?>
+                        <span>Unlimited</span>
+                    <?php endif; ?>
+                </a>
+            <?php endif; ?>
+
             <!-- Notifications -->
-            <button class="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
-                </svg>
-                <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
+            <div class="relative">
+                <button type="button" data-notif-toggle="notif-panel-desktop" class="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition" aria-label="Notifications">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                    </svg>
+                    <span data-notif-badge class="hidden absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold leading-[18px] text-center rounded-full"></span>
+                </button>
+                <div id="notif-panel-desktop" data-notif-panel class="hidden absolute right-0 mt-2 w-80 max-h-[28rem] overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                    <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                        <h3 class="text-sm font-semibold text-gray-900">Notifications</h3>
+                        <a href="?page=tasks" class="text-xs text-gray-500 hover:text-gray-900">View all tasks</a>
+                    </div>
+                    <div data-notif-list></div>
+                </div>
+            </div>
             
             <!-- User Menu -->
             <div class="relative" x-data="{ open: false }">
@@ -161,4 +196,15 @@ document.addEventListener('keydown', function(e) {
         overlay?.classList.add('hidden');
     }
 });
+
+// Notification bell — wire data-attribute-driven dropdown once App.js has loaded.
+(function initNotifBell() {
+    if (window.App?.notificationCenter?.initialize) {
+        App.notificationCenter.initialize();
+    } else {
+        document.addEventListener('DOMContentLoaded', function() {
+            window.App?.notificationCenter?.initialize?.();
+        });
+    }
+})();
 </script>

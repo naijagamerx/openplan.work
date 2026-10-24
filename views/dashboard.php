@@ -3,6 +3,8 @@
 $dashboardError = null;
 $masterPassword = getMasterPassword();
 $backupReminder = null;
+$adminAlerts = null;
+$paymentApprovalFlash = null;
 
 if ($masterPassword === '') {
     $dashboardError = 'Your secure session is missing the master key required to unlock the dashboard. Sign in again to continue.';
@@ -10,8 +12,32 @@ if ($masterPassword === '') {
     try {
         $db = new Database($masterPassword, Auth::userId());
 
+        // Consume one-shot payment approval flash flag (written by PaymentsAPI::approve).
+        try {
+            $flashConfig = $db->load('config', false);
+            if (is_array($flashConfig) && !empty($flashConfig['paymentApprovalFlash'])) {
+                $paymentApprovalFlash = $flashConfig['paymentApprovalFlash'];
+                $flashConfig['paymentApprovalFlash'] = null;
+                $db->save('config', $flashConfig);
+            }
+        } catch (Throwable $e) {
+            error_log('paymentApprovalFlash read failed: ' . $e->getMessage());
+        }
+
         // Check for login success to request notification permission
         $loginSuccess = isset($_GET['login']) && $_GET['login'] === 'success';
+
+        // One-shot AI subscription popup gating: desktop, non-admin, non-subscriber, fresh login.
+        $userIdForSub = Auth::userId() ?? '';
+        $activeSubForPopup = $userIdForSub !== '' ? getActiveSubscription($userIdForSub) : null;
+        $showAiPopup = $loginSuccess
+            && !Auth::isAdmin()
+            && empty($activeSubForPopup)
+            && empty($_SESSION['ai_popup_seen']);
+        if ($showAiPopup) {
+            $_SESSION['ai_popup_seen'] = true;
+        }
+        $showAiTipCard = !Auth::isAdmin();
 
         // Get statistics
         $projects = $db->load('projects');
@@ -154,6 +180,41 @@ if ($masterPassword === '') {
             ];
         }
 
+        if (Auth::isAdmin()) {
+            try {
+                require_once INCLUDES_PATH . '/PaymentsAPI.php';
+                require_once INCLUDES_PATH . '/TicketsAPI.php';
+
+                $pendingPaymentsCount = count((new PaymentsAPI())->getAll('pending'));
+                $awaitingTicketsCount = count(array_filter(
+                    (new TicketsAPI())->getAll(),
+                    fn($t) => ($t['status'] ?? '') === 'awaiting_admin'
+                ));
+
+                $cutoff = time() - (7 * 86400);
+                $newUsersCount = 0;
+                foreach (Auth::allUsers() as $u) {
+                    if (!empty($u['emailVerifiedAt'])) {
+                        continue;
+                    }
+                    $createdTs = strtotime((string)($u['createdAt'] ?? ''));
+                    if ($createdTs !== false && $createdTs >= $cutoff) {
+                        $newUsersCount++;
+                    }
+                }
+
+                if ($pendingPaymentsCount > 0 || $newUsersCount > 0 || $awaitingTicketsCount > 0) {
+                    $adminAlerts = [
+                        'pendingPayments' => $pendingPaymentsCount,
+                        'newUsers'        => $newUsersCount,
+                        'openTickets'     => $awaitingTicketsCount
+                    ];
+                }
+            } catch (Throwable $e) {
+                error_log('dashboard admin alerts failed: ' . $e->getMessage());
+            }
+        }
+
         $recentHabitCompletions = array_filter($completions, fn($c) => ($c['status'] ?? '') === 'complete');
         usort($recentHabitCompletions, fn($a, $b) => strcmp($b['date'] ?? '', $a['date'] ?? ''));
         $recentHabitCompletions = array_slice($recentHabitCompletions, 0, 5);
@@ -208,6 +269,153 @@ if ($masterPassword === '') {
         <h2 class="text-2xl font-semibold">Welcome back, <?php echo e(Auth::user()['name'] ?? 'User'); ?>!</h2>
         <p class="text-gray-400 mt-1"><?php echo date('l, F j, Y'); ?></p>
     </div>
+
+    <?php if ($showAiTipCard): ?>
+        <?php
+        $aiTips = [
+            [
+                'eyebrow' => 'AI Assistant',
+                'title'   => 'Plan, draft, and brainstorm without leaving the dashboard',
+                'body'    => 'Open the AI Assistant to generate task lists, draft project briefs, or get a daily summary of what is on your plate.',
+                'cta'     => ['label' => 'Open AI Assistant', 'href' => '?page=ai-assistant']
+            ],
+            [
+                'eyebrow' => 'MCP Integration',
+                'title'   => 'Connect Claude, Cursor, or any MCP client to your tasks',
+                'body'    => 'The built-in Model Context Protocol server lets external AI tools read and create tasks, notes, and habits on your behalf.',
+                'cta'     => ['label' => 'Set up MCP', 'href' => '?page=mcp']
+            ],
+            [
+                'eyebrow' => 'AI Daily Brief',
+                'title'   => 'Get a written morning summary of your priorities',
+                'body'    => 'The agent reviews overdue work, today\'s due dates, and recent habits, then writes you a one-paragraph brief each morning.',
+                'cta'     => ['label' => 'Configure briefings', 'href' => '?page=ai-assistant']
+            ],
+            [
+                'eyebrow' => 'Quick Capture',
+                'title'   => 'Talk to the agent the way you talk to a teammate',
+                'body'    => 'Say "add a task to call Sara on Friday" and the AI agent creates the task in the right project with the due date set.',
+                'cta'     => ['label' => 'Try a quick capture', 'href' => '?page=ai-assistant']
+            ],
+            [
+                'eyebrow' => 'Knowledge Base',
+                'title'   => 'Feed documents to the AI so it answers from your data',
+                'body'    => 'Upload PDFs and notes into the Knowledge Base — the agent will cite them when answering questions about your business.',
+                'cta'     => ['label' => 'Open Knowledge Base', 'href' => '?page=knowledge-base']
+            ],
+        ];
+        ?>
+        <div id="ai-tips-card" class="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-6 hidden">
+            <div class="absolute top-4 right-4 flex items-center gap-2">
+                <button type="button" id="ai-tips-next" class="p-2 rounded-lg text-gray-500 hover:text-black hover:bg-black/5 transition" title="Next tip" aria-label="Next tip">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 12h14"/></svg>
+                </button>
+                <button type="button" id="ai-tips-dismiss" class="p-2 rounded-lg text-gray-500 hover:text-black hover:bg-black/5 transition" title="Hide tips" aria-label="Hide tips">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="flex items-start gap-4 pr-16">
+                <div class="flex-shrink-0 w-11 h-11 rounded-xl bg-black text-white flex items-center justify-center">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p id="ai-tips-eyebrow" class="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-1.5"></p>
+                    <h3 id="ai-tips-title" class="text-base sm:text-lg font-semibold text-gray-900 leading-snug mb-1.5"></h3>
+                    <p id="ai-tips-body" class="text-sm text-gray-600 leading-relaxed mb-4"></p>
+                    <div class="flex items-center gap-4">
+                        <a id="ai-tips-cta" href="#" class="inline-flex items-center gap-2 text-sm font-semibold text-black hover:underline">
+                            <span></span>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+                        </a>
+                        <span id="ai-tips-counter" class="text-[11px] text-gray-400"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+        (function initAiTipsCard() {
+            const STORAGE_KEY = 'dashboardAiTipsDismissed';
+            const tips = <?php echo json_encode($aiTips, JSON_UNESCAPED_SLASHES); ?>;
+            const card = document.getElementById('ai-tips-card');
+            if (!card) return;
+            if (localStorage.getItem(STORAGE_KEY) === '1') return;
+            card.classList.remove('hidden');
+
+            let idx = Math.floor(Math.random() * tips.length);
+            const eyebrow = document.getElementById('ai-tips-eyebrow');
+            const title = document.getElementById('ai-tips-title');
+            const body = document.getElementById('ai-tips-body');
+            const cta = document.getElementById('ai-tips-cta');
+            const counter = document.getElementById('ai-tips-counter');
+
+            function render() {
+                const t = tips[idx];
+                eyebrow.textContent = t.eyebrow;
+                title.textContent = t.title;
+                body.textContent = t.body;
+                cta.querySelector('span').textContent = t.cta.label;
+                cta.setAttribute('href', t.cta.href);
+                counter.textContent = `${idx + 1} / ${tips.length}`;
+            }
+            render();
+
+            document.getElementById('ai-tips-next').addEventListener('click', () => {
+                idx = (idx + 1) % tips.length;
+                render();
+            });
+            document.getElementById('ai-tips-dismiss').addEventListener('click', () => {
+                localStorage.setItem(STORAGE_KEY, '1');
+                card.remove();
+            });
+        })();
+        </script>
+    <?php endif; ?>
+
+    <?php if ($paymentApprovalFlash !== null): ?>
+        <div class="p-5 bg-green-50 border-2 border-green-300 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div class="flex items-start gap-3">
+                <svg class="w-6 h-6 text-green-700 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <div>
+                    <p class="text-sm font-bold text-green-900">Payment approved — <?php echo e($paymentApprovalFlash['planName'] ?? 'Your plan'); ?> is active</p>
+                    <p class="text-xs text-green-800 mt-0.5">
+                        <?php if (!empty($paymentApprovalFlash['expiresAt'])): ?>
+                            Active until <?php echo e(date('M j, Y', strtotime((string)$paymentApprovalFlash['expiresAt']))); ?>.
+                        <?php endif; ?>
+                        Platform AI keys are now turned on for your account.
+                        <?php if (!empty($paymentApprovalFlash['providers']) && is_array($paymentApprovalFlash['providers'])): ?>
+                            Providers unlocked: <strong><?php echo e(implode(', ', $paymentApprovalFlash['providers'])); ?></strong>.
+                        <?php endif; ?>
+                    </p>
+                </div>
+            </div>
+            <a href="?page=ai-assistant" class="px-4 py-2 bg-green-700 text-white rounded-xl font-medium hover:bg-green-800 transition text-sm whitespace-nowrap">Open AI Assistant</a>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($adminAlerts !== null): ?>
+        <div class="p-5 border-2 border-black rounded-2xl flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
+            <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Needs attention</span>
+            <?php if ($adminAlerts['pendingPayments'] > 0): ?>
+                <a href="?page=admin-payments" class="font-bold text-black hover:underline">
+                    <?php echo $adminAlerts['pendingPayments']; ?> pending payment<?php echo $adminAlerts['pendingPayments'] === 1 ? '' : 's'; ?>
+                </a>
+            <?php endif; ?>
+            <?php if ($adminAlerts['newUsers'] > 0): ?>
+                <a href="?page=users" class="font-bold text-black hover:underline">
+                    <?php echo $adminAlerts['newUsers']; ?> new unverified user<?php echo $adminAlerts['newUsers'] === 1 ? '' : 's'; ?>
+                </a>
+            <?php endif; ?>
+            <?php if ($adminAlerts['openTickets'] > 0): ?>
+                <a href="?page=admin-tickets" class="font-bold text-black hover:underline">
+                    <?php echo $adminAlerts['openTickets']; ?> ticket<?php echo $adminAlerts['openTickets'] === 1 ? '' : 's'; ?> awaiting reply
+                </a>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
 
     <?php if ($backupReminder !== null): ?>
         <div id="backup-reminder-banner" class="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -1611,4 +1819,88 @@ function startWaterReminder() {
     }, intervalMs);
 }
 </script>
+
+<?php if (!empty($showAiPopup)): ?>
+<!-- Post-login AI subscription popup (monochrome glass) -->
+<div id="ai-promo-overlay" class="fixed inset-0 z-[70] hidden">
+    <div class="absolute inset-0 bg-black/70 backdrop-blur-xl" data-ai-promo-close></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
+        <div class="relative w-full max-w-md pointer-events-auto">
+            <!-- Glass card -->
+            <div class="relative overflow-hidden rounded-3xl border border-white/20 bg-white/10 backdrop-blur-2xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)]">
+                <div class="absolute inset-x-0 -top-24 h-48 bg-gradient-to-b from-white/15 to-transparent pointer-events-none"></div>
+                <div class="absolute -right-10 -bottom-10 w-48 h-48 rounded-full bg-white/5 blur-3xl pointer-events-none"></div>
+
+                <button type="button" data-ai-promo-close class="absolute top-4 right-4 z-10 p-2 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition" aria-label="Close">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+
+                <div class="relative p-8 text-white">
+                    <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white/15 border border-white/20 backdrop-blur mb-6">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+
+                    <p class="text-[10px] font-bold uppercase tracking-[0.3em] text-white/60 mb-3">AI Subscription</p>
+                    <h2 class="text-2xl font-semibold leading-tight tracking-tight mb-3">Unlock the AI features in your workspace.</h2>
+                    <p class="text-sm text-white/70 leading-relaxed mb-6">
+                        Generate tasks from a sentence, get a written morning brief, plug Claude or Cursor into your data via MCP, and keep a Knowledge Base your agent can cite. A subscription turns these on across the desktop and mobile app.
+                    </p>
+
+                    <ul class="space-y-2.5 mb-7">
+                        <li class="flex items-start gap-2.5 text-sm text-white/80">
+                            <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>Live AI Assistant with tool use</span>
+                        </li>
+                        <li class="flex items-start gap-2.5 text-sm text-white/80">
+                            <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>MCP server for Claude / Cursor / desktop clients</span>
+                        </li>
+                        <li class="flex items-start gap-2.5 text-sm text-white/80">
+                            <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>Daily Brief + smart task generation</span>
+                        </li>
+                    </ul>
+
+                    <div class="flex items-center gap-3">
+                        <a href="?page=subscription" class="inline-flex items-center justify-center flex-1 px-5 h-11 rounded-xl bg-white text-black text-sm font-semibold hover:bg-white/90 transition">
+                            See plans
+                            <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+                        </a>
+                        <button type="button" data-ai-promo-close class="px-4 h-11 rounded-xl text-sm font-medium text-white/70 hover:text-white transition">
+                            Maybe later
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function initAiPromo() {
+    const overlay = document.getElementById('ai-promo-overlay');
+    if (!overlay) return;
+
+    function open() {
+        overlay.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+    function close() {
+        overlay.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    overlay.querySelectorAll('[data-ai-promo-close]').forEach(el => {
+        el.addEventListener('click', close);
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !overlay.classList.contains('hidden')) close();
+    });
+
+    // Small delay so the welcome animation finishes first.
+    setTimeout(open, 600);
+})();
+</script>
+<?php endif; ?>
 

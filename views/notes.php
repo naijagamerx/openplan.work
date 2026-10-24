@@ -1604,11 +1604,35 @@ function stripHtml(str) {
     return (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
 }
 
+// True when the (non-HTML) text carries structural markdown a native/mobile
+// client may have saved — a GFM table, an ATX heading, or a list. Every pattern
+// is anchored to line-start and the table needs its |---| separator row, so
+// incidental dashes/pipes/hashes inside prose never false-trigger.
+function looksLikeMarkdown(text) {
+    if (!text) return false;
+    const lines = text.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+        const l = lines[i];
+        if (l.includes('|') &&
+            /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)+\|?\s*$/.test(lines[i + 1] || '')) return true; // table
+        if (/^\s{0,3}#{1,6}\s+\S/.test(l)) return true;                                                 // heading
+        if (/^\s{0,3}[-*]\s+\S/.test(l) || /^\s{0,3}\d+\.\s+\S/.test(l)) return true;                   // list
+    }
+    return false;
+}
+
 function normalizeEditorHtml(content) {
     if (!content) return '';
     const hasHtml = /<\/?[a-z][\s\S]*>/i.test(content);
     if (hasHtml) {
         return content;
+    }
+    // Non-HTML body. When the Flutter/mobile client saved it as markdown (e.g. an
+    // AI-generated table), render it rich via mdToHtml so it matches what the PC
+    // editor produces — not raw "| a | b |" pipes. Plain prose keeps the exact
+    // escape+<br> path so its line breaks are preserved byte-for-byte.
+    if (looksLikeMarkdown(content)) {
+        return mdToHtml(content);
     }
     return escapeHtml(content).replace(/\n/g, '<br>');
 }

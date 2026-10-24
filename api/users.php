@@ -40,7 +40,7 @@ try {
 
         $body = getJsonBody();
         $csrfToken = $body['csrf_token'] ?? '';
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 
@@ -67,7 +67,7 @@ try {
 
         $body = getJsonBody();
         $csrfToken = $body['csrf_token'] ?? '';
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 
@@ -86,7 +86,7 @@ try {
 
         $body = getJsonBody();
         $csrfToken = $body['csrf_token'] ?? '';
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 
@@ -131,7 +131,7 @@ try {
 
         $body = getJsonBody();
         $csrfToken = $body['csrf_token'] ?? '';
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 
@@ -162,6 +162,30 @@ try {
         }
 
         successResponse(['user_id' => $userId], 'User deleted');
+    }
+
+    if ($action === 'resend_verification') {
+        if (requestMethod() !== 'POST') {
+            errorResponse('Method not allowed', 405);
+        }
+
+        $body = getJsonBody();
+        $csrfToken = $body['csrf_token'] ?? '';
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
+            errorResponse('Invalid CSRF token', 403);
+        }
+
+        $userId = trim((string)($body['user_id'] ?? ''));
+        if ($userId === '') {
+            errorResponse('User id is required');
+        }
+
+        $result = $authService->adminResendVerification($userId);
+        if (empty($result['success'])) {
+            errorResponse($result['error'] ?? 'Failed to resend verification', 500, ERROR_SERVER);
+        }
+
+        successResponse(['user_id' => $userId], 'Verification email sent');
     }
 
     errorResponse('Invalid action', 400);

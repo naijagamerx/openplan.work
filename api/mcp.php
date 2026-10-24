@@ -52,7 +52,7 @@ switch ($action) {
         $csrfToken = $body['csrf_token'] ?? '';
 
         // CSRF validation
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 
@@ -77,7 +77,7 @@ switch ($action) {
         $csrfToken = $body['csrf_token'] ?? '';
 
         // CSRF validation
-        if (!Auth::validateCsrf($csrfToken)) {
+        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 

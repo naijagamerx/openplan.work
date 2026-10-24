@@ -126,7 +126,11 @@ function handleException(Exception $e): void {
  */
 function getJsonBody(): array {
     $body = file_get_contents('php://input');
-    return json_decode($body, true) ?? [];
+    $decoded = json_decode($body, true);
+    // Only an object/array body is valid. A bare JSON scalar (e.g. "5", true)
+    // decodes to a non-array, which would violate the array return type and
+    // throw a TypeError 500. Coerce anything non-array to an empty array.
+    return is_array($decoded) ? $decoded : [];
 }
 
 /**

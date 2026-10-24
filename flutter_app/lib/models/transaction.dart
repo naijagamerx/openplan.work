@@ -9,6 +9,7 @@ class FinanceTransaction {
     required this.date,
     this.category = '',
     this.description = '',
+    this.notes = '',
     this.createdAt,
   });
 
@@ -18,6 +19,7 @@ class FinanceTransaction {
   final DateTime date;
   final String category;
   final String description;
+  final String notes;
   final DateTime? createdAt;
 
   /// True for income rows (drives +/- prefix and green/red tint).
@@ -34,6 +36,7 @@ class FinanceTransaction {
           DateTime.now(),
       category: (j['category'] ?? '').toString(),
       description: (j['description'] ?? '').toString(),
+      notes: (j['notes'] ?? '').toString(),
       createdAt: _parseDate(j['createdAt']),
     );
   }
@@ -45,6 +48,7 @@ class FinanceTransaction {
         'date': date.toIso8601String(),
         if (category.isNotEmpty) 'category': category,
         if (description.isNotEmpty) 'description': description,
+        if (notes.isNotEmpty) 'notes': notes,
       };
 
   FinanceTransaction copyWith({
@@ -53,6 +57,7 @@ class FinanceTransaction {
     DateTime? date,
     String? category,
     String? description,
+    String? notes,
   }) {
     return FinanceTransaction(
       id: id,
@@ -61,6 +66,7 @@ class FinanceTransaction {
       date: date ?? this.date,
       category: category ?? this.category,
       description: description ?? this.description,
+      notes: notes ?? this.notes,
       createdAt: createdAt,
     );
   }

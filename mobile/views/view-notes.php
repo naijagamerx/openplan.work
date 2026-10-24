@@ -517,6 +517,71 @@ $isEditing = ($_GET['edit'] ?? 'false') === 'true';
             return tpl.innerHTML;
         }
 
+        // Minimal, safe markdown -> HTML (mirrors views/notes.php mdToHtml). Used
+        // only for content a native/mobile client saved as markdown (tables,
+        // headings, bold, lists). escapeHtml runs first, so no raw user HTML can
+        // pass through — the emitted tags are a fixed safe set.
+        function mdToHtml(md) {
+            if (!md) return '';
+            let s = escapeHtml(md);
+            s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+            s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+            const lines = s.split(/\r?\n/);
+            let html = '';
+            let listType = null;
+            const closeList = () => { if (listType) { html += `</${listType}>`; listType = null; } };
+            const isTableSep = (l) =>
+                l != null && l.includes('-') &&
+                /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)+\|?\s*$/.test(l);
+            const splitRow = (l) => {
+                let r = l.trim();
+                if (r.startsWith('|')) r = r.slice(1);
+                if (r.endsWith('|')) r = r.slice(0, -1);
+                return r.split('|').map(c => c.trim());
+            };
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].replace(/\s+$/, '');
+                if (line.includes('|') && isTableSep(lines[i + 1])) {
+                    closeList();
+                    const header = splitRow(line);
+                    const body = [];
+                    let j = i + 2;
+                    for (; j < lines.length; j++) {
+                        const bl = lines[j];
+                        if (bl == null || bl.trim() === '' || !bl.includes('|')) break;
+                        body.push(splitRow(bl));
+                    }
+                    html += '<table class="md-table"><thead><tr>'
+                        + header.map(h => `<th>${h}</th>`).join('')
+                        + '</tr></thead><tbody>'
+                        + body.map(row => '<tr>' + row.map(c => `<td>${c}</td>`).join('') + '</tr>').join('')
+                        + '</tbody></table>';
+                    i = j - 1;
+                    continue;
+                }
+                let m;
+                if ((m = line.match(/^\s*(#{1,3})\s+(.*)$/))) {
+                    closeList();
+                    const level = m[1].length;
+                    html += `<h${level}>${m[2]}</h${level}>`;
+                } else if ((m = line.match(/^\s*[-*]\s+(.*)$/))) {
+                    if (listType !== 'ul') { closeList(); html += '<ul>'; listType = 'ul'; }
+                    html += `<li>${m[1]}</li>`;
+                } else if ((m = line.match(/^\s*\d+\.\s+(.*)$/))) {
+                    if (listType !== 'ol') { closeList(); html += '<ol>'; listType = 'ol'; }
+                    html += `<li>${m[1]}</li>`;
+                } else if (line.trim() === '') {
+                    closeList();
+                } else {
+                    closeList();
+                    html += `<p>${line}</p>`;
+                }
+            }
+            closeList();
+            return html;
+        }
+
         function renderChecklistContent() {
             const container = document.getElementById('note-content-view');
             const emptyHint = document.getElementById('note-empty-hint');
@@ -535,6 +600,18 @@ $isEditing = ($_GET['edit'] ?? 'false') === 'true';
             // content). Plain-text / markdown-checklist notes keep the line renderer.
             if (/<(table|thead|tbody|tr|td|th|ul|ol|li|h[1-6]|p|strong|em|b|i|br|div|code|blockquote)\b/i.test(currentNoteContent)) {
                 container.innerHTML = sanitizeNoteHtml(currentNoteContent);
+                return;
+            }
+
+            // Markdown from the Flutter/native client (e.g. an AI-generated table or
+            // headings) — render it rich so it matches desktop instead of showing raw
+            // "| a | b |" pipes. Skipped when the note is an interactive markdown
+            // checklist, which the line renderer below handles with tappable boxes.
+            const hasChecklist = /^\s*-\s*\[[ xX]\]\s+/m.test(currentNoteContent);
+            const hasMdTable = /(^|\n)\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)+\|?\s*(\n|$)/.test(currentNoteContent);
+            const hasMdHeading = /^\s{0,3}#{1,6}\s+\S/m.test(currentNoteContent);
+            if (!hasChecklist && (hasMdTable || hasMdHeading)) {
+                container.innerHTML = mdToHtml(currentNoteContent);
                 return;
             }
 
