@@ -187,7 +187,7 @@ $recentTasks = array_slice($recentTasks, 0, 5);
 <html class="light" lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
 <title>Dashboard - <?= htmlspecialchars($siteName) ?></title>
 
 <!-- Favicons -->

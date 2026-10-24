@@ -139,7 +139,7 @@ function formatViewTaskDate($dateString, $format = 'M j, Y')
 <html class="light" lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
 <title><?= htmlspecialchars($taskTitle) ?> - <?= htmlspecialchars($siteName) ?></title>
 
 <!-- Favicons -->

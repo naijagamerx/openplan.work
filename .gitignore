@@ -93,3 +93,8 @@ uploads/**
 skills-lock.json
 test_ftp*
 user-manual-*.png
+
+# Android release signing (never commit)
+android/keystore.properties
+*.jks
+*.keystore

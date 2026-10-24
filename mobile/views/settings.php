@@ -125,7 +125,7 @@ $siteName = getSiteName() ?? 'LazyMan';
 <html class="light" lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
 <title>Settings - <?= htmlspecialchars($siteName) ?></title>
 
 <!-- Favicons -->
