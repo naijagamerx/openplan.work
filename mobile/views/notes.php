@@ -212,7 +212,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     <?php if (!empty($allTags)): ?>
     <div class="flex gap-2 mt-3 overflow-x-auto no-scrollbar">
         <?php foreach ($allTags as $tag): ?>
-            <button onclick="setTag('<?= htmlspecialchars($tag) ?>')" class="tag-btn whitespace-nowrap text-[10px] text-gray-400 hover:text-black transition-colors px-2 py-1 rounded-full bg-gray-50" data-tag="<?= htmlspecialchars($tag) ?>">
+            <button onclick="setTag('<?= htmlspecialchars($tag) ?>')" class="tag-btn flex-shrink-0 whitespace-nowrap text-[10px] text-gray-400 hover:text-black transition-colors px-2 py-1 rounded-full bg-gray-50" data-tag="<?= htmlspecialchars($tag) ?>">
                 #<?= htmlspecialchars($tag) ?>
             </button>
         <?php endforeach; ?>
@@ -249,7 +249,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                         <?= date('M d', strtotime($note['updatedAt'] ?? 'now')) ?>
                     </span>
                 </div>
-                <p class="text-xs text-gray-500 line-clamp-2 leading-relaxed mb-2">
+                <p class="text-xs text-gray-500 line-clamp-2 leading-relaxed mb-2 break-words">
                     <?= htmlspecialchars(substr(strip_tags($note['content'] ?? ''), 0, 120)) ?>
                     <?php if (strlen($note['content'] ?? '') > 120) echo '...'; ?>
                 </p>
@@ -827,7 +827,7 @@ function renderNotes(searchQuery = '') {
                     </h3>
                     <span class="text-[10px] text-gray-400 font-medium flex-shrink-0">${new Date(note.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                 </div>
-                <p class="text-xs text-gray-500 line-clamp-2 leading-relaxed mb-2">
+                <p class="text-xs text-gray-500 line-clamp-2 leading-relaxed mb-2 break-words">
                     ${(note.content || '').substring(0, 120).replace(/<[^>]*>/g, '')}${(note.content || '').length > 120 ? '...' : ''}
                 </p>
                 <div class="flex gap-2">

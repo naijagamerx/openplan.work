@@ -45,7 +45,7 @@ $navItems = [
 // Get current page for highlighting
 $currentPage = $activePage ?? $_GET['page'] ?? 'dashboard';
 ?>
-<nav class="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-zinc-950 border-t border-gray-100 dark:border-zinc-800 px-8 py-4 flex items-center justify-between" style="padding-bottom: max(1rem, env(safe-area-inset-bottom)); min-height: calc(4.5rem + env(safe-area-inset-bottom))">
+<nav class="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-[420px] z-40 bg-white dark:bg-zinc-950 border-t border-gray-100 dark:border-zinc-800 px-8 py-4 flex items-center justify-between" style="padding-bottom: max(1rem, env(safe-area-inset-bottom)); min-height: calc(4.5rem + env(safe-area-inset-bottom))">
     <?php foreach ($navItems as $item): ?>
         <?php
         $isMenu = !empty($item['isMenu']);

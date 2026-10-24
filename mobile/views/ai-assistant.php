@@ -146,7 +146,7 @@ tailwind.config = {
 </style>
 </head>
 <body class="bg-white text-black font-display antialiased overflow-x-hidden">
-<div class="relative w-full max-w-[420px] h-screen bg-white shadow-2xl flex flex-col border-x border-black/5 overflow-hidden">
+<div class="relative w-full max-w-[420px] mx-auto h-screen bg-white shadow-2xl flex flex-col border-x border-black/5 overflow-hidden">
 
 <?php
 $title = 'AI Assistant';
