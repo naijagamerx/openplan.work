@@ -132,7 +132,7 @@ flutter run --dart-define=API_BASE=https://openplan.work
 ```
 
 ### Login to test
-- Email: `lazymantools@gmail.com`
+- Email: `<your-account-email>`
 - Password: your account password
 - Master password: `<your-master-password>`
 

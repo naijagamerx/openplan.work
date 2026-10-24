@@ -65,7 +65,7 @@ This is the new multi-user setup. Lets any OpenPlan user link their Amazon accou
 | **Your Web Authorization URI** | `https://openplan.work/api/oauth/authorize.php` |
 | **Your Access Token URI** | `https://openplan.work/api/oauth/token.php` |
 | **Your Client ID** | `openplan-alexa` |
-| **Your Secret** | `25c9951a63628aa0460c13338f29619b98ef274f5c3d4ca34e2415dc7080bf1a` |
+| **Your Secret** | `<value of ALEXA_OAUTH_CLIENT_SECRET>` |
 | **Your Authentication Scheme** | **HTTP Basic (Recommended)** |
 | **Scope** (click "+ Add Scope") | `openplan.read_write` |
 | **Domain List** (click "+ Add Domain") | `openplan.work` |
@@ -255,7 +255,7 @@ User will debug from there.
 | Authorize URL | `https://openplan.work/api/oauth/authorize.php` |
 | Token URL | `https://openplan.work/api/oauth/token.php` |
 | Client ID | `openplan-alexa` |
-| Client Secret | `25c9951a63628aa0460c13338f29619b98ef274f5c3d4ca34e2415dc7080bf1a` |
+| Client Secret | `<value of ALEXA_OAUTH_CLIENT_SECRET>` |
 | Auth Scheme | HTTP Basic |
 | Scope | `openplan.read_write` |
 | Domain | `openplan.work` |

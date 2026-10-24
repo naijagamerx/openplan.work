@@ -642,7 +642,8 @@ Host, username, password and SMTP settings live in **`CLAUDE.local.md`** (gitign
 
 - Never commit user data: `data/`, `data_backups/`, `data_backup_*`, `uploads/`, `release-artifacts/`, `.env*`, `.mcp.json*`, `*.log`. Stage files by name — never `git add -A` / `git add .` in this repo (the working tree holds backups, test FTP scripts, and screenshots).
 - Before pushing, scan the outgoing diff for secrets and require zero hits — the API-key patterns below **plus** the master password and FTP username from `CLAUDE.local.md`:
-  `git diff origin/main..HEAD | grep -E 'gsk_|sk-or-|sk-ant-|AIza'`
+  `git diff origin/main..HEAD | grep -E 'gsk_|sk-or-|sk-ant-|AIza|@gmail\.com|\b[0-9a-f]{32,}\b'`
+  The last pattern catches bare hex secrets (OAuth client secrets, platform keys) — key-prefix patterns alone missed one. Also read every `*HANDOFF*`/setup doc in the diff by eye: console walkthroughs tend to paste live secrets.
 - Known files that have held the master password: `mcp-server/index.js` (header comment), `flutter_app/MAC_SETUP.md`, `flutter_app/README.md`, `test_ftp_diagnostic.py`.
 - Push the feature branch onto main with `git push origin <branch>:main` (fast-forward only).
 
