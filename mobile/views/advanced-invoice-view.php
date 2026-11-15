@@ -122,6 +122,7 @@ tailwind.config = {
 </style>
 </head>
 <body class="flex justify-center">
+<?php include __DIR__ . '/partials/wide-shell.php'; ?>
 <div class="relative w-full max-w-[420px] min-h-screen bg-white shadow-2xl flex flex-col overflow-hidden border-x border-zinc-200">
     <header class="no-print px-4 pt-4 pb-3 flex items-center justify-between border-b border-zinc-200 sticky top-0 bg-white z-20">
         <div class="flex items-center gap-3 min-w-0">
@@ -149,7 +150,7 @@ tailwind.config = {
 
     <div class="no-print px-4 pb-3 flex gap-2">
         <button id="downloadAdvancedInvoiceBtn" type="button" class="btn-outline flex-1 justify-center">Download PDF</button>
-        <a href="<?= APP_URL ?>?page=advanced-invoice-form&id=<?= urlencode($invoiceId) ?>&device=desktop" class="btn-outline flex-1 justify-center">Edit</a>
+        <a href="<?= APP_URL ?>?page=advanced-invoice-form&id=<?= urlencode($invoiceId) ?>&device=desktop-once" class="btn-outline flex-1 justify-center">Edit</a>
     </div>
 
     <main class="flex-1 overflow-y-auto no-scrollbar pb-8">

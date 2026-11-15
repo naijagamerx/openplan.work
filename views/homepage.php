@@ -1,49 +1,10 @@
 <?php
-$siteName = getPublicAppName();
+require_once __DIR__ . '/partials/public-site-context.php';
 $pageTitle = $siteName . ' | Make room for work that matters';
 $pageDescription = 'Bring projects, clients, invoices, notes, and everyday plans together in one clear workspace for running your business.';
-$repoUrl = 'https://github.com/naijagamerx/openplan.work';
-$publicDocsUrl = APP_URL . '?page=docs';
-$canonicalUrl = rtrim(APP_URL, '/') . '/';
-$heroImageUrl = APP_URL . '/assets/images/openplan-landing-hero-20261003.png';
-$isAuthenticated = Auth::check();
-$registrationEnabled = isRegistrationEnabled();
-
-if ($isAuthenticated) {
-    $primaryActionUrl = APP_URL . '?page=dashboard';
-    $primaryActionText = 'Open your workspace';
-} elseif ($registrationEnabled) {
-    $primaryActionUrl = APP_URL . '?page=register';
-    $primaryActionText = 'Create your workspace';
-} else {
-    $primaryActionUrl = APP_URL . '?page=login';
-    $primaryActionText = 'Sign in to continue';
-}
-
-$releaseDownloadUrl = '';
-$hasHostedRelease = false;
-$releaseArtifactsDir = ROOT_PATH . '/release-artifacts';
-if (is_dir($releaseArtifactsDir)) {
-    $hostedCandidates = glob($releaseArtifactsDir . '/*-hosted-clean-*.zip');
-    if (is_array($hostedCandidates) && $hostedCandidates !== []) {
-        usort($hostedCandidates, static fn(string $a, string $b): int => filemtime($b) <=> filemtime($a));
-        $releaseDownloadUrl = APP_URL . '/release-artifacts/' . basename($hostedCandidates[0]);
-        $hasHostedRelease = true;
-    }
-}
-
-$apkDownloadUrl = '';
-$hasApkRelease = false;
-$apkArtifactsDir = ROOT_PATH . '/release-artifacts/android';
-if (is_dir($apkArtifactsDir)) {
-    $apkCandidates = glob($apkArtifactsDir . '/*.apk');
-    if (is_array($apkCandidates) && $apkCandidates !== []) {
-        usort($apkCandidates, static fn(string $a, string $b): int => filemtime($b) <=> filemtime($a));
-        $apkDownloadUrl = APP_URL . '/release-artifacts/android/' . basename($apkCandidates[0]);
-        $hasApkRelease = true;
-    }
-}
-
+$canonicalUrl = $canonicalHomeUrl;
+$heroImageUrl = $publicBaseUrl . '/assets/images/app-dashboard.webp';
+$shareImageUrl = $publicBaseUrl . '/assets/images/app-dashboard-og.jpg';
 $structuredData = [
     '@context' => 'https://schema.org',
     '@graph' => [
@@ -90,12 +51,12 @@ $structuredData = [
     <meta property="og:description" content="<?php echo e($pageDescription); ?>">
     <meta property="og:site_name" content="<?php echo e($siteName); ?>">
     <meta property="og:locale" content="en_US">
-    <meta property="og:image" content="<?php echo e($heroImageUrl); ?>">
-    <meta property="og:image:alt" content="A quiet, sunlit desk where someone plans the work ahead">
+    <meta property="og:image" content="<?php echo e($shareImageUrl); ?>">
+    <meta property="og:image:alt" content="The OpenPlan dashboard with tasks, projects, habits and revenue (sample data)">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="<?php echo e($pageTitle); ?>">
     <meta name="twitter:description" content="<?php echo e($pageDescription); ?>">
-    <meta name="twitter:image" content="<?php echo e($heroImageUrl); ?>">
+    <meta name="twitter:image" content="<?php echo e($shareImageUrl); ?>">
 
     <link rel="icon" type="image/png" sizes="32x32" href="<?php echo e(APP_URL); ?>/assets/favicons/favicon-32x32.png">
     <link rel="shortcut icon" href="<?php echo e(APP_URL); ?>/assets/favicons/favicon.ico">
@@ -107,50 +68,17 @@ $structuredData = [
         echo json_encode($structuredData, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
     ?></script>
     <script>
+        document.documentElement.classList.add('js');
         try {
             if (localStorage.getItem('theme') === 'dark') document.documentElement.classList.add('dark');
         } catch (error) {}
     </script>
-    <link rel="stylesheet" href="<?php echo e(APP_URL); ?>/assets/css/public-homepage.css">
+    <link rel="stylesheet" href="<?php echo e(APP_URL); ?>/assets/css/public-homepage.css?v=<?php echo (int) @filemtime(ROOT_PATH . '/assets/css/public-homepage.css'); ?>">
+    <link rel="stylesheet" href="<?php echo e(APP_URL); ?>/assets/css/public-pages.css?v=<?php echo (int) @filemtime(ROOT_PATH . '/assets/css/public-pages.css'); ?>">
 </head>
 <body class="marketing-page">
-    <a class="skip-link" href="#main">Skip to content</a>
-
-    <nav class="site-nav" aria-label="Main navigation">
-        <div class="site-nav__inner">
-            <a class="brand" href="<?php echo e($canonicalUrl); ?>" aria-label="<?php echo e($siteName); ?> home">
-                <span class="brand__mark" aria-hidden="true">
-                    <svg viewBox="0 0 48 48" fill="none"><path d="M24 4H6v26.6667h18V44h18V17.3333H24V4Z" fill="currentColor"/></svg>
-                </span>
-                <span class="brand__name"><?php echo e($siteName); ?></span>
-            </a>
-
-            <button class="nav-toggle" id="nav-toggle" type="button" aria-label="Open navigation" aria-controls="site-links" aria-expanded="false">
-                <svg class="icon nav-toggle__open" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-                <svg class="icon nav-toggle__close" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-            </button>
-
-            <div class="site-nav__links" id="site-links">
-                <a href="#workspace">Workspace</a>
-                <a href="#workflow">How it works</a>
-                <a href="#mobile">Mobile</a>
-                <a href="<?php echo e($publicDocsUrl); ?>">Documentation</a>
-            </div>
-
-            <div class="site-nav__actions">
-                <a class="nav-login" href="<?php echo e(APP_URL . '?page=' . ($isAuthenticated ? 'dashboard' : 'login')); ?>">
-                    <?php echo $isAuthenticated ? 'Dashboard' : 'Log in'; ?>
-                </a>
-                <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch color theme">
-                    <svg class="icon theme-toggle__sun" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                    <svg class="icon theme-toggle__moon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20.2 15.2A8.6 8.6 0 0 1 8.8 3.8a8.6 8.6 0 1 0 11.4 11.4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
-                </button>
-                <a class="button button--small button--dark nav-cta" href="<?php echo e($primaryActionUrl); ?>"><?php echo e($primaryActionText); ?></a>
-            </div>
-        </div>
-    </nav>
-
-    <main id="main">
+    <?php $publicHeaderCurrentPage = 'homepage'; require __DIR__ . '/partials/public-site-header.php'; ?>
+<main id="main">
         <section class="hero section-wrap" id="top" aria-labelledby="hero-title">
             <div class="hero__copy">
                 <p class="eyebrow"><span class="eyebrow__dot"></span> A little more room to do good work</p>
@@ -162,6 +90,9 @@ $structuredData = [
                         <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </a>
                     <a class="text-link" href="#workspace">Take a look around <span aria-hidden="true">↓</span></a>
+                    <?php if (!$isAuthenticated): ?>
+                        <a class="text-link hero__login" href="<?php echo e(APP_URL . '?page=login'); ?>">Log in <span aria-hidden="true">→</span></a>
+                    <?php endif; ?>
                 </div>
                 <div class="hero__categories" aria-label="A few things you can organize">
                     <span>Projects</span><span>Clients</span><span>Invoices</span><span>Everyday plans</span>
@@ -169,16 +100,16 @@ $structuredData = [
             </div>
 
             <figure class="hero__visual">
-                <img src="<?php echo e($heroImageUrl); ?>" alt="A sunlit home workspace with a notebook, laptop, and leafy plants" fetchpriority="high" decoding="async">
+                <img class="app-shot" src="<?php echo e($heroImageUrl); ?>" width="1600" height="1000" alt="The OpenPlan dashboard showing pending tasks, active projects, habits and revenue (sample data)" fetchpriority="high" decoding="async" data-dashboard-shot>
                 <figcaption class="hero-note"><span class="hero-note__spark" aria-hidden="true">✳</span><span><strong>Make space for the next good idea.</strong><small>Your work, thoughtfully in view.</small></span></figcaption>
-                <span class="hero__image-label" aria-hidden="true">A workspace for your kind of work</span>
+                <span class="hero__image-label" aria-hidden="true">The real app · sample data</span>
             </figure>
         </section>
 
         <section class="section section--workspace" id="workspace" aria-labelledby="workspace-title">
             <div class="section-wrap workspace-layout">
                 <div class="workspace-photo">
-                    <img src="<?php echo e(APP_URL); ?>/assets/images/openplan-landing-planning-20261003.png" alt="Hands arranging a notebook and planner on a warm wooden desk" loading="lazy" decoding="async">
+                    <img class="app-shot" src="<?php echo e(APP_URL); ?>/assets/images/app-projects.webp" width="1400" height="1064" alt="The Projects screen with three client projects and their progress (sample data)" loading="lazy" decoding="async">
                     <span class="photo-caption">A calmer place for the moving pieces.</span>
                 </div>
                 <div class="workspace-copy">
@@ -224,7 +155,7 @@ $structuredData = [
                     <a class="text-link" href="<?php echo e($publicDocsUrl); ?>">See what’s inside <span aria-hidden="true">↗</span></a>
                 </div>
                 <div class="day-visual">
-                    <div class="day-image day-image--large"><img src="<?php echo e(APP_URL); ?>/assets/images/openplan-landing-planning-20261003.png" alt="A notebook and a cup of coffee ready for a new workday" loading="lazy" decoding="async"></div>
+                    <div class="day-image day-image--large day-image--shot"><img src="<?php echo e(APP_URL); ?>/assets/images/app-habits.webp" width="1400" height="1064" alt="The Habits screen with weekly routines like morning planning and sending invoices on Friday (sample data)" loading="lazy" decoding="async"></div>
                     <div class="day-note"><span class="day-note__line"></span><span>Progress, with a little more perspective.</span></div>
                     <div class="routine-card">
                         <span class="routine-card__label">YOUR DAY, YOUR WAY</span>
@@ -264,7 +195,7 @@ $structuredData = [
                     <a class="text-link" href="<?php echo e($publicDocsUrl); ?>">Read about keeping your information safe <span aria-hidden="true">↗</span></a>
                 </div>
                 <div class="ownership-image">
-                    <img src="<?php echo e(APP_URL); ?>/assets/images/openplan-landing-hero-20261003.png" alt="A personal workspace set up beside a sunny window" loading="lazy" decoding="async">
+                    <img class="app-shot" src="<?php echo e(APP_URL); ?>/assets/images/app-invoices.webp" width="1400" height="1064" alt="The Invoices screen with revenue, pending and overdue totals (sample data)" loading="lazy" decoding="async">
                     <div class="ownership-stamp"><span class="ownership-stamp__icon" aria-hidden="true">✳</span><span><strong>Work, on your terms.</strong><small>A space that feels like yours.</small></span></div>
                 </div>
             </div>
@@ -272,8 +203,8 @@ $structuredData = [
 
         <section class="section section--mobile" id="mobile" aria-labelledby="mobile-title">
             <div class="section-wrap mobile-layout">
-                <div class="mobile-visual">
-                    <img src="<?php echo e(APP_URL); ?>/assets/images/openplan-landing-mobile-20261003.png" alt="A person checking their phone at a sunlit cafe" loading="lazy" decoding="async">
+                <div class="mobile-visual mobile-visual--phone">
+                    <img class="app-shot--phone" src="<?php echo e(APP_URL); ?>/assets/images/app-mobile-dashboard.webp" width="600" height="1298" alt="The mobile dashboard with tasks, projects, habits and the water tracker (sample data)" loading="lazy" decoding="async">
                     <span class="mobile-photo-note">A little clarity, wherever the day goes.</span>
                 </div>
                 <div class="mobile-copy">
@@ -295,10 +226,27 @@ $structuredData = [
             </div>
         </section>
 
+        <section class="section section--pricing" id="pricing" aria-labelledby="pricing-title">
+            <div class="section-wrap">
+                <div class="pricing-heading">
+                    <p class="eyebrow"><span class="eyebrow__number">07</span> Pricing</p>
+                    <h2 id="pricing-title">Start free. Add AI when you want it.</h2>
+                    <p class="section-lede">Your workspace is free. Plans add built-in AI requests, so you don’t need your own API keys.</p>
+                </div>
+                <div class="pricing-grid">
+                    <?php require __DIR__ . '/partials/public-pricing-cards.php'; ?>
+                </div>
+                <?php if (!$isAuthenticated && $plans !== []): ?>
+                    <p class="pricing-note">Choosing a plan asks you to log in first. New here? <a href="<?php echo e($primaryActionUrl); ?>"><?php echo e($primaryActionText); ?></a>, then pick a plan.</p>
+                <?php endif; ?>
+                <p class="pricing-more"><a class="text-link" href="<?php echo e($publicPricingUrl); ?>">View the dedicated pricing page <span aria-hidden="true">↗</span></a></p>
+            </div>
+        </section>
+
         <section class="section section--closing" id="get-started" aria-labelledby="closing-title">
             <div class="section-wrap closing-panel">
                 <div class="closing-decoration" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-                <p class="eyebrow eyebrow--light"><span class="eyebrow__number">07</span> A fresh start for the work ahead</p>
+                <p class="eyebrow eyebrow--light"><span class="eyebrow__number">08</span> A fresh start for the work ahead</p>
                 <h2 id="closing-title">Bring a little more order to your work.</h2>
                 <p>Give the projects, people, and plans you care about a place to come together.</p>
                 <div class="closing-actions">
@@ -312,55 +260,7 @@ $structuredData = [
         </section>
     </main>
 
-    <footer class="site-footer">
-        <div class="site-footer__inner">
-            <div class="footer-top">
-                <a class="brand brand--footer" href="<?php echo e($canonicalUrl); ?>" aria-label="<?php echo e($siteName); ?> home">
-                    <span class="brand__mark" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><path d="M24 4H6v26.6667h18V44h18V17.3333H24V4Z" fill="currentColor"/></svg></span>
-                    <span class="brand__name"><?php echo e($siteName); ?></span>
-                </a>
-                <p>Make room for work that matters.</p>
-                <div class="site-footer__links">
-                    <a href="<?php echo e($publicDocsUrl); ?>">Documentation</a>
-                    <?php if ($hasApkRelease): ?><a href="<?php echo e($apkDownloadUrl); ?>">Android download</a><?php endif; ?>
-                    <?php if ($hasHostedRelease): ?><a href="<?php echo e($releaseDownloadUrl); ?>">Self-hosting package</a><?php endif; ?>
-                    <a href="<?php echo e($repoUrl); ?>" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                <span>© <?php echo date('Y'); ?> <?php echo e($siteName); ?></span>
-                <a href="#top">Back to top ↑</a>
-            </div>
-        </div>
-    </footer>
-
-    <script>
-        const themeToggle = document.getElementById('theme-toggle');
-        const navToggle = document.getElementById('nav-toggle');
-        const siteLinks = document.getElementById('site-links');
-        const root = document.documentElement;
-
-        themeToggle.addEventListener('click', () => {
-            const isDark = root.classList.toggle('dark');
-            try {
-                localStorage.setItem('theme', isDark ? 'dark' : 'light');
-            } catch (error) {}
-        });
-
-        navToggle.addEventListener('click', () => {
-            const isOpen = navToggle.getAttribute('aria-expanded') === 'true';
-            navToggle.setAttribute('aria-expanded', String(!isOpen));
-            navToggle.setAttribute('aria-label', isOpen ? 'Open navigation' : 'Close navigation');
-            siteLinks.classList.toggle('is-open', !isOpen);
-        });
-
-        siteLinks.addEventListener('click', (event) => {
-            if (event.target.closest('a')) {
-                navToggle.setAttribute('aria-expanded', 'false');
-                navToggle.setAttribute('aria-label', 'Open navigation');
-                siteLinks.classList.remove('is-open');
-            }
-        });
-    </script>
+    <?php require __DIR__ . '/partials/public-site-footer.php'; ?>
+    <?php require __DIR__ . '/partials/public-site-scripts.php'; ?>
 </body>
 </html>

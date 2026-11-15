@@ -168,7 +168,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     </section>
 </main>
 
-<button onclick="openCreateFolderDialog()" class="fixed bottom-28 right-[calc(50%-180px)] w-12 h-12 bg-black text-white rounded-full flex items-center justify-center shadow-2xl active:scale-95 transition-transform z-40">
+<button onclick="openCreateFolderDialog()" data-shell-fab class="fixed bottom-28 right-[calc(50%-180px)] w-12 h-12 bg-black text-white rounded-full flex items-center justify-center shadow-2xl active:scale-95 transition-transform z-40">
     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.5v15m7.5-7.5h-15"/>
     </svg>

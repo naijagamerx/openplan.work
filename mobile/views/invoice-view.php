@@ -171,6 +171,7 @@ tailwind.config = {
 </style>
 </head>
 <body class="flex justify-center">
+<?php include __DIR__ . '/partials/wide-shell.php'; ?>
 <div class="relative w-full max-w-[420px] min-h-screen bg-white shadow-2xl flex flex-col overflow-hidden border-x border-zinc-200">
     <header class="no-print px-4 pt-4 pb-3 border-b border-black flex items-center gap-3 sticky top-0 bg-white z-20">
         <button onclick="history.back()" class="size-9 flex items-center justify-center border border-black hover:bg-black hover:text-white transition-colors">

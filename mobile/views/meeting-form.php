@@ -65,6 +65,7 @@ $siteName = getSiteName() ?? 'LazyMan';
 </style>
 </head>
 <body class="bg-gray-100 dark:bg-zinc-950 flex justify-center">
+<?php include __DIR__ . '/partials/wide-shell.php'; ?>
 <div class="relative w-full max-w-[420px] min-h-screen bg-white dark:bg-zinc-950 shadow-2xl flex flex-col">
 
 <header class="px-4 py-4 flex items-center justify-between border-b border-gray-100 dark:border-zinc-800">

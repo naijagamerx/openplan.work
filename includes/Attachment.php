@@ -295,15 +295,17 @@ class Attachment {
      * Get file extension from name and MIME type
      */
     protected function getExtension(string $filename, string $mimeType): string {
-        $extension = pathinfo($filename, PATHINFO_EXTENSION);
-        $extension = strtolower($extension);
-
+        // The stored extension comes only from the detected type, never from the
+        // uploaded name: a text file named "x.php" must not be saved as .php.
         $mimeExtensions = [
             'image/jpeg' => '.jpg',
             'image/png' => '.png',
             'image/gif' => '.gif',
             'image/webp' => '.webp',
             'application/pdf' => '.pdf',
+            'text/plain' => '.txt',
+            'text/csv' => '.csv',
+            'text/markdown' => '.md',
             'application/msword' => '.doc',
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => '.docx',
             'application/vnd.ms-excel' => '.xls',
@@ -312,7 +314,7 @@ class Attachment {
             'application/x-zip-compressed' => '.zip',
         ];
 
-        return $mimeExtensions[$mimeType] ?? ($extension ? '.' . $extension : '');
+        return $mimeExtensions[$mimeType] ?? '.bin';
     }
 
     /**

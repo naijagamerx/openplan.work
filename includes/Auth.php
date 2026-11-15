@@ -1301,16 +1301,25 @@ class Auth {
 
         self::touchSessionActivity($now);
 
-        // Lightweight session fingerprint: hash Accept-Language only.
-        // Avoids User-Agent (mutates on iOS Safari between requests) and IP
-        // (changes on WiFi/cellular handoff). Accept-Language is stable per
-        // browser install. On first check after login, store the fingerprint.
-        // On subsequent checks, mismatch destroys the session.
-        $fingerprint = hash('sha256', (string)($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? ''));
-        if (!isset($_SESSION['session_fingerprint'])) {
+        // Lightweight session fingerprint: the browser's primary language only.
+        // Avoids User-Agent (mutates on iOS Safari between requests, and Chrome on
+        // foldables switches mobile/desktop UA) and IP (changes on WiFi/cellular handoff).
+        // Only the primary language subtag is compared: Chrome/Samsung "Accept-Language
+        // reduction" alternates between "en-US" and "en-US,en;q=0.9" within one session,
+        // which used to sign users out. Requests without the header are not checked.
+        // On first check after login, store the fingerprint; a mismatch destroys the session.
+        $acceptLanguage = (string)($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '');
+        $primaryLanguage = strtolower(trim(explode('-', explode(';', explode(',', $acceptLanguage)[0])[0])[0]));
+        $fingerprint = hash('sha256', $primaryLanguage);
+        if ($primaryLanguage === '') {
+            // No language information on this request: nothing to compare.
+        } elseif (!isset($_SESSION['session_fingerprint'])) {
+            $_SESSION['session_fingerprint'] = $fingerprint;
+        } elseif (hash_equals((string)$_SESSION['session_fingerprint'], hash('sha256', $acceptLanguage))) {
+            // Pinned by the previous full-header format: upgrade in place instead of signing out
             $_SESSION['session_fingerprint'] = $fingerprint;
         } elseif (!hash_equals((string)$_SESSION['session_fingerprint'], $fingerprint)) {
-            error_log('Session fingerprint mismatch for user ' . ($_SESSION[SESSION_USER_ID] ?? '?'));
+            error_log('Session fingerprint mismatch for user ' . ($_SESSION[SESSION_USER_ID] ?? '?') . ' (Accept-Language: ' . substr($acceptLanguage, 0, 64) . ')');
             $_SERVER['AUTH_LOGOUT_REASON'] = 'session_fingerprint_mismatch';
             self::destroyCurrentSession(true);
             return false;

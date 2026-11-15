@@ -12,16 +12,15 @@ require_once __DIR__ . '/includes/DeviceDetector.php';
 // Get the requested page
 $rawPage = $_GET['page'] ?? 'homepage';
 $page = preg_replace('/[^a-z0-9_-]/i', '', $rawPage);
-$publicPages = ['homepage', 'docs', 'login', 'master-code', 'setup', 'register', 'thank-you', 'forgot-password', 'reset-password', 'verify-email', 'privacy', 'terms'];
+$publicMarketingPages = ['homepage', 'docs', 'pricing', 'how-it-works', 'mobile'];
+$publicPages = array_merge($publicMarketingPages, ['login', 'master-code', 'setup', 'register', 'thank-you', 'forgot-password', 'reset-password', 'verify-email', 'privacy', 'terms']);
 $verificationAllowedPages = ['verification-required', 'verify-email', 'logout'];
 
-// Mobile routing: phones get the dedicated mobile design (login, register,
-// dashboard, etc.) EXCEPT the homepage, which always uses the responsive
-// desktop design (the desktop index shrunk to fit mobile). Desktop browsers
-// are served the desktop site everywhere. The Android APK loads /mobile/
-// directly (mobile/index.php) and is unaffected by this check.
-if (DeviceDetector::shouldShowMobile() && $page !== 'homepage') {
-    // For public pages (login, setup), include mobile views directly
+// Public marketing routes always use their own responsive page layouts.
+// Other phone visits use the dedicated mobile design (login, register,
+// dashboard, etc.). The Android APK loads /mobile/ directly (mobile/index.php).
+if (DeviceDetector::shouldShowMobile() && !in_array($page, $publicMarketingPages, true)) {
+    // Public account pages use their matching mobile views when available.
     if (in_array($page, $publicPages)) {
         $mobileViewFile = __DIR__ . '/mobile/views/' . $page . '.php';
         if (file_exists($mobileViewFile)) {
@@ -469,7 +468,7 @@ if (in_array($page, $blockedPages, true)) {
 $pageTitle = ucfirst(str_replace('-', ' ', $page)) . ' | ' . getSiteName();
 
 // Pages that use their own full-page layout (bypass main.php)
-$fullPageViews = ['homepage', 'docs', 'setup', 'notes-three-pane-sample'];
+$fullPageViews = array_merge($publicMarketingPages, ['setup', 'notes-three-pane-sample']);
 
 // Include the appropriate layout
 $authLayoutPages = ['login', 'master-code', 'register', 'thank-you', 'forgot-password', 'reset-password', 'verify-email', 'verification-required', 'privacy', 'terms'];

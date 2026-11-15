@@ -129,8 +129,27 @@ $siteName = getSiteName() ?? 'LazyMan';
         }
     }
 </style>
+<style>
+/* Wide screens (unfolded foldables): list on the left, open note in a pane on the right.
+   html.notes-split is set by script with the same media query as partials/wide-shell.php. */
+#notes-pane { display: none; }
+html.notes-split { --notes-list-w: 360px; }
+html.notes-split.rail-expanded { --notes-list-w: 320px; }
+html.notes-split body { justify-content: flex-start !important; }
+html.notes-split body > div[class*="max-w-[420px]"] { max-width: var(--notes-list-w) !important; box-shadow: none; }
+html.notes-split #notes-pane {
+    display: flex; position: fixed; top: 0; bottom: 0; right: 0; z-index: 30;
+    left: calc(var(--rail-w, 0px) + var(--notes-list-w));
+    background: #fff; border-left: 1px solid #e5e7eb;
+}
+html.notes-split #notes-pane iframe { flex: 1; width: 100%; height: 100%; border: 0; }
+html.notes-split #notes-pane-empty { margin: auto; padding: 1.5rem; text-align: center; color: #9ca3af; font-size: .875rem; }
+html.notes-split main a.is-open { background: #f4f4f5; box-shadow: inset 3px 0 0 #000; }
+html.notes-split #bulkActionsBar { left: var(--rail-w, 0px); right: auto; width: var(--notes-list-w); bottom: 0; }
+html.notes-split #swipeAction { right: calc(100vw - var(--rail-w, 0px) - var(--notes-list-w) + 12px); bottom: 1.5rem; }
+</style>
 </head>
-<body class="bg-gray-100 flex justify-center">
+<body class="bg-gray-100 flex justify-center overflow-x-hidden">
 <div class="relative w-full max-w-[420px] min-h-screen bg-white shadow-2xl flex flex-col overflow-hidden">
 
 <?php
@@ -221,7 +240,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 </div>
 
 <!-- Notes List -->
-<main class="flex-1 overflow-y-auto no-scrollbar pb-32">
+<main class="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar pb-32">
     <?php if (empty($filteredNotes)): ?>
         <!-- Empty State -->
         <div class="text-center py-16 px-6">
@@ -237,7 +256,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
         <?php foreach ($filteredNotes as $note): ?>
             <a href="?page=view-notes&id=<?= urlencode($note['id']) ?>" class="block border-b border-gray-100 py-4 px-6 hover:bg-gray-50 transition-colors">
                 <div class="flex justify-between items-start mb-1">
-                    <h3 class="text-sm font-bold uppercase tracking-tight pr-8 flex-1">
+                    <h3 class="text-sm font-bold uppercase tracking-tight pr-8 flex-1 min-w-0 break-words">
                         <?= htmlspecialchars($note['title'] ?? 'Untitled') ?>
                         <?php if (!empty($note['isPinned'])): ?>
                             <svg class="w-3 h-3 inline ml-1 text-black" fill="currentColor" viewBox="0 0 24 24">
@@ -253,15 +272,20 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                     <?= htmlspecialchars(substr(strip_tags($note['content'] ?? ''), 0, 120)) ?>
                     <?php if (strlen($note['content'] ?? '') > 120) echo '...'; ?>
                 </p>
-                <div class="flex gap-2">
+                <div class="flex flex-wrap gap-x-2 gap-y-1 min-w-0">
                     <?php foreach (($note['tags'] ?? []) as $tag): ?>
-                        <span class="text-[9px] uppercase tracking-widest text-gray-400">#<?= htmlspecialchars($tag) ?></span>
+                        <span class="text-[9px] uppercase tracking-widest text-gray-400 break-all">#<?= htmlspecialchars($tag) ?></span>
                     <?php endforeach; ?>
                 </div>
             </a>
         <?php endforeach; ?>
     <?php endif; ?>
 </main>
+
+<section id="notes-pane" aria-label="Note">
+    <p id="notes-pane-empty">Select a note to read it here.</p>
+    <iframe id="notes-pane-frame" title="Note" hidden></iframe>
+</section>
 
 <?php include MOBILE_VIEW_PATH . '/partials/bottom-nav.php'; ?>
 <?php include MOBILE_VIEW_PATH . '/partials/offcanvas-menu.php'; ?>
@@ -821,7 +845,7 @@ function renderNotes(searchQuery = '') {
                class="block border-b border-gray-100 py-4 px-6 hover:bg-gray-50 transition-colors"
                style="touch-action: pan-y; will-change: transform;">
                 <div class="flex justify-between items-start mb-1">
-                    <h3 class="text-sm font-bold uppercase tracking-tight pr-8 flex-1">
+                    <h3 class="text-sm font-bold uppercase tracking-tight pr-8 flex-1 min-w-0 break-words">
                         ${note.title || 'Untitled'}
                         ${note.isPinned ? '<svg class="w-3 h-3 inline ml-1 text-black" fill="currentColor" viewBox="0 0 24 24"><path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>' : ''}
                     </h3>
@@ -830,12 +854,13 @@ function renderNotes(searchQuery = '') {
                 <p class="text-xs text-gray-500 line-clamp-2 leading-relaxed mb-2 break-words">
                     ${(note.content || '').substring(0, 120).replace(/<[^>]*>/g, '')}${(note.content || '').length > 120 ? '...' : ''}
                 </p>
-                <div class="flex gap-2">
-                    ${(note.tags || []).map(t => `<span class="text-[9px] uppercase tracking-widest text-gray-400">#${t}</span>`).join('')}
+                <div class="flex flex-wrap gap-x-2 gap-y-1 min-w-0">
+                    ${(note.tags || []).map(t => `<span class="text-[9px] uppercase tracking-widest text-gray-400 break-all">#${t}</span>`).join('')}
                 </div>
             </a>
         `;
     }).join('');
+    if (typeof markOpenNote === 'function') markOpenNote();
 }
 
 // ==================== NEW UI/UX FUNCTIONS ====================
@@ -1196,6 +1221,96 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+</script>
+
+<!-- Wide screens: open notes in the side pane instead of navigating away -->
+<script>
+const notesSplitQuery = window.matchMedia('screen and (min-width: 600px) and (min-height: 480px)');
+let openNoteId = null;
+
+function noteIdFromLink(link) {
+    try {
+        return new URL(link.href, window.location.href).searchParams.get('id');
+    } catch (e) {
+        return null;
+    }
+}
+
+function setNoteUrl(id) {
+    const params = new URLSearchParams(window.location.search);
+    if (id) params.set('id', id); else params.delete('id');
+    history.replaceState(null, '', '?' + params.toString());
+}
+
+function markOpenNote() {
+    document.querySelectorAll('main a[href*="page=view-notes"]').forEach(link => {
+        link.classList.toggle('is-open', !!openNoteId && noteIdFromLink(link) === openNoteId);
+    });
+}
+
+function openNoteInPane(id) {
+    const frame = document.getElementById('notes-pane-frame');
+    openNoteId = id;
+    frame.src = `?page=view-notes&id=${encodeURIComponent(id)}&embedded=1`;
+    frame.hidden = false;
+    document.getElementById('notes-pane-empty').hidden = true;
+    setNoteUrl(id);
+    markOpenNote();
+}
+
+function closeNotePane() {
+    const frame = document.getElementById('notes-pane-frame');
+    openNoteId = null;
+    frame.hidden = true;
+    frame.removeAttribute('src');
+    document.getElementById('notes-pane-empty').hidden = false;
+    setNoteUrl(null);
+    markOpenNote();
+}
+
+function syncNotesSplit() {
+    const wide = notesSplitQuery.matches;
+    document.documentElement.classList.toggle('notes-split', wide);
+    if (!wide && openNoteId) closeNotePane();
+}
+
+// Runs after each row's own onclick (swipe guard), so a prevented tap stays prevented
+document.querySelector('main').addEventListener('click', (event) => {
+    if (!document.documentElement.classList.contains('notes-split') || event.defaultPrevented) return;
+    const link = event.target.closest('a[href*="page=view-notes"]');
+    const id = link && noteIdFromLink(link);
+    if (!id) return;
+    event.preventDefault();
+    openNoteInPane(id);
+});
+
+window.addEventListener('message', (event) => {
+    const frame = document.getElementById('notes-pane-frame');
+    if (event.origin !== window.location.origin || event.source !== frame.contentWindow) return;
+    const msg = event.data || {};
+    if (msg.type !== 'op-note' || !msg.id) return;
+    const index = allNotes.findIndex(n => n.id === msg.id);
+    if (msg.action === 'saved' && index !== -1) {
+        allNotes[index].title = msg.title;
+        allNotes[index].content = msg.content;
+        allNotes[index].updatedAt = new Date().toISOString();
+        renderNotes((document.getElementById('search-input')?.value || '').toLowerCase());
+    } else if (msg.action === 'deleted') {
+        if (index !== -1) allNotes.splice(index, 1);
+        closeNotePane();
+        renderNotes((document.getElementById('search-input')?.value || '').toLowerCase());
+        showToast('Note deleted', 'success');
+    } else if (msg.action === 'closed') {
+        closeNotePane();
+    }
+});
+
+notesSplitQuery.addEventListener('change', syncNotesSplit);
+syncNotesSplit();
+const initialNoteId = new URLSearchParams(window.location.search).get('id');
+if (notesSplitQuery.matches && initialNoteId && allNotes.some(n => n.id === initialNoteId)) {
+    openNoteInPane(initialNoteId);
+}
 </script>
 </body>
 </html>

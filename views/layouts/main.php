@@ -9,6 +9,20 @@ if (!defined('ASSETS_PATH')) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+    // Touch tablets and unfolded foldables often identify as desktop browsers, so the server
+    // router (DeviceDetector) sends them here. Below 1024px the mobile app (with its wide layout)
+    // fits them better. Skipped when ?device= is set or the user chose "Switch to Desktop".
+    (function () {
+        try {
+            var params = new URLSearchParams(window.location.search);
+            if (params.has('device') || /(?:^|;\s*)lazyman_device_pref=desktop(?:;|$)/.test(document.cookie)) return;
+            if (window.innerWidth >= 1024 || !window.matchMedia('(hover: none) and (pointer: coarse)').matches) return;
+            params.set('device', 'mobile');
+            window.location.replace('?' + params.toString());
+        } catch (e) {}
+    })();
+    </script>
     <title><?php echo e($pageTitle ?? getSiteName()); ?></title>
 
     <!-- Note: Security headers (X-Frame-Options, CSP, etc.) are sent via HTTP in PHP, not meta tags -->

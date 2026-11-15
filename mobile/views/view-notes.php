@@ -67,6 +67,8 @@ function displayPlainText($text) {
 }
 
 $isEditing = ($_GET['edit'] ?? 'false') === 'true';
+// Rendered inside the wide-screen Notes pane (mobile/views/notes.php) instead of as a full page
+$isEmbedded = ($_GET['embedded'] ?? '') === '1';
 ?>
 <!DOCTYPE html>
 <html class="light" lang="en">
@@ -193,11 +195,20 @@ $isEditing = ($_GET['edit'] ?? 'false') === 'true';
         #note-content-view p { margin: 0.4rem 0; }
         #note-content-view strong { font-weight: 700; }
     </style>
+    <?php if ($isEmbedded): ?>
+    <style>
+        /* The pane is the viewport: fill it instead of drawing a centred phone column */
+        body { background: #fff; }
+        body > div[class*="max-w-[420px]"] { max-width: none; box-shadow: none; border: 0; }
+        .fixed[class*="max-w-[420px]"] { max-width: none; }
+    </style>
+    <?php endif; ?>
 </head>
 <body class="bg-gray-100 flex justify-center overflow-x-hidden">
+<?php include __DIR__ . '/partials/wide-shell.php'; ?>
     <div class="relative w-full max-w-[420px] bg-white shadow-2xl mx-auto flex flex-col border-x border-gray-100 overflow-hidden" style="height: 100dvh;">
 
-        <div class="sticky top-0 z-40 px-4 py-3 flex items-center">
+        <div class="sticky top-0 z-40 px-4 py-3 flex items-center<?= $isEmbedded ? ' hidden' : '' ?>">
             <button onclick="history.back()" class="p-2 -ml-2 touch-target">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"/>
@@ -315,7 +326,7 @@ $isEditing = ($_GET['edit'] ?? 'false') === 'true';
                 </div>
                 <div class="flex items-center gap-3 flex-shrink-0">
                     <div class="h-6 w-[1px] bg-gray-200"></div>
-                    <button type="button" onclick="window.location.href='./index.php?page=notes'" class="text-[11px] font-black uppercase tracking-widest bg-black text-white px-2.5 py-1.5 rounded-sm hover:opacity-90 whitespace-nowrap">
+                    <button type="button" onclick="closeNoteView()" class="text-[11px] font-black uppercase tracking-widest bg-black text-white px-2.5 py-1.5 rounded-sm hover:opacity-90 whitespace-nowrap">
                         Done
                     </button>
                 </div>
@@ -430,6 +441,21 @@ $isEditing = ($_GET['edit'] ?? 'false') === 'true';
         let isEditing = <?= $isEditing ? 'true' : 'false' ?>;
         let currentNoteTitle = <?= json_encode($note['title'] ?? 'Untitled') ?>;
         let currentNoteContent = <?= json_encode($note['content'] ?? '') ?>;
+        const IS_EMBEDDED = <?= $isEmbedded ? 'true' : 'false' ?> && window.parent !== window;
+
+        // Embedded in the wide Notes pane: tell the list what happened instead of navigating away
+        function notifyNotesPane(action) {
+            if (!IS_EMBEDDED) return;
+            window.parent.postMessage({ type: 'op-note', action, id: noteId, title: currentNoteTitle, content: currentNoteContent }, window.location.origin);
+        }
+
+        function closeNoteView() {
+            if (IS_EMBEDDED) {
+                notifyNotesPane('closed');
+                return;
+            }
+            window.location.href = './index.php?page=notes';
+        }
         let autoSaveTimer = null;
         let saveInFlight = false;
         let lastSavedSignature = JSON.stringify({
@@ -663,6 +689,7 @@ $isEditing = ($_GET['edit'] ?? 'false') === 'true';
                 setSaveStatus('Saved', 'success');
                 setTimeout(() => setSaveStatus(''), 1200);
                 renderChecklistContent();
+                notifyNotesPane('saved');
                 return true;
             } catch (error) {
                 console.error('Error saving note:', error);
@@ -746,7 +773,7 @@ $isEditing = ($_GET['edit'] ?? 'false') === 'true';
                 return;
             }
             isEditing = !isEditing;
-            window.location.href = `?page=view-notes&id=${encodeURIComponent(noteId)}&edit=${isEditing ? 'true' : 'false'}`;
+            window.location.href = `?page=view-notes&id=${encodeURIComponent(noteId)}&edit=${isEditing ? 'true' : 'false'}${IS_EMBEDDED ? '&embedded=1' : ''}`;
         };
 
         window.toggleMenu = function() {
@@ -841,6 +868,10 @@ $isEditing = ($_GET['edit'] ?? 'false') === 'true';
                     }
                 );
                 if (response.ok && result.success) {
+                    if (IS_EMBEDDED) {
+                        notifyNotesPane('deleted');
+                        return;
+                    }
                     location.href = '?page=notes';
                     return;
                 }
@@ -935,7 +966,7 @@ $isEditing = ($_GET['edit'] ?? 'false') === 'true';
                 );
                 if (response.ok && result.success) {
                     alert('Converted to Knowledge Base!');
-                    window.location.href = `?page=knowledge-base&device=desktop&id=${result.articleId}`;
+                    (IS_EMBEDDED ? window.top : window).location.href = `?page=knowledge-base&device=desktop-once&id=${result.articleId}`;
                     return;
                 }
                 alert('Conversion failed: ' + getErrorMessage(result, 'Unknown error'));

@@ -1,7 +1,7 @@
 <?php
 
 $missingMobilePage = isset($missingMobilePage) ? (string)$missingMobilePage : '';
-$desktopUrl = APP_URL . '?page=' . urlencode($missingMobilePage) . '&device=desktop';
+$desktopUrl = APP_URL . '?page=' . urlencode($missingMobilePage) . '&device=desktop-once';
 $dashboardUrl = '?page=dashboard';
 
 ?>

@@ -230,11 +230,12 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // Security Headers - HTTP protection against common attacks
 $requestedPage = preg_replace('/[^a-z0-9_-]/i', '', (string)($_GET['page'] ?? ''));
-$isEmbeddedInvoiceRequest = (($_GET['embedded'] ?? '') === '1') && in_array($requestedPage, ['invoice-view', 'advanced-invoice-view'], true);
-$frameAncestorsPolicy = $isEmbeddedInvoiceRequest ? "'self'" : "'none'";
+// Same-origin framing only for pages the app itself embeds (invoice previews, wide-screen notes pane)
+$isEmbeddedFrameRequest = (($_GET['embedded'] ?? '') === '1') && in_array($requestedPage, ['invoice-view', 'advanced-invoice-view', 'view-notes'], true);
+$frameAncestorsPolicy = $isEmbeddedFrameRequest ? "'self'" : "'none'";
 
 header('X-Content-Type-Options: nosniff');
-header('X-Frame-Options: ' . ($isEmbeddedInvoiceRequest ? 'SAMEORIGIN' : 'DENY'));
+header('X-Frame-Options: ' . ($isEmbeddedFrameRequest ? 'SAMEORIGIN' : 'DENY'));
 header('X-XSS-Protection: 1; mode=block');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {

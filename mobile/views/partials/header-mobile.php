@@ -84,6 +84,10 @@ if ($rightAction === 'add') {
     // Empty spacer to maintain center alignment
     $rightContent = '<div class="w-10"></div>';
 }
+
+// Wide screens (unfolded foldables): side rail + wider column. Must render outside the
+// header, whose backdrop-filter would otherwise trap the fixed-position rail.
+include __DIR__ . '/wide-shell.php';
 ?>
 <!-- Universal Mobile Header -->
 <header class="sticky top-0 z-50 mb-2 bg-white/95 dark:bg-zinc-950/95 text-black dark:text-white backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 px-4 py-3 pb-3 flex items-center justify-between" style="padding-top: max(0.75rem, env(safe-area-inset-top)); min-height: calc(3.5rem + env(safe-area-inset-top))">

@@ -1,271 +1,217 @@
 <?php
-$siteName = getPublicAppName();
-$pageTitle = $siteName . ' | Public Documentation';
-
-// SEO Configuration
-$pageDescription = 'Complete documentation for OpenPlan Work - setup guides, features, and API reference for the encrypted PHP workspace.';
-$pageKeywords = 'documentation, setup guide, PHP app documentation, self-hosted documentation, encrypted workspace docs';
-$canonicalUrl = APP_URL . '/?page=docs';
-$ogImage = APP_URL . '/assets/images/chrome_B3N3g51Yeo.png';
+require_once __DIR__ . '/partials/public-site-context.php';
+$pageTitle = $siteName . ' | Documentation';
+$pageDescription = 'Clear OpenPlan Work guides for getting started, managing projects, using mobile, and understanding storage, setup, and releases.';
+$canonicalUrl = $publicDocsUrl;
+$ogImageAlt = 'OpenPlan Work dashboard with sample workspace data';
+$publicHeaderCurrentPage = 'docs';
+$structuredData = [
+    '@context' => 'https://schema.org',
+    '@type' => 'WebPage',
+    'name' => $pageTitle,
+    'description' => $pageDescription,
+    'url' => $canonicalUrl,
+    'isPartOf' => [
+        '@type' => 'WebSite',
+        'name' => $siteName,
+        'url' => $canonicalHomeUrl,
+    ],
+];
+$docsNav = [
+    ['id' => 'start', 'label' => 'Getting started'],
+    ['id' => 'work', 'label' => 'Dashboard and work'],
+    ['id' => 'clients', 'label' => 'Clients and invoices'],
+    ['id' => 'everyday', 'label' => 'Everyday tools'],
+    ['id' => 'mobile-access', 'label' => 'Mobile access'],
+    ['id' => 'security', 'label' => 'Data and security'],
+    ['id' => 'configuration', 'label' => 'Configuration'],
+    ['id' => 'local-run', 'label' => 'Run locally'],
+    ['id' => 'hosted-run', 'label' => 'Hosted setup'],
+    ['id' => 'exports', 'label' => 'Exports and releases'],
+    ['id' => 'branding', 'label' => 'Branding'],
+    ['id' => 'license', 'label' => 'License'],
+];
+require __DIR__ . '/partials/public-site-head.php';
 ?>
-<!DOCTYPE html>
-<html class="scroll-smooth" lang="en">
-<head>
-<!-- Primary Meta Tags -->
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title><?php echo e($pageTitle); ?></title>
-<meta name="description" content="<?php echo e($pageDescription); ?>"/>
-<meta name="keywords" content="<?php echo e($pageKeywords); ?>"/>
-<meta name="author" content="OpenPlan Work"/>
-<meta name="robots" content="index, follow"/>
-<link rel="canonical" href="<?php echo e($canonicalUrl); ?>"/>
+<body class="marketing-page marketing-subpage">
+<?php require __DIR__ . '/partials/public-site-header.php'; ?>
+<main id="main">
+    <section class="public-docs-hero" id="top" aria-labelledby="docs-title">
+        <div class="section-wrap public-docs-hero-layout">
+            <div>
+                <p class="eyebrow"><span class="eyebrow__number">01</span> Documentation</p>
+                <h1 id="docs-title">A clear next step, whenever you need one.</h1>
+                <p class="hero__lede">Short guides for setting up your workspace, finding the right tool, and keeping the work moving.</p>
+                <nav class="public-docs-links" aria-label="Popular documentation topics">
+                    <a href="#start">Getting started <span aria-hidden="true">↓</span></a>
+                    <a href="#work">Managing work <span aria-hidden="true">↓</span></a>
+                    <a href="#everyday">Everyday tools <span aria-hidden="true">↓</span></a>
+                </nav>
+            </div>
+            <figure class="public-screen public-screen--hero">
+                <img src="<?php echo e($publicBaseUrl); ?>/assets/images/app-dashboard.webp" width="1600" height="1000" alt="OpenPlan dashboard showing example projects, tasks, habits, and revenue totals. Sample workspace data." fetchpriority="high" decoding="async" data-dashboard-shot>
+                <figcaption>Dashboard screen · actual product UI with sample workspace data</figcaption>
+            </figure>
+        </div>
+    </section>
 
-<!-- Open Graph / Facebook -->
-<meta property="og:type" content="website"/>
-<meta property="og:url" content="<?php echo e($canonicalUrl); ?>"/>
-<meta property="og:title" content="<?php echo e($pageTitle); ?>"/>
-<meta property="og:description" content="<?php echo e($pageDescription); ?>"/>
-<meta property="og:image" content="<?php echo e($ogImage); ?>"/>
-<meta property="og:image:alt" content="<?php echo e($pageTitle); ?>"/>
-<meta property="og:image:width" content="1200"/>
-<meta property="og:image:height" content="630"/>
-<meta property="og:site_name" content="<?php echo e($siteName); ?>"/>
-<meta property="og:locale" content="en_US"/>
+    <section class="section public-docs-body" aria-label="OpenPlan Work documentation">
+        <div class="section-wrap public-docs-layout">
+            <aside class="public-docs-sidebar" aria-label="Documentation contents">
+                <p>IN THIS GUIDE</p>
+                <?php foreach ($docsNav as $item): ?>
+                    <a href="#<?php echo e($item['id']); ?>"><?php echo e($item['label']); ?></a>
+                <?php endforeach; ?>
+            </aside>
 
-<!-- Twitter -->
-<meta name="twitter:card" content="summary_large_image"/>
-<meta name="twitter:url" content="<?php echo e($canonicalUrl); ?>"/>
-<meta name="twitter:title" content="<?php echo e($pageTitle); ?>"/>
-<meta name="twitter:description" content="<?php echo e($pageDescription); ?>"/>
-<meta name="twitter:image" content="<?php echo e($ogImage); ?>"/>
-<meta name="twitter:image:alt" content="<?php echo e($pageTitle); ?>"/>
+            <article class="public-docs-content">
+                <section class="public-docs-section" id="start" aria-labelledby="start-title">
+                    <p class="eyebrow">OpenPlan Work guide</p>
+                    <h2 id="start-title">Getting started</h2>
+                    <p class="section-lede">Begin with the basics: set up your workspace, get familiar with the dashboard, and choose the first part of your work to bring in.</p>
+                    <p><?php echo e($siteName); ?> is a self-hosted PHP productivity suite for tasks, projects, notes, habits, invoices, inventory, and AI-assisted workflows. It is designed for local-first storage and portable deployment on a local machine or hosted server.</p>
+                    <div class="public-docs-callout"><strong>Start with one useful thing.</strong><span>Add a project, capture a task, or create a client record. Build out the rest of your workspace as you go.</span></div>
+                    <div class="public-docs-two-up">
+                        <div class="public-docs-topic"><h3>Core modules</h3><p>Projects and tasks, clients, notes and Knowledge Base, habits and Pomodoro, invoices and quotes, and inventory.</p></div>
+                        <div class="public-docs-topic"><h3>Choose a starting point</h3><p>See the <a class="text-link" href="<?php echo e($publicHowItWorksUrl); ?>">work flow guide</a>, review <a class="text-link" href="<?php echo e($publicPricingUrl); ?>">pricing</a>, or open the <a class="text-link" href="<?php echo e($publicMobileUrl); ?>">mobile guide</a>.</p></div>
+                    </div>
+                </section>
 
-<!-- Favicons -->
-<link rel="icon" type="image/png" sizes="32x32" href="<?php echo APP_URL; ?>/assets/favicons/favicon-32x32.png"/>
-<link rel="icon" type="image/png" sizes="16x16" href="<?php echo APP_URL; ?>/assets/favicons/favicon-16x16.png"/>
-<link rel="shortcut icon" href="<?php echo APP_URL; ?>/assets/favicons/favicon.ico"/>
-<link rel="apple-touch-icon" sizes="180x180" href="<?php echo APP_URL; ?>/assets/favicons/apple-touch-icon.png"/>
+                <section class="public-docs-section" id="work" aria-labelledby="work-title">
+                    <p class="eyebrow"><span class="eyebrow__number">02</span> Find your way</p>
+                    <h2 id="work-title">Dashboard and projects</h2>
+                    <p>The dashboard gives you a starting view across the workspace. Projects keep related tasks and progress together, so you can move from the broad plan to the next action without losing context.</p>
+                    <ul>
+                        <li>Use projects to group work and review its progress.</li>
+                        <li>Use tasks to capture the next action and follow its status.</li>
+                        <li>Keep notes and knowledge close to the work they support.</li>
+                    </ul>
+                    <figure class="public-screen public-screen--wide public-docs-shot">
+                        <img src="<?php echo e($publicBaseUrl); ?>/assets/images/app-projects.webp" width="1400" height="1064" alt="OpenPlan Projects view showing example project records and task progress. Sample workspace data." loading="lazy" decoding="async">
+                        <figcaption>Projects · actual product UI with sample workspace data</figcaption>
+                    </figure>
+                </section>
 
-<!-- Styles -->
-<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+                <section class="public-docs-section" id="clients" aria-labelledby="clients-title">
+                    <p class="eyebrow"><span class="eyebrow__number">03</span> Client work</p>
+                    <h2 id="clients-title">Clients, quotes, and invoices</h2>
+                    <p>Keep client details with the work and billing records connected to them. The suite includes client, quote, and invoice modules, along with inventory tools for the operational details behind a business.</p>
+                    <figure class="public-screen public-screen--wide public-docs-shot">
+                        <img src="<?php echo e($publicBaseUrl); ?>/assets/images/app-invoices.webp" width="1400" height="1064" alt="OpenPlan invoice list with example clients, invoice statuses, and sample amounts. Sample workspace data." loading="lazy" decoding="async">
+                        <figcaption>Invoices · actual product UI with sample workspace data</figcaption>
+                    </figure>
+                    <p><a class="text-link" href="<?php echo e($publicHowItWorksUrl); ?>#billing">Follow the client-to-invoice workflow <span aria-hidden="true">↗</span></a></p>
+                </section>
 
-<!-- Schema.org Structured Data -->
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "WebPage",
-  "name": "<?php echo e($pageTitle); ?>",
-  "description": "<?php echo e($pageDescription); ?>",
-  "url": "<?php echo e($canonicalUrl); ?>",
-  "isPartOf": {
-    "@type": "WebSite",
-    "name": "OpenPlan Work",
-    "url": "<?php echo e(APP_URL); ?>"
-  },
-  "breadcrumb": {
-    "@type": "BreadcrumbList",
-    "itemListElement": [
-      {
-        "@type": "ListItem",
-        "position": 1,
-        "name": "Home",
-        "item": "<?php echo e(APP_URL); ?>/"
-      },
-      {
-        "@type": "ListItem",
-        "position": 2,
-        "name": "Documentation"
-      }
-    ]
-  }
-}
-</script>
-<script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        primary: "#000000",
-                        "background-light": "#FFFFFF",
-                        "background-dark": "#0A0A0A",
-                    },
-                    fontFamily: {
-                        display: ["Inter", "sans-serif"],
-                        sans: ["Inter", "sans-serif"],
-                    },
-                },
-            },
-        };
-    </script>
-</head>
-<body class="bg-background-light dark:bg-background-dark text-zinc-900 dark:text-zinc-100 antialiased transition-colors duration-300">
-<header class="sticky top-0 z-40 border-b border-black/10 dark:border-white/10 bg-white/90 dark:bg-black/80 backdrop-blur">
-<div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-<div class="flex items-center gap-3">
-<div class="w-7 h-7 bg-black text-white dark:bg-white dark:text-black rounded flex items-center justify-center">
-<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z"></path>
-</svg>
-</div>
-<span class="text-sm font-bold tracking-tight"><?php echo e($siteName); ?></span>
-</div>
-<div class="flex items-center gap-4 text-xs uppercase tracking-[0.25em] font-semibold text-black/60 dark:text-white/70">
-<a class="hover:text-black dark:hover:text-white transition-colors" href="<?php echo APP_URL; ?>?page=homepage">Home</a>
-<a class="hover:text-black dark:hover:text-white transition-colors" href="<?php echo APP_URL; ?>?page=login">Login</a>
-</div>
-</div>
-</header>
-<main class="max-w-6xl mx-auto px-6 py-16">
-<div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8 border-b border-zinc-200 dark:border-zinc-800 pb-10">
-<div>
-<p class="text-xs uppercase tracking-[0.3em] text-zinc-400">Public Documentation</p>
-<h1 class="text-4xl sm:text-5xl font-black tracking-tight mt-4"><?php echo e($siteName); ?></h1>
-<p class="text-lg text-zinc-500 dark:text-zinc-400 mt-4 max-w-2xl">
-                The encrypted PHP workspace for teams and solo builders who want ownership of their data.
-            </p>
-</div>
-<div class="flex gap-3">
-<a class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] border border-black text-black dark:text-white dark:border-white px-6 py-2 rounded hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all" href="<?php echo APP_URL; ?>?page=register">
-<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-</svg>
-                Create Account
-            </a>
-</div>
-</div>
-<section class="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-12">
-<div class="border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 bg-white dark:bg-zinc-950">
-<h2 class="text-sm font-bold uppercase tracking-[0.2em] mb-4">What It Is</h2>
-<ul class="space-y-3 text-sm text-zinc-600 dark:text-zinc-300">
-<li>A <strong>self-hosted PHP productivity suite</strong> for tasks, projects, notes, habits, invoices, inventory, and AI-assisted workflows.</li>
-<li><strong>Local-first storage</strong> built on encrypted JSON files for complete data ownership.</li>
-<li>Portable deployments for both local development and hosted production environments.</li>
-</ul>
-</div>
-<div class="border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 bg-white dark:bg-zinc-950">
-<h2 class="text-sm font-bold uppercase tracking-[0.2em] mb-4">Core Modules</h2>
-<ul class="space-y-3 text-sm text-zinc-600 dark:text-zinc-300">
-<li>Tasks and Projects</li>
-<li>Notes and Knowledge Base</li>
-<li>Habits and Pomodoro</li>
-<li>Invoices, Quotes, Inventory</li>
-</ul>
-</div>
-<div class="border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 bg-white dark:bg-zinc-950">
-<h2 class="text-sm font-bold uppercase tracking-[0.2em] mb-4">Security</h2>
-<ul class="space-y-3 text-sm text-zinc-600 dark:text-zinc-300">
-<li>AES-256-GCM encryption for stored JSON data.</li>
-<li>Master password controls data access.</li>
-<li>Session timeout enforcement and audit logging.</li>
-</ul>
-</div>
-</section>
-<section class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-12">
-<div class="border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 bg-white dark:bg-zinc-950">
-<h2 class="text-xl font-black mb-4">Data Model</h2>
-<p class="text-sm text-zinc-600 dark:text-zinc-300 mb-4">
-                Data is stored as <strong>encrypted JSON records</strong> per user workspace. Each module persists its own collections, keeping tasks, projects, notes, clients, and invoices isolated with <strong>AES-256-GCM encryption</strong>.
-            </p>
-<ul class="space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
-<li><strong>Encrypted JSON</strong> collections per module</li>
-<li>Per-user storage isolation</li>
-<li>Backups and exports regenerate clean data folders</li>
-</ul>
-</div>
-<div class="border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 bg-white dark:bg-zinc-950">
-<h2 class="text-xl font-black mb-4">Authentication Flow</h2>
-<p class="text-sm text-zinc-600 dark:text-zinc-300 mb-4">
-                Users authenticate with email + password and a <strong>master encryption key</strong>. The master key encrypts all stored data using <strong>industry-standard encryption</strong> and must be retained for future access.
-            </p>
-<ul class="space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
-<li><strong>Master key encryption</strong></li>
-<li>Optional email verification</li>
-<li>Session timeout configuration</li>
-</ul>
-</div>
-</section>
-<section class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-12">
-<div class="border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 bg-white dark:bg-zinc-950">
-<h2 class="text-xl font-black mb-4">Configuration</h2>
-<p class="text-sm text-zinc-600 dark:text-zinc-300 mb-4">
-                Configure email, branding, and hosted-only toggles through environment variables and the app settings UI.
-            </p>
-<ul class="space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
-<li>.env.example for baseline configuration</li>
-<li>MAIL, SMTP, and app branding values</li>
-<li>Hosted feature flags for auth + image service</li>
-</ul>
-</div>
-<div class="border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 bg-white dark:bg-zinc-950">
-<h2 class="text-xl font-black mb-4">Exports</h2>
-<p class="text-sm text-zinc-600 dark:text-zinc-300 mb-4">
-                Exports create clean release artifacts without secrets or live data, ready for public distribution or handoff.
-            </p>
-<ul class="space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
-<li>Clean data skeleton</li>
-<li>No user data or sessions</li>
-<li>Release manifest included</li>
-</ul>
-</div>
-</section>
-<section class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-12">
-<div class="border border-black dark:border-white rounded-2xl p-8 bg-black text-white dark:bg-white dark:text-black">
-<h2 class="text-2xl font-black mb-4">Local Run</h2>
-<p class="text-sm text-white/70 dark:text-black/70 mb-6">
-                Requirements: PHP 8.0+, json, mbstring, openssl.
-            </p>
-<div class="text-xs uppercase tracking-[0.2em] font-bold">
-<div class="flex items-center justify-between border-b border-white/20 dark:border-black/20 py-2">
-<span>php start_server.php</span>
-<span>CLI</span>
-</div>
-<div class="flex items-center justify-between border-b border-white/20 dark:border-black/20 py-2">
-<span>start_server.bat</span>
-<span>Windows</span>
-</div>
-</div>
-</div>
-<div class="border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 bg-white dark:bg-zinc-950">
-<h2 class="text-2xl font-black mb-4">Hosted Run</h2>
-<p class="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
-                Hosted installs rely on environment configuration for auth and mail features.
-            </p>
-<p class="text-sm text-zinc-600 dark:text-zinc-300">
-                Use .env.example as a starting point for deployment settings, then define hosted-only flags and secrets in your server environment.
-            </p>
-</div>
-</section>
-<section class="mt-12 border-t border-zinc-200 dark:border-zinc-800 pt-10">
-<h2 class="text-xl font-black mb-4">Export and Releases</h2>
-<p class="text-sm text-zinc-600 dark:text-zinc-300 max-w-3xl">
-            Release exports exclude live data, sessions, and secrets. Generated ZIPs include a clean data structure for safe distribution and onboarding.
-        </p>
-</section>
-<section class="mt-12 border-t border-zinc-200 dark:border-zinc-800 pt-10">
-<h2 class="text-xl font-black mb-4">Branding</h2>
-<p class="text-sm text-zinc-600 dark:text-zinc-300 max-w-3xl">
-            Clean high-contrast design language with light and dark modes. Logos and icons are intentionally minimal.
-        </p>
-</section>
-<section class="mt-12 border-t border-zinc-200 dark:border-zinc-800 pt-10">
-<h2 class="text-xl font-black mb-4">License</h2>
-<p class="text-sm text-zinc-600 dark:text-zinc-300 max-w-3xl">
-            Add a LICENSE file before distributing as open source.
-        </p>
-</section>
+                <section class="public-docs-section" id="everyday" aria-labelledby="everyday-title">
+                    <p class="eyebrow"><span class="eyebrow__number">04</span> Everyday tools</p>
+                    <h2 id="everyday-title">Notes, habits, and focus</h2>
+                    <p>Use the smaller tools around a project plan: capture notes, keep a Knowledge Base, track habits, and use a Pomodoro timer for focused sessions. These modules give day-to-day work a place alongside longer projects.</p>
+                    <figure class="public-screen public-screen--wide public-docs-shot">
+                        <img src="<?php echo e($publicBaseUrl); ?>/assets/images/app-habits.webp" width="1400" height="1064" alt="OpenPlan Habits view showing example routines and weekly progress. Sample workspace data." loading="lazy" decoding="async">
+                        <figcaption>Habits · actual product UI with sample workspace data</figcaption>
+                    </figure>
+                </section>
+
+                <section class="public-docs-section" id="mobile-access" aria-labelledby="mobile-access-title">
+                    <p class="eyebrow"><span class="eyebrow__number">05</span> On your phone</p>
+                    <h2 id="mobile-access-title">Mobile access</h2>
+                    <p>The mobile view is designed around phone-sized screens and provides access to the workspace modules available in the mobile interface. Visit the dedicated mobile page for the current Android download status.</p>
+                    <figure class="public-screen public-screen--wide public-docs-shot">
+                        <img src="<?php echo e($publicBaseUrl); ?>/assets/images/app-mobile-dashboard.webp" width="600" height="1298" alt="OpenPlan mobile dashboard with example tasks, projects, and habits. Sample workspace data." loading="lazy" decoding="async">
+                        <figcaption>Mobile dashboard · actual product UI with sample workspace data</figcaption>
+                    </figure>
+                    <p><a class="text-link" href="<?php echo e($publicMobileUrl); ?>">View the mobile and Android page <span aria-hidden="true">↗</span></a></p>
+                </section>
+
+                <section class="public-docs-section" id="security" aria-labelledby="security-title">
+                    <p class="eyebrow"><span class="eyebrow__number">06</span> Data and security</p>
+                    <h2 id="security-title">Your data stays in your workspace</h2>
+                    <p>Workspace records are stored as per-user encrypted JSON collections. AES-256-GCM protects data at rest. The master password derives the encryption key and must be kept by the user for future access; the application does not store it in plaintext.</p>
+                    <ul>
+                        <li>Collections are isolated by user.</li>
+                        <li>Authentication uses an email and password, followed by the master password for encrypted data access.</li>
+                        <li>Email verification can be enabled, and session timeouts are enforced.</li>
+                        <li>Audit logging records security-relevant events.</li>
+                    </ul>
+                    <div class="public-docs-callout"><strong>Keep the master password safe.</strong><span>It is needed to access encrypted workspace data. Do not share it or store it in logs.</span></div>
+                </section>
+
+                <section class="public-docs-section" id="configuration" aria-labelledby="configuration-title">
+                    <p class="eyebrow"><span class="eyebrow__number">07</span> Configuration</p>
+                    <h2 id="configuration-title">Set up the environment</h2>
+                    <p>Email, SMTP, application branding, and hosted-only feature settings can be configured through environment variables and application settings. Use the example configuration as a baseline, then provide real secrets through the server environment.</p>
+                    <ul>
+                        <li><code>.env.example</code> documents baseline values.</li>
+                        <li>Mail delivery uses the configured MAIL and SMTP values.</li>
+                        <li>Hosted feature flags control optional authentication and image-service behavior.</li>
+                    </ul>
+                </section>
+
+                <section class="public-docs-section" id="local-run" aria-labelledby="local-run-title">
+                    <p class="eyebrow"><span class="eyebrow__number">08</span> Local development</p>
+                    <h2 id="local-run-title">Run locally</h2>
+                    <p>Get the code from the <a class="text-link" href="<?php echo e($repoUrl); ?>" target="_blank" rel="noreferrer">open-source repository on GitHub</a>, either as a <a class="text-link" href="<?php echo e($sourceDownloadUrl); ?>">ZIP download</a> or with git:</p>
+                    <div class="public-docs-code" aria-label="Clone command">
+                        <code>git clone <?php echo e($repoUrl); ?>.git</code>
+                    </div>
+                    <p>Local development requires PHP 8.0 or newer and the <code>json</code>, <code>mbstring</code>, and <code>openssl</code> extensions.</p>
+                    <div class="public-docs-code" aria-label="Local server commands">
+                        <p>Start the local server with either command:</p>
+                        <code>php start_server.php</code>
+                        <code>start_server.bat</code>
+                    </div>
+                </section>
+
+                <section class="public-docs-section" id="hosted-run" aria-labelledby="hosted-run-title">
+                    <p class="eyebrow"><span class="eyebrow__number">09</span> Hosted installation</p>
+                    <h2 id="hosted-run-title">Configure a hosted install</h2>
+                    <p>Hosted installs rely on server environment configuration for authentication and mail features. Use <code>.env.example</code> as a starting point, then set hosted-only flags and secrets in the server environment.</p>
+                    <p>Keep deployment credentials and private configuration out of public release files and source control.</p>
+                </section>
+
+                <section class="public-docs-section" id="exports" aria-labelledby="exports-title">
+                    <p class="eyebrow"><span class="eyebrow__number">10</span> Exports and releases</p>
+                    <h2 id="exports-title">Prepare a clean release</h2>
+                    <p>Release exports are intended to create clean artifacts without live user data, sessions, master passwords, or AI keys. The generated ZIP includes a clean data structure and a release manifest for distribution or handoff.</p>
+                    <ul>
+                        <li>Clean data skeleton</li>
+                        <li>No user data or active sessions</li>
+                        <li>Release manifest included</li>
+                    </ul>
+                </section>
+
+                <section class="public-docs-section" id="branding" aria-labelledby="branding-title">
+                    <p class="eyebrow"><span class="eyebrow__number">11</span> Branding</p>
+                    <h2 id="branding-title">A consistent visual system</h2>
+                    <p>The public product pages use a high-contrast black-and-white design with light and dark themes. Logos and icons are intentionally minimal; product screenshots retain their original color.</p>
+                </section>
+
+                <section class="public-docs-section" id="license" aria-labelledby="license-title">
+                    <p class="eyebrow"><span class="eyebrow__number">12</span> License</p>
+                    <h2 id="license-title">Before distributing</h2>
+                    <p>Add and review a LICENSE file before distributing the project as open source. Confirm that bundled dependencies and assets are compatible with the chosen license.</p>
+                </section>
+            </article>
+        </div>
+    </section>
+
+    <section class="section public-docs-topics" aria-labelledby="docs-next-title">
+        <div class="section-wrap public-docs-last">
+            <div>
+                <p class="eyebrow"><span class="eyebrow__number">13</span> Keep exploring</p>
+                <h2 id="docs-next-title">Find the guide for your next step.</h2>
+                <p class="section-lede">See how everyday work connects, explore the mobile experience, or review the current plans.</p>
+            </div>
+            <div class="public-doc-links">
+                <a href="<?php echo e($publicHowItWorksUrl); ?>">How it works <span>↗</span></a>
+                <a href="<?php echo e($publicMobileUrl); ?>">Mobile and Android <span>↗</span></a>
+                <a href="<?php echo e($publicPricingUrl); ?>">Pricing <span>↗</span></a>
+            </div>
+        </div>
+    </section>
 </main>
-<script>
-        const html = document.documentElement;
-        if (localStorage.theme === 'dark') {
-            html.classList.add('dark');
-        } else {
-            html.classList.remove('dark');
-        }
-    </script>
+<?php require __DIR__ . '/partials/public-site-footer.php'; ?>
+<?php require __DIR__ . '/partials/public-site-scripts.php'; ?>
 </body>
 </html>

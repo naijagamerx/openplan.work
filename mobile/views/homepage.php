@@ -10,17 +10,9 @@ $pageDescription = 'Self-hosted PHP productivity suite for tasks, projects, note
 $canonicalUrl = APP_URL . '/';
 $repoUrl = 'https://github.com/naijagamerx/openplan.work';
 
-$releaseDownloadUrl = '';
-$hasHostedRelease = false;
-$releaseArtifactsDir = ROOT_PATH . '/release-artifacts';
-if (is_dir($releaseArtifactsDir)) {
-    $hostedCandidates = glob($releaseArtifactsDir . '/*-hosted-clean-*.zip');
-    if (is_array($hostedCandidates) && !empty($hostedCandidates)) {
-        usort($hostedCandidates, static fn($a, $b) => filemtime($b) <=> filemtime($a));
-        $releaseDownloadUrl = APP_URL . '/release-artifacts/' . basename($hostedCandidates[0]);
-        $hasHostedRelease = true;
-    }
-}
+// Release zips on this server are blocked by .htaccess; offer the public source instead.
+$releaseDownloadUrl = $repoUrl . '/archive/refs/heads/main.zip';
+$hasHostedRelease = true;
 
 $apkDownloadUrl = '';
 $hasApkRelease = false;
@@ -146,8 +138,8 @@ $isAuthenticated = Auth::check();
       <h2 class="text-2xl font-black">Self-host or sideload</h2>
       <?php if ($hasHostedRelease): ?>
         <a href="<?= htmlspecialchars($releaseDownloadUrl) ?>" class="block border border-black p-3 active:bg-gray-50">
-          <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500">Hosted Release ZIP</p>
-          <p class="text-sm font-bold">Drop on any PHP 8 server</p>
+          <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500">Source ZIP</p>
+          <p class="text-sm font-bold">Self-host on any PHP 8 server</p>
         </a>
       <?php endif; ?>
       <?php if ($hasApkRelease): ?>

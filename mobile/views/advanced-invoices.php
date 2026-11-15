@@ -97,7 +97,7 @@ tailwind.config = {
 $title = 'Advanced Invoices';
 $leftAction = 'menu';
 $rightAction = 'add';
-$rightTarget = APP_URL . '?page=advanced-invoice-form&device=desktop';
+$rightTarget = APP_URL . '?page=advanced-invoice-form&device=desktop-once';
 $rightIsLink = true;
 include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 ?>
@@ -125,7 +125,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     <?php if (empty($invoices)): ?>
         <div class="px-6 py-14 text-center">
             <p class="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">No advanced invoices</p>
-            <a href="<?= APP_URL ?>?page=advanced-invoice-form&device=desktop" class="mt-4 inline-block px-4 py-3 bg-black dark:bg-white text-white dark:text-black text-[10px] font-black uppercase tracking-widest">New Advanced Invoice</a>
+            <a href="<?= APP_URL ?>?page=advanced-invoice-form&device=desktop-once" class="mt-4 inline-block px-4 py-3 bg-black dark:bg-white text-white dark:text-black text-[10px] font-black uppercase tracking-widest">New Advanced Invoice</a>
         </div>
     <?php else: ?>
         <div class="px-4 py-3 flex justify-between bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 text-[9px] font-black uppercase tracking-widest">
@@ -182,7 +182,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
                     </div>
                     <div class="mt-2 flex items-center justify-end gap-2">
                         <a href="?page=advanced-invoice-view&id=<?= urlencode($invoiceId) ?>" class="px-3 py-0.5 text-[9px] font-black uppercase tracking-widest border border-black dark:border-white" onclick="event.stopPropagation()">View</a>
-                        <a href="<?= APP_URL ?>?page=advanced-invoice-form&id=<?= urlencode($invoiceId) ?>&device=desktop" class="px-3 py-0.5 text-[9px] font-black uppercase tracking-widest bg-black dark:bg-white text-white dark:text-black" onclick="event.stopPropagation()">Edit</a>
+                        <a href="<?= APP_URL ?>?page=advanced-invoice-form&id=<?= urlencode($invoiceId) ?>&device=desktop-once" class="px-3 py-0.5 text-[9px] font-black uppercase tracking-widest bg-black dark:bg-white text-white dark:text-black" onclick="event.stopPropagation()">Edit</a>
                         <button onclick="event.stopPropagation(); deleteAdvancedInvoice('<?= htmlspecialchars($invoiceId, ENT_QUOTES) ?>')" class="px-3 py-0.5 text-[9px] font-black uppercase tracking-widest border border-red-400 text-red-600">Delete</button>
                     </div>
                 </div>

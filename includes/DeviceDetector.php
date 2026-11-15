@@ -1,7 +1,9 @@
 <?php
 
 class DeviceDetector {
-    private const COOKIE_NAME = 'lazyman_device_preference';
+    // Renamed from 'lazyman_device_preference' (2026-10): in-app links used to set a sticky 30-day
+    // desktop preference, stranding phones/foldables on the desktop site. Old cookies are ignored.
+    private const COOKIE_NAME = 'lazyman_device_pref';
     private const COOKIE_TTL = 2592000;
 
     public static function shouldShowMobile(): bool {
@@ -20,6 +22,10 @@ class DeviceDetector {
         }
 
         $requested = strtolower(trim((string)($_GET['device'] ?? '')));
+        // One-off desktop page (e.g. a form with no mobile version): don't change the saved preference
+        if ($requested === 'desktop-once') {
+            return false;
+        }
         if ($requested === 'mobile' || $requested === 'desktop') {
             self::setPreferenceCookie($requested);
             return $requested === 'mobile';
