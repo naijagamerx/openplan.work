@@ -5,7 +5,8 @@
  * All collections referenced here live in the GLOBAL encrypted store
  * (Database(APP_NAME)) so any user's request can read them without holding
  * the admin's master password. The per-user ai_usage counter is the only
- * per-user file involved here.
+ * per-user file involved here, and quotas never rely on it alone (see
+ * saas_platformUsageCount): the user can roll their own files back.
  */
 
 require_once __DIR__ . '/Database.php';
@@ -149,8 +150,68 @@ if (!function_exists('getMonthlyUsage')) {
     }
 }
 
+if (!function_exists('saas_platformUsageCount')) {
+    /**
+     * Platform-key requests per user per month, kept in the GLOBAL store. Quotas
+     * must not rest on the per-user ai_usage file alone: the user can roll that
+     * back or delete it (backup restore, data wipe, reset). This copy is out of
+     * their reach; the per-user file still holds the per-provider breakdown.
+     */
+    function saas_platformUsageCount(string $userId, string $yearMonth): int {
+        try {
+            $all = saas_globalDatabase()->load('platform_usage', false);
+        } catch (Exception $e) {
+            return 0;
+        }
+        return (int)($all[$userId][$yearMonth] ?? 0);
+    }
+
+    function saas_recordPlatformUsage(string $userId): void {
+        $handle = @fopen(DATA_PATH . '/platform_usage.lock', 'c');
+        if ($handle !== false) {
+            flock($handle, LOCK_EX);
+        }
+        try {
+            $db = saas_globalDatabase();
+            $all = $db->load('platform_usage', true); // strict: never overwrite counts we could not read
+            $month = date('Y-m');
+            $row = is_array($all[$userId] ?? null) ? $all[$userId] : [];
+            $row[$month] = (int)($row[$month] ?? 0) + 1;
+            // Quotas read this month; a trial (60 days at most) reaches back three.
+            $oldest = date('Y-m', strtotime('-3 months', strtotime(date('Y-m-01'))));
+            foreach (array_keys($row) as $m) {
+                if ((string)$m < $oldest) {
+                    unset($row[$m]);
+                }
+            }
+            $all[$userId] = $row;
+            $db->save('platform_usage', $all);
+        } catch (Exception $e) {
+            error_log('saas_recordPlatformUsage failed: ' . $e->getMessage());
+        } finally {
+            if ($handle !== false) {
+                flock($handle, LOCK_UN);
+                fclose($handle);
+            }
+        }
+    }
+}
+
+if (!function_exists('saas_quotaMonthCount')) {
+    /** Requests counted against a quota for one month: the larger of the two counters. */
+    function saas_quotaMonthCount(string $userId, string $yearMonth): int {
+        return max(
+            (int)(getMonthlyUsage($userId, $yearMonth)['totalRequests'] ?? 0),
+            saas_platformUsageCount($userId, $yearMonth)
+        );
+    }
+}
+
 if (!function_exists('incrementUsage')) {
     function incrementUsage(string $userId, string $provider): void {
+        if ($userId !== '') {
+            saas_recordPlatformUsage($userId);
+        }
         $db = saas_userUsageDb($userId);
         if ($db === null) {
             return;
@@ -230,14 +291,14 @@ if (!function_exists('subscriptionUsage')) {
     function subscriptionUsage(string $userId, array $subscription): array {
         $cap = (int)($subscription['monthlyRequestCap'] ?? 0);
         if (empty($subscription['trial'])) {
-            return ['used' => (int)(getMonthlyUsage($userId)['totalRequests'] ?? 0), 'cap' => $cap, 'perTrial' => false];
+            return ['used' => saas_quotaMonthCount($userId, date('Y-m')), 'cap' => $cap, 'perTrial' => false];
         }
         $start = strtotime((string)($subscription['startsAt'] ?? '')) ?: time();
         $used = 0;
         $month = strtotime(date('Y-m-01', $start));
         $guard = 0;
         while ($month <= time() && $guard++ < 24) {
-            $used += (int)(getMonthlyUsage($userId, date('Y-m', $month))['totalRequests'] ?? 0);
+            $used += saas_quotaMonthCount($userId, date('Y-m', $month));
             $month = strtotime('+1 month', $month);
         }
         return ['used' => $used, 'cap' => $cap, 'perTrial' => true];
@@ -489,16 +550,52 @@ if (!function_exists('trialEligibility')) {
         if (!empty($user['trialStartedAt'])) {
             return $no('TRIAL_USED', 'You have already used your free trial. Pick a plan to keep using the AI on our keys.');
         }
+        // Trial records outlive a deleted account, so deleting the account and
+        // registering the same address again does not bring a second trial.
+        $emailKey = saas_trialEmailKey((string)($user['email'] ?? ''));
         foreach ($db->load('subscriptions', true) as $s) {
             if (($s['userId'] ?? '') === $userId) {
                 return $no('TRIAL_USED', 'Free trials are for accounts that have not had a plan yet. Pick a plan instead.');
+            }
+            if ($emailKey !== '' && hash_equals((string)($s['trialEmailKey'] ?? ''), $emailKey)) {
+                return $no('TRIAL_USED', 'This email address has already had a free trial. Pick a plan to keep using the AI on our keys.');
             }
         }
         $covered = array_filter($settings['providers'], fn($p) => getAdminSharedKey($p) !== null);
         if ($covered === []) {
             return $no('TRIAL_UNAVAILABLE', 'Free trials are not available right now.');
         }
-        return ['ok' => true, 'code' => 'OK', 'message' => ''];
+        return ['ok' => true, 'code' => 'OK', 'message' => '', 'emailKey' => $emailKey];
+    }
+}
+
+if (!function_exists('saas_trialEmailKey')) {
+    /**
+     * One key per mailbox, so "Name+x@Gmail.com" and "name@gmail.com" match.
+     * Stored hashed on the trial record: it is only ever compared, never shown.
+     */
+    function saas_trialEmailKey(string $email): string {
+        $email = strtolower(trim($email));
+        $at = strrpos($email, '@');
+        if ($at === false || $at === 0) {
+            return '';
+        }
+        $local = substr($email, 0, $at);
+        $domain = substr($email, $at + 1);
+        $plus = strpos($local, '+');
+        if ($plus !== false) {
+            $local = substr($local, 0, $plus);
+        }
+        if ($domain === 'googlemail.com') {
+            $domain = 'gmail.com';
+        }
+        if ($domain === 'gmail.com') {
+            $local = str_replace('.', '', $local);
+        }
+        if ($local === '' || $domain === '') {
+            return '';
+        }
+        return hash('sha256', 'trial-email|' . $local . '@' . $domain);
     }
 }
 
@@ -542,6 +639,7 @@ if (!function_exists('startTrial')) {
                 'providers' => $providers,
                 'monthlyRequestCap' => $settings['requests'],
                 'noticePending' => false,
+                'trialEmailKey' => (string)($check['emailKey'] ?? ''),
                 'createdAt' => $nowIso,
                 'updatedAt' => $nowIso,
             ];

@@ -44,9 +44,10 @@ $isAuthenticated = Auth::check();
 // Stored in session so it survives the 2-step (password → master code) login.
 if ($page === 'login' && !empty($_GET['redirect'])) {
     $candidate = (string)$_GET['redirect'];
-    // Same-site paths only: no "//host", no scheme, and no backslash ("/\host" is
-    // read as "//host" by browsers).
-    if (strpos($candidate, '/') === 0 && strpos($candidate, '//') !== 0 && strpos($candidate, '://') === false && strpos($candidate, "\\") === false) {
+    // Same-site paths only: no "//host", no scheme, no backslash ("/\host" is read
+    // as "//host" by browsers) and no control characters or spaces (browsers drop
+    // tabs and newlines, so "/<TAB>/host" would also become "//host").
+    if (strpos($candidate, '/') === 0 && strpos($candidate, '//') !== 0 && strpos($candidate, '://') === false && strpos($candidate, "\\") === false && !preg_match('/[\x00-\x20\x7F]/', $candidate)) {
         $_SESSION['post_login_redirect'] = $candidate;
     }
 }
