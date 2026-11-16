@@ -571,7 +571,8 @@ if (!function_exists('trialEligibility')) {
 
 if (!function_exists('saas_trialEmailKey')) {
     /**
-     * One key per mailbox, so "Name+x@Gmail.com" and "name@gmail.com" match.
+     * One key per mailbox, so "Name+x@Example.com" and "name@example.com" match
+     * (and, for Gmail addresses, dots in the name are ignored too).
      * Stored hashed on the trial record: it is only ever compared, never shown.
      */
     function saas_trialEmailKey(string $email): string {
