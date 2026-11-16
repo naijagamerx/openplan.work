@@ -18,6 +18,18 @@
     line-height: 1.03;
 }
 .public-page-hero h1 span { color: var(--muted); }
+/* Inner-page heroes are one centred column, like the homepage (the contract refuses
+   the split hero). The Mobile page keeps its phone beside the copy on purpose. */
+.public-page-hero--center { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: clamp(2.5rem, 5vw, 4rem); text-align: center; }
+.public-page-hero--center .public-page-hero__copy { display: flex; flex-direction: column; align-items: center; max-width: 1040px; }
+.public-page-hero--center h1 { max-width: none; text-wrap: balance; }
+.public-page-hero--center .hero__lede { max-width: 62ch; }
+.public-page-hero--center .op-cta-row { justify-content: center; }
+.public-page-hero--center .public-screen { width: min(100%, 960px); }
+.public-docs-hero--center .public-docs-hero-layout { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; }
+.public-docs-hero--center h1 { max-width: 16ch; margin-inline: auto; }
+.public-docs-hero--center .hero__lede { max-width: 62ch; margin-inline: auto; }
+.public-docs-hero--center .public-docs-links { justify-content: center; }
 .public-page-hero .hero__lede,
 .public-mobile-hero .hero__lede { max-width: 34rem; margin-bottom: 1.7rem; color: var(--ink-soft); font-size: 1rem; line-height: 1.8; }
 .public-screen { min-width: 0; margin: 0; }
@@ -59,7 +71,7 @@
 .public-copy .section-lede { margin-bottom: 1.25rem; }
 .public-check-list { display: grid; gap: .6rem; margin: 1.4rem 0 0; padding: 0; list-style: none; }
 .public-check-list li { position: relative; padding-left: 1.55rem; color: var(--ink-soft); font-size: .84rem; }
-.public-check-list li::before { position: absolute; left: 0; content: "✓"; color: var(--ink); font-weight: 700; }
+.public-check-list li::before { position: absolute; top: .3em; left: .3rem; width: .38rem; height: .72rem; border-right: 2px solid var(--ink); border-bottom: 2px solid var(--ink); transform: rotate(45deg); content: ""; }
 .public-close { padding-top: 1rem; }
 .public-section-heading { max-width: 700px; margin-bottom: 2.8rem; }
 .public-section-heading h2 { max-width: 14ch; }
@@ -142,6 +154,14 @@
 .public-docs-section p { max-width: 72ch; }
 .public-docs-section ul { display: grid; gap: .35rem; margin: .75rem 0 1.25rem; padding-left: 1.2rem; }
 .public-docs-section li::marker { color: var(--muted); }
+/* Grid columns default to their widest content; let long code lines scroll inside instead. */
+.public-docs-layout > * { min-width: 0; }
+.public-docs-section :not(.public-docs-code) > code { overflow-wrap: anywhere; }
+.public-docs-section ol { display: grid; gap: .45rem; margin: .75rem 0 1.25rem; padding-left: 1.3rem; }
+.public-docs-section .op-code { margin: .75rem 0 1.25rem; }
+.public-docs-section .public-docs-code { margin: .75rem 0 1.25rem; }
+.public-docs-section .public-docs-callout { margin: 1rem 0 1.25rem; }
+.public-docs-section .public-docs-callout code { color: inherit; }
 .public-docs-shot { max-width: 860px; margin: 1.7rem 0 0; }
 .public-docs-shot img { max-height: none; }
 .public-docs-two-up { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; margin-top: 1.5rem; }
@@ -226,3 +246,101 @@ html.js [data-dashboard-shot]:not(.is-revealed) { clip-path: inset(0 0 100% 0); 
     .public-legal dl { grid-template-columns: 1fr; gap: .1rem; }
     .public-legal dd { margin-bottom: .6rem; }
 }
+
+/* ---- Detailed content blocks shared by the public pages (2026-11 rework) ---- */
+.op-section { padding-block: clamp(4.5rem, 8vw, 7.5rem); }
+.op-section--soft { background: var(--paper-soft); }
+.op-section--paper { background: var(--paper); }
+.op-section__head { max-width: 760px; margin-bottom: clamp(2.2rem, 4vw, 3.25rem); }
+.op-section__head--center { margin-inline: auto; text-align: center; }
+.op-section__head h2 { margin-bottom: 1rem; font-size: clamp(2.3rem, 4.2vw, 3.7rem); line-height: 1.06; text-wrap: balance; }
+.op-section__head p { max-width: 64ch; margin: 0; color: var(--ink-soft); font-size: 1rem; line-height: 1.75; }
+.op-section__head--center p { margin-inline: auto; }
+
+/* Module directory: one row per area, a hairline between modules. Not cards. */
+.op-area { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: clamp(2rem, 5vw, 5rem); padding-block: clamp(2.5rem, 5vw, 4rem); border-top: 1px solid var(--line); }
+.op-area:last-child { border-bottom: 1px solid var(--line); }
+/* On wide screens the heading and screenshot stay in view while the module list scrolls. */
+@media (min-width: 901px) {
+    .op-area__intro { position: sticky; top: 7rem; align-self: start; }
+}
+.op-area__intro h3 { margin: 0 0 .75rem; font-size: clamp(1.6rem, 2.6vw, 2.2rem); line-height: 1.12; letter-spacing: -.035em; }
+.op-area__intro > p { max-width: 46ch; margin: 0 0 1.4rem; color: var(--ink-soft); font-size: .95rem; line-height: 1.75; }
+.op-area__shot { margin: 0; }
+.op-area__shot img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); box-shadow: 0 18px 44px rgba(0, 0, 0, .08); }
+.op-area__shot figcaption { margin-top: .6rem; color: var(--muted); font-size: .72rem; font-weight: 600; }
+.op-modules { margin: 0; }
+.op-module { display: grid; grid-template-columns: minmax(9rem, .34fr) minmax(0, 1fr); gap: .4rem 1.75rem; padding: 1.15rem 0; border-top: 1px solid var(--line); }
+.op-module:first-child { border-top: 0; padding-top: 0; }
+.op-module dt { font-size: .98rem; font-weight: 700; letter-spacing: -.015em; }
+.op-module dd { margin: 0; color: var(--ink-soft); font-size: .9rem; line-height: 1.7; }
+.op-module dd p { margin: 0 0 .5rem; }
+.op-module dd ul { display: grid; gap: .3rem; margin: .2rem 0 0; padding-left: 1.1rem; }
+.op-module dd li::marker { color: var(--muted); }
+
+/* Numbered steps: the order matters, so the numbers stay. */
+.op-steps { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; counter-reset: op-step; }
+.op-steps > li { position: relative; display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: 1rem; padding: 1.35rem 0; border-top: 1px solid var(--line); counter-increment: op-step; }
+.op-steps > li:last-child { border-bottom: 1px solid var(--line); }
+.op-steps > li::before { display: grid; width: 2.2rem; height: 2.2rem; place-items: center; border: 1px solid var(--ink); border-radius: 50%; font-size: .8rem; font-weight: 700; font-variant-numeric: tabular-nums; content: counter(op-step); }
+.op-steps h3 { margin: .25rem 0 .35rem; font-size: 1.02rem; letter-spacing: -.02em; }
+.op-steps p { max-width: 68ch; margin: 0; color: var(--ink-soft); font-size: .9rem; line-height: 1.7; }
+.op-steps p + p { margin-top: .5rem; }
+.op-steps code, .op-module code, .op-faq code, .op-prose code, .public-docs-section :not(.public-docs-code) > code { padding: .1rem .35rem; border-radius: 4px; background: var(--accent-soft); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .84em; overflow-wrap: anywhere; }
+
+/* Two columns of plain prose, used for "how it works" detail. */
+.op-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(2rem, 5vw, 4.5rem); }
+.op-prose h3 { margin: 0 0 .55rem; font-size: 1.12rem; letter-spacing: -.02em; }
+.op-prose p, .op-prose li { color: var(--ink-soft); font-size: .92rem; line-height: 1.75; }
+.op-prose p { max-width: 68ch; margin: 0 0 1rem; }
+.op-prose ul { display: grid; gap: .35rem; margin: 0 0 1.2rem; padding-left: 1.15rem; }
+.op-prose a { text-decoration: underline; text-underline-offset: .2em; }
+
+/* Code sample (the dark block reads the same in both themes). */
+.op-code { margin: 1.1rem 0 0; overflow-x: auto; padding: 1.2rem 1.3rem; border-radius: 10px; background: #111111; color: #f2f2f2; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .8rem; line-height: 1.65; white-space: pre; tab-size: 2; }
+html.dark .op-code { border: 1px solid var(--line); background: #0a0a0a; }
+.op-code__label { display: block; margin: 1.4rem 0 -.6rem; color: var(--muted); font-size: .76rem; font-weight: 600; }
+
+/* An illustrative exchange with the assistant. Labelled as an example. */
+.op-chat { display: grid; gap: .75rem; padding: 1.4rem; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); box-shadow: 0 18px 44px rgba(0, 0, 0, .06); }
+.op-chat__you, .op-chat__ai { max-width: 88%; padding: .8rem 1rem; border-radius: 14px; font-size: .88rem; line-height: 1.6; }
+.op-chat__you { justify-self: end; border-bottom-right-radius: 4px; background: var(--ink); color: var(--page); }
+.op-chat__ai { justify-self: start; border-bottom-left-radius: 4px; background: var(--paper-soft); color: var(--ink); }
+.op-chat__ai ul { margin: .4rem 0 0; padding-left: 1.1rem; }
+.op-chat__note { margin: .25rem 0 0; color: var(--muted); font-size: .72rem; }
+
+/* FAQ: native details, one hairline per question. */
+.op-faq { max-width: 860px; border-top: 1px solid var(--line); }
+.op-faq details { border-bottom: 1px solid var(--line); }
+.op-faq summary { display: flex; align-items: center; justify-content: space-between; gap: 1.25rem; padding: 1.2rem 0; font-size: 1.02rem; font-weight: 700; letter-spacing: -.015em; list-style: none; cursor: pointer; }
+.op-faq summary::-webkit-details-marker { display: none; }
+.op-faq summary::after { flex: 0 0 auto; width: .7rem; height: .7rem; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(45deg) translateY(-25%); transition: transform 200ms ease; content: ""; }
+.op-faq details[open] summary::after { transform: rotate(225deg) translateY(-25%); }
+.op-faq summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+.op-faq__answer { max-width: 72ch; padding: 0 0 1.35rem; color: var(--ink-soft); font-size: .92rem; line-height: 1.75; }
+.op-faq__answer p { margin: 0 0 .7rem; }
+.op-faq__answer p:last-child { margin-bottom: 0; }
+.op-faq__answer a { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: .2em; }
+
+/* A short list of plain facts with a label column (privacy, requirements, limits). */
+.op-facts { display: grid; max-width: 1000px; margin: 0; border-top: 1px solid var(--line); }
+.op-facts > div { display: grid; grid-template-columns: minmax(8rem, .38fr) minmax(0, 1fr); gap: 1.5rem; padding: 1rem 0; border-bottom: 1px solid var(--line); }
+.op-facts dt { font-size: .9rem; font-weight: 700; }
+.op-facts dd { margin: 0; color: var(--ink-soft); font-size: .9rem; line-height: 1.7; }
+
+.op-cta-row { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; margin-top: 1.6rem; }
+
+@media (max-width: 900px) {
+    .op-area { grid-template-columns: 1fr; }
+    .op-columns { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+    .op-module, .op-facts > div { grid-template-columns: 1fr; gap: .3rem; }
+    .op-steps > li { grid-template-columns: 2.6rem minmax(0, 1fr); gap: .7rem; }
+    .op-code { font-size: .74rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .op-faq summary::after { transition: none; }
+}
+.op-prose__title { margin-bottom: 1rem; font-size: clamp(2.1rem, 3.6vw, 3.2rem); line-height: 1.08; text-wrap: balance; }
+.op-prose .button { margin-top: .4rem; text-decoration: none; }

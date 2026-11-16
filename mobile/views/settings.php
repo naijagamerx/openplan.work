@@ -271,7 +271,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
             </div>
         </div>
         <div class="px-4 pb-4">
-            <p class="text-[11px] text-gray-500">Set `EMAIL_VERIFICATION_ENABLED`, `PASSWORD_RESET_ENABLED`, `IMAGE_SERVICE_ENABLED`, and mail env values outside the app. See `docs/HOSTED_SETUP.md`.</p>
+            <p class="text-[11px] text-gray-500">Set `EMAIL_VERIFICATION_ENABLED`, `PASSWORD_RESET_ENABLED`, `IMAGE_SERVICE_ENABLED`, and mail env values in `.env` on the server. `.env.example` explains each one.</p>
         </div>
     </section>
 

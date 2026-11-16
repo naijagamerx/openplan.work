@@ -27,7 +27,7 @@ $publicHeaderLinks = [
             <?php foreach ($publicHeaderLinks as $link): ?>
                 <a href="<?php echo e($publicRouteUrl($link['slug'])); ?>"<?php echo $publicHeaderCurrentPage === $link['slug'] ? ' aria-current="page"' : ''; ?>><?php echo e($link['label']); ?></a>
             <?php endforeach; ?>
-            <a href="<?php echo e($repoUrl); ?>" target="_blank" rel="noreferrer">Open source <span aria-hidden="true">↗</span></a>
+            <a href="<?php echo e($repoUrl); ?>" target="_blank" rel="noreferrer">Open source <?php echo $publicIcon('arrow-up-right'); ?></a>
             <a href="<?php echo e($sourceDownloadUrl); ?>" aria-label="Download the source code (zip)">Download</a>
             <a class="site-nav__account" href="<?php echo e($isAuthenticated ? $publicRouteUrl('dashboard') : $publicRouteUrl('login')); ?>"><?php echo $isAuthenticated ? 'Dashboard' : 'Log in'; ?></a>
         </div>
@@ -40,7 +40,11 @@ $publicHeaderLinks = [
                 <svg class="icon theme-toggle__sun" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l-1.42 1.42m11.3-11.3 1.42-1.42" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
                 <svg class="icon theme-toggle__moon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20.2 15.2A8.6 8.6 0 0 1 8.8 3.8a8.6 8.6 0 1 0 11.4 11.4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
             </button>
-            <a class="button button--small button--dark nav-cta" href="<?php echo e($primaryActionUrl); ?>"><?php echo e($isAuthenticated ? 'Dashboard' : $primaryActionText); ?></a>
+            <?php
+            // Phones get a short label so the logo, theme toggle, button and menu fit on one row.
+            $navCtaShort = $isAuthenticated ? 'Dashboard' : ($registrationEnabled ? 'Sign up' : 'Log in');
+            ?>
+            <a class="button button--small button--dark nav-cta" href="<?php echo e($primaryActionUrl); ?>"><span class="nav-cta__long"><?php echo e($isAuthenticated ? 'Dashboard' : $primaryActionText); ?></span><span class="nav-cta__short" aria-hidden="true"><?php echo e($navCtaShort); ?></span></a>
         </div>
     </div>
 </nav>

@@ -1,11 +1,15 @@
 <?php
 require_once __DIR__ . '/partials/public-site-context.php';
-$pageTitle = $siteName . ' | Mobile for Android';
-$pageDescription = 'Keep tasks, project progress, and everyday tools close with OpenPlan on mobile. Check the current Android download availability.';
+$pageTitle = $siteName . ' | Mobile and Android';
+$pageDescription = 'Use OpenPlan on your phone: the mobile web app in any browser, or the Android app. Same account and encrypted data, laid out for a small screen, with a wide layout for foldables and tablets.';
 $canonicalUrl = $publicMobileUrl;
 $ogImage = $publicBaseUrl . '/assets/images/app-mobile-dashboard.webp';
 $ogImageAlt = 'OpenPlan mobile dashboard with sample workspace data';
 $publicHeaderCurrentPage = 'mobile';
+$mobileWebUrl = $publicBaseUrl . '/mobile/';
+// The Android app is a thin shell around this site's hosted mobile app.
+$apkVersion = $hasApkRelease && preg_match('/(\d+(?:\.\d+)+)\.apk$/', $apkDownloadUrl, $apkMatch) ? $apkMatch[1] : '';
+$apkSizeMb = $hasApkRelease ? (int) round(((int) @filesize(ROOT_PATH . '/release-artifacts/android/' . rawurldecode(basename((string) parse_url($apkDownloadUrl, PHP_URL_PATH))))) / 1048576) : 0;
 require __DIR__ . '/partials/public-site-head.php';
 ?>
 <body class="marketing-page marketing-subpage">
@@ -13,68 +17,103 @@ require __DIR__ . '/partials/public-site-head.php';
 <main id="main">
     <section class="public-mobile-hero section-wrap" id="top" aria-labelledby="mobile-title">
         <div class="public-mobile-copy">
-            <p class="eyebrow"><span class="eyebrow__number">01</span> Work goes where you go</p>
-            <h1 id="mobile-title">Your workspace, ready for the day you’re having.</h1>
-            <p class="hero__lede">Check the next task, see project progress, and keep everyday tools close when you’re away from your desk.</p>
-            <?php if ($hasApkRelease): ?>
-                <a class="button button--dark" href="<?php echo e($apkDownloadUrl); ?>" download>Download for Android <span aria-hidden="true">↓</span></a>
-                <p class="public-mobile-caption">Android download available for this installation.</p>
-            <?php else: ?>
-                <a class="button button--dark" href="#android-access">Explore Android access <span aria-hidden="true">↓</span></a>
-                <p class="public-mobile-caption">A direct download will appear here when an Android package is published.</p>
-            <?php endif; ?>
+            <h1 id="mobile-title">Your workspace, in your pocket.</h1>
+            <p class="hero__lede">Use the mobile web app in any phone browser, or install the Android app. It is the same account and the same encrypted workspace as on your computer, laid out for a small screen.</p>
+            <div class="op-cta-row">
+                <?php if ($hasApkRelease): ?>
+                    <a class="button button--dark" href="<?php echo e($apkDownloadUrl); ?>" download>Download for Android <?php echo $publicIcon('arrow-down'); ?></a>
+                <?php endif; ?>
+                <a class="<?php echo $hasApkRelease ? 'text-link' : 'button button--dark'; ?>" href="<?php echo e($mobileWebUrl); ?>">Open the mobile web app <?php echo $publicIcon('arrow-up-right'); ?></a>
+            </div>
+            <p class="public-mobile-caption"><?php echo $hasApkRelease ? 'Android app' . ($apkVersion !== '' ? ' ' . e($apkVersion) : '') . ', a direct download (APK). ' : ''; ?>The mobile web app works on iPhone and Android with no install.</p>
         </div>
         <figure class="public-phone-frame">
             <div class="public-phone-frame__bezel">
                 <img src="<?php echo e($publicBaseUrl); ?>/assets/images/app-mobile-dashboard.webp" width="600" height="1298" alt="OpenPlan mobile dashboard showing example tasks, projects, habits, and water tracking. Sample workspace data." fetchpriority="high" decoding="async">
             </div>
-            <figcaption>Mobile dashboard · sample workspace data</figcaption>
+            <figcaption>Mobile dashboard &middot; sample workspace data</figcaption>
         </figure>
     </section>
 
-    <section class="section public-mobile-benefits" id="mobile-details" aria-labelledby="mobile-details-title">
+    <section class="op-section op-section--soft" id="ways" aria-labelledby="ways-title">
         <div class="section-wrap">
-            <div class="public-section-heading">
-                <p class="eyebrow"><span class="eyebrow__number">02</span> The essentials, in reach</p>
-                <h2 id="mobile-details-title">Pick up where the day takes you.</h2>
-                <p class="section-lede">Keep the familiar pieces of the workspace close without squeezing the desktop page into a phone.</p>
+            <div class="op-section__head">
+                <h2 id="ways-title">Two ways to use it on a phone</h2>
+                <p>Both open the same workspace. Changes you make on the phone are there on your computer straight away, and the other way round.</p>
             </div>
-            <div class="public-mobile-grid">
-                <article><span>01</span><h3>See the day</h3><p>Bring tasks, active projects, and habit progress into one mobile starting point.</p></article>
-                <article><span>02</span><h3>Move between work</h3><p>Use the menu to reach the modules you need as the day changes shape.</p></article>
-                <article><span>03</span><h3>Keep your routine</h3><p>Check habits and everyday tools alongside the work you’re coordinating.</p></article>
-            </div>
+            <dl class="op-facts">
+                <div>
+                    <dt>Mobile web app</dt>
+                    <dd>Go to <a class="text-link" href="<?php echo e($mobileWebUrl); ?>"><?php echo e(preg_replace('#^https?://#', '', $mobileWebUrl)); ?></a> in Safari, Chrome or any phone browser and sign in. To open it like an app, use your browser&rsquo;s <strong>Add to Home Screen</strong>. Works on iPhone, Android and tablets, and on any self-hosted copy at <code>your-address/mobile/</code>.</dd>
+                </div>
+                <?php if ($hasApkRelease): ?>
+                    <div>
+                        <dt>Android app</dt>
+                        <dd>A small app that opens the mobile workspace full screen, with its own icon, no browser bar and the Android back button working inside the app. It connects to this site (<?php echo e(preg_replace('#^https?://#', '', $publicBaseUrl)); ?>), so if you host <?php echo e($siteName); ?> yourself, use the mobile web app on your own address instead.</dd>
+                    </div>
+                <?php endif; ?>
+                <div>
+                    <dt>Foldables and tablets</dt>
+                    <dd>On a wide screen, such as an unfolded phone or a tablet, the mobile app switches to a wider layout with a side menu, and Notes shows the list and the open note side by side.</dd>
+                </div>
+            </dl>
         </div>
     </section>
 
-    <section class="section public-mobile-proof" id="mobile-views" aria-labelledby="mobile-views-title">
+    <?php if ($hasApkRelease): ?>
+        <section class="op-section op-section--paper" id="android-access" aria-labelledby="android-access-title">
+            <div class="section-wrap op-columns">
+                <div class="op-prose">
+                    <h2 id="android-access-title" class="op-prose__title">Install the Android app</h2>
+                    <p>The app is a direct download rather than a Play Store listing, so Android asks you once to allow the install.</p>
+                    <a class="button button--dark" href="<?php echo e($apkDownloadUrl); ?>" download>Download for Android <?php echo $publicIcon('arrow-down'); ?></a>
+                </div>
+                <ol class="op-steps">
+                    <li><div><h3>Download the app</h3><p>Open this page on your Android phone and tap <strong>Download for Android</strong>. <?php if ($apkSizeMb > 0): ?>The file is about <?php echo $apkSizeMb; ?>&nbsp;MB.<?php endif; ?></p></div></li>
+                    <li><div><h3>Allow the install</h3><p>Open the downloaded file. If Android says the browser is not allowed to install apps, tap <strong>Settings</strong>, turn on <strong>Allow from this source</strong>, then go back and tap <strong>Install</strong>.</p></div></li>
+                    <li><div><h3>Sign in</h3><p>Open <?php echo e($siteName); ?>, sign in with your email and password, then enter your master password to unlock your workspace.</p></div></li>
+                    <li><div><h3>Updating later</h3><p>When a new version is listed here, download it and install it over the old one. Your data lives in your account, not on the phone, so nothing is lost.</p></div></li>
+                </ol>
+            </div>
+        </section>
+    <?php endif; ?>
+
+    <section class="op-section op-section--soft" id="mobile-details" aria-labelledby="mobile-details-title">
+        <div class="section-wrap">
+            <div class="op-section__head">
+                <h2 id="mobile-details-title">What you can do on your phone</h2>
+                <p>The bottom bar has <strong>Menu</strong>, <strong>Tasks</strong>, <strong>Habits</strong> and <strong>Settings</strong>. The menu opens every other part of the workspace.</p>
+            </div>
+            <dl class="op-modules">
+                <div class="op-module"><dt>Your day</dt><dd>The dashboard shows pending tasks, active projects, today&rsquo;s habits and your water progress, with links straight into each one.</dd></div>
+                <div class="op-module"><dt>Tasks and projects</dt><dd>Add and edit tasks, change status and priority, open a project to see its tasks, or switch to the kanban board.</dd></div>
+                <div class="op-module"><dt>Clients and billing</dt><dd>Look up a client, create an invoice and download it as a PDF, and record income and expenses in Finance. Inventory and stock history are there too.</dd></div>
+                <div class="op-module"><dt>Notes and files</dt><dd>Write notes with checklists and tags, pin the important ones, and open your knowledge base files.</dd></div>
+                <div class="op-module"><dt>Focus and routines</dt><dd>Run a Pomodoro session with music; a small player stays on screen while you move around the app. Track habits, see their history, and follow your water plan.</dd></div>
+                <div class="op-module"><dt>AI assistant</dt><dd>Chat with the assistant or, with an OpenRouter or Gemini model, let the agent create tasks, notes and records for you, the same as on desktop.</dd></div>
+                <div class="op-module"><dt>Settings</dt><dd>Dark mode, AI keys and models, your plan, connecting AI apps over MCP, backups and support.</dd></div>
+            </dl>
+        </div>
+    </section>
+
+    <section class="op-section op-section--paper" id="mobile-views" aria-labelledby="mobile-views-title">
         <div class="section-wrap public-split public-split--mobile">
             <div class="public-copy">
-                <p class="eyebrow"><span class="eyebrow__number">03</span> Made for real screens</p>
-                <h2 id="mobile-views-title">A clear view without losing the detail.</h2>
-                <p class="section-lede">The mobile dashboard keeps the same work nearby in a layout designed around a phone-sized screen.</p>
-                <a class="text-link" href="<?php echo e($publicHowItWorksUrl); ?>">See how the work connects <span aria-hidden="true">↗</span></a>
+                <h2 id="mobile-views-title">Start on the phone, finish at the desk.</h2>
+                <p class="section-lede">Capture a task on the way to a meeting, then plan the week on the full desktop dashboard. Everything is saved to your account the moment you make it.</p>
+                <a class="text-link" href="<?php echo e($publicHowItWorksUrl); ?>">See how the work connects <?php echo $publicIcon('arrow-up-right'); ?></a>
             </div>
-            <figure class="public-screen public-screen--wide"><img src="<?php echo e($publicBaseUrl); ?>/assets/images/app-dashboard.webp" width="1600" height="1000" alt="OpenPlan desktop dashboard with sample tasks and project summaries." decoding="async" data-dashboard-shot><figcaption>Desktop dashboard · sample workspace data</figcaption></figure>
+            <figure class="public-screen public-screen--wide"><img src="<?php echo e($publicBaseUrl); ?>/assets/images/app-dashboard.webp" width="1600" height="1000" alt="OpenPlan desktop dashboard with sample tasks and project summaries." loading="lazy" decoding="async" data-dashboard-shot><figcaption>Desktop dashboard &middot; sample workspace data</figcaption></figure>
         </div>
     </section>
 
-    <section class="section public-android-access" id="android-access" aria-labelledby="android-access-title">
-        <div class="section-wrap public-android-access__inner">
-            <div>
-                <p class="eyebrow"><span class="eyebrow__number">04</span> Android access</p>
-                <h2 id="android-access-title">Get the build for this installation.</h2>
-                <?php if ($hasApkRelease): ?>
-                    <p class="section-lede">An Android package is published and ready to download.</p>
-                    <a class="button button--dark" href="<?php echo e($apkDownloadUrl); ?>" download>Download for Android <span aria-hidden="true">↓</span></a>
-                <?php else: ?>
-                    <p class="section-lede">There isn’t an Android package published on this installation right now. The download link will appear here when one is available.</p>
-                    <a class="text-link" href="<?php echo e($publicDocsUrl); ?>#mobile-access">Read the mobile guide <span aria-hidden="true">↗</span></a>
-                <?php endif; ?>
-            </div>
-            <div class="public-android-access__links">
-                <a href="<?php echo e($publicPricingUrl); ?>">Pricing <span aria-hidden="true">↗</span></a>
-                <a href="<?php echo e($publicDocsUrl); ?>">Documentation <span aria-hidden="true">↗</span></a>
+    <section class="section public-close" aria-labelledby="mobile-close-title">
+        <div class="section-wrap closing-panel">
+            <h2 id="mobile-close-title">Take the workspace with you.</h2>
+            <p>Create your workspace on any device, then sign in on your phone.</p>
+            <div class="closing-actions">
+                <a class="button button--light" href="<?php echo e($primaryActionUrl); ?>"><?php echo e($primaryActionText); ?> <?php echo $publicIcon('arrow-right'); ?></a>
+                <a class="text-link text-link--light" href="<?php echo e($publicDocsUrl); ?>">Read the documentation <?php echo $publicIcon('arrow-up-right'); ?></a>
             </div>
         </div>
     </section>

@@ -27,6 +27,12 @@
             <li><?php echo $cap > 0 ? e(number_format($cap)) . ' AI requests a month' : 'Unlimited AI requests'; ?></li>
             <?php if ($providers !== []): ?>
                 <li>AI by <?php echo e(implode(', ', $providers)); ?></li>
+                <?php // Groq is chat only in the agent (AIAgent::isChatOnlyProvider), so say which plans can act. ?>
+                <?php if (array_intersect(['openrouter', 'gemini'], (array) ($plan['providers'] ?? [])) !== []): ?>
+                    <li>The agent: creates tasks, invoices, notes and more for you</li>
+                <?php else: ?>
+                    <li>Chat, writing help and Notes AI (no agent actions)</li>
+                <?php endif; ?>
             <?php endif; ?>
         </ul>
         <?php if ($publicTrialDays > 0): ?>

@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/partials/public-site-context.php';
-$pageTitle = $siteName . ' | Make room for work that matters';
-$pageDescription = 'Bring projects, clients, invoices, notes, and everyday plans together in one clear workspace for running your business.';
+$pageTitle = $siteName . ' | Run your business from one workspace';
+$pageDescription = 'Projects, tasks, clients, invoices, finance, inventory, notes and habits in one encrypted workspace, with an AI agent and an MCP server for your own AI apps. Free, and open source.';
 $canonicalUrl = $canonicalHomeUrl;
 $heroImageUrl = $publicBaseUrl . '/assets/images/app-dashboard.webp';
 $shareImageUrl = $publicBaseUrl . '/assets/images/app-dashboard-og.jpg';
@@ -21,14 +21,17 @@ $structuredData = [
             'applicationCategory' => 'BusinessApplication',
             'operatingSystem' => 'Web, Android',
             'featureList' => [
-                'Projects and tasks',
-                'Client records and invoicing',
+                'Projects and tasks with kanban, timers and recurring tasks',
+                'Clients, invoices and advanced invoices with PDF download',
                 'Finance and inventory',
-                'Notes and calendar',
-                'Everyday planning tools',
-                'Optional AI assistance',
-                'Information encrypted while stored',
+                'Notes, Notes AI and a knowledge base',
+                'Calendar, meetings, habits, Pomodoro and water tracking',
+                'AI assistant and agent (Groq, OpenRouter, Gemini, Ollama)',
+                'MCP server with 86 tools',
+                'Encrypted storage with a user master password',
+                'Open source under the AGPL-3.0',
             ],
+            'offers' => ['@type' => 'Offer', 'price' => '0', 'priceCurrency' => 'USD'],
             'url' => $canonicalUrl,
         ],
     ],
@@ -75,152 +78,236 @@ $structuredData = [
     </script>
     <link rel="stylesheet" href="<?php echo e(APP_URL); ?>/assets/css/public-homepage.css?v=<?php echo (int) @filemtime(ROOT_PATH . '/assets/css/public-homepage.css'); ?>">
     <link rel="stylesheet" href="<?php echo e(APP_URL); ?>/assets/css/public-pages.css?v=<?php echo (int) @filemtime(ROOT_PATH . '/assets/css/public-pages.css'); ?>">
+    <link rel="stylesheet" href="<?php echo e(APP_URL); ?>/assets/css/public-hero.css?v=<?php echo (int) @filemtime(ROOT_PATH . '/assets/css/public-hero.css'); ?>">
 </head>
 <body class="marketing-page">
     <?php $publicHeaderCurrentPage = 'homepage'; require __DIR__ . '/partials/public-site-header.php'; ?>
 <main id="main">
-        <section class="hero section-wrap" id="top" aria-labelledby="hero-title">
-            <div class="hero__copy">
-                <p class="eyebrow"><span class="eyebrow__dot"></span> A little more room to do good work</p>
-                <h1 id="hero-title">Make room for work <span>that matters.</span></h1>
-                <p class="hero__lede">Projects, clients, invoices, and the small details that keep a business moving—together in one thoughtful workspace.</p>
-                <div class="hero__actions">
-                    <a class="button button--dark" href="<?php echo e($primaryActionUrl); ?>">
-                        <?php echo e($primaryActionText); ?>
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </a>
-                    <a class="text-link" href="#workspace">Take a look around <span aria-hidden="true">↓</span></a>
+        <section class="op-hero" id="top" aria-labelledby="hero-title">
+            <div class="op-hero__inner">
+                <div class="op-hero__copy" data-hero-copy>
+                    <?php if ($publicTrialDays > 0): ?>
+                        <a class="op-pill" href="<?php echo e($primaryActionUrl); ?>">
+                            <span class="op-pill__tag">Free trial</span>
+                            <span>Try the AI on our keys for <?php echo (int) $publicTrialDays; ?> days, no card</span>
+                            <svg class="op-pill__arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </a>
+                    <?php else: ?>
+                        <a class="op-pill" href="<?php echo e($publicDocsUrl); ?>#self-host">
+                            <span class="op-pill__tag">Open source</span>
+                            <span>Use it here, or host it yourself for free</span>
+                            <svg class="op-pill__arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </a>
+                    <?php endif; ?>
+                    <h1 id="hero-title"><span>Run your business</span> <span>from <em>one</em> workspace.</span></h1>
+                    <p class="op-hero__lede">Projects, clients, invoices, money, notes and daily habits in one place, stored encrypted with your own master password. An AI agent handles the admin, and your own AI apps can work in it too.</p>
+                    <div class="op-hero__actions">
+                        <a class="button button--dark" href="<?php echo e($primaryActionUrl); ?>">
+                            <?php echo e($primaryActionText); ?>
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </a>
+                        <a class="button button--outline" href="#workspace">See what&rsquo;s inside</a>
+                    </div>
                     <?php if (!$isAuthenticated): ?>
-                        <a class="text-link hero__login" href="<?php echo e(APP_URL . '?page=login'); ?>">Log in <span aria-hidden="true">→</span></a>
+                        <p class="op-hero__note">Already have an account? <a href="<?php echo e(APP_URL . '?page=login'); ?>">Log in</a></p>
                     <?php endif; ?>
                 </div>
-                <div class="hero__categories" aria-label="A few things you can organize">
-                    <span>Projects</span><span>Clients</span><span>Invoices</span><span>Everyday plans</span>
+
+                <div class="op-stage" data-hero-stage role="group" aria-roledescription="carousel" aria-label="Screens from the app, with sample data">
+                    <figure class="op-slide is-front" data-slot="0">
+                        <img src="<?php echo e($heroImageUrl); ?>" width="1600" height="1000" alt="The dashboard: pending tasks, active projects, habits and revenue (sample data)" fetchpriority="high" decoding="async">
+                        <figcaption>Dashboard &middot; sample data</figcaption>
+                    </figure>
+                    <figure class="op-slide" data-slot="1">
+                        <img src="<?php echo e(APP_URL); ?>/assets/images/app-projects.webp" width="1400" height="1064" alt="The Projects screen with three client projects and their progress (sample data)" decoding="async">
+                        <figcaption>Projects &middot; sample data</figcaption>
+                    </figure>
+                    <figure class="op-slide" data-slot="2">
+                        <img src="<?php echo e(APP_URL); ?>/assets/images/app-invoices.webp" width="1400" height="1064" alt="The Invoices screen with paid, pending and overdue totals (sample data)" decoding="async">
+                        <figcaption>Invoices &middot; sample data</figcaption>
+                    </figure>
+                    <p class="op-visually-hidden" aria-live="polite" data-hero-live></p>
                 </div>
             </div>
 
-            <figure class="hero__visual">
-                <img class="app-shot" src="<?php echo e($heroImageUrl); ?>" width="1600" height="1000" alt="The OpenPlan dashboard showing pending tasks, active projects, habits and revenue (sample data)" fetchpriority="high" decoding="async" data-dashboard-shot>
-                <figcaption class="hero-note"><span class="hero-note__spark" aria-hidden="true">✳</span><span><strong>Make space for the next good idea.</strong><small>Your work, thoughtfully in view.</small></span></figcaption>
-                <span class="hero__image-label" aria-hidden="true">The real app · sample data</span>
-            </figure>
-        </section>
-
-        <section class="section section--workspace" id="workspace" aria-labelledby="workspace-title">
-            <div class="section-wrap workspace-layout">
-                <div class="workspace-photo">
-                    <img class="app-shot" src="<?php echo e(APP_URL); ?>/assets/images/app-projects.webp" width="1400" height="1064" alt="The Projects screen with three client projects and their progress (sample data)" loading="lazy" decoding="async">
-                    <span class="photo-caption">A calmer place for the moving pieces.</span>
-                </div>
-                <div class="workspace-copy">
-                    <p class="eyebrow"><span class="eyebrow__number">01</span> The whole picture</p>
-                    <h2 id="workspace-title">Your work has a lot of moving parts. Give them one home.</h2>
-                    <p class="section-lede">Keep the plan, the people, and the follow-through close enough to work together. OpenPlan gives the everyday side of running a business a little more breathing room.</p>
-                    <div class="workspace-list">
-                        <article><span class="list-mark">01</span><div><h3>Plan the work</h3><p>Projects, tasks, meetings, and dates in one clear view.</p></div></article>
-                        <article><span class="list-mark">02</span><div><h3>Look after your clients</h3><p>Keep client details, quotes, and invoices connected.</p></div></article>
-                        <article><span class="list-mark">03</span><div><h3>Keep your context</h3><p>Notes, files, and useful knowledge stay close at hand.</p></div></article>
-                        <article><span class="list-mark">04</span><div><h3>Mind the everyday</h3><p>Make space for routines, focus time, and the little lists.</p></div></article>
-                    </div>
-                </div>
+            <div class="op-marquee">
+                <ul class="op-marquee__track" aria-label="What the workspace includes">
+                    <?php
+                    $heroFeatures = ['Projects and tasks', 'Kanban boards', 'Clients', 'Invoices', 'Advanced invoices', 'Finance', 'Inventory', 'Notes', 'Notes AI', 'Knowledge base', 'Calendar and meetings', 'Habits', 'Pomodoro focus', 'Water plan', 'AI agent', 'MCP for your AI apps', 'Android app', 'Self-hosting'];
+                    foreach ([false, true] as $heroCopy):
+                        foreach ($heroFeatures as $heroFeature): ?>
+                            <li<?php echo $heroCopy ? ' aria-hidden="true"' : ''; ?>><?php echo e($heroFeature); ?></li>
+                        <?php endforeach;
+                    endforeach; ?>
+                </ul>
             </div>
         </section>
 
-        <section class="section section--workflow" id="workflow" aria-labelledby="workflow-title">
+        <section class="op-section op-section--paper" id="workspace" aria-labelledby="workspace-title">
             <div class="section-wrap">
-                <div class="workflow-heading">
-                    <p class="eyebrow eyebrow--light"><span class="eyebrow__number">02</span> From first hello to finished work</p>
-                    <h2 id="workflow-title">Let the business side follow the work.</h2>
-                    <p>Keep each next step close to the conversation that started it.</p>
+                <div class="op-section__head">
+                    <h2 id="workspace-title">Everything a one&#8209;person business runs on.</h2>
+                    <p>Every tool works in the same workspace, so a client, their projects, the tasks and the invoices stay linked. Here is what each part does and how you use it.</p>
                 </div>
-                <div class="workflow-path" aria-label="Example client workflow">
-                    <article class="workflow-card"><span class="workflow-card__index">01</span><span class="workflow-card__icon" aria-hidden="true">◌</span><h3>Meet a client</h3><p>Keep the relationship and its details in one place.</p></article>
-                    <span class="workflow-arrow" aria-hidden="true">↗</span>
-                    <article class="workflow-card"><span class="workflow-card__index">02</span><span class="workflow-card__icon" aria-hidden="true">⌁</span><h3>Shape the project</h3><p>Give the goals, plan, and people a shared home.</p></article>
-                    <span class="workflow-arrow" aria-hidden="true">↗</span>
-                    <article class="workflow-card"><span class="workflow-card__index">03</span><span class="workflow-card__icon" aria-hidden="true">✓</span><h3>Move the work forward</h3><p>Keep tasks and the next useful action in view.</p></article>
-                    <span class="workflow-arrow" aria-hidden="true">↗</span>
-                    <article class="workflow-card"><span class="workflow-card__index">04</span><span class="workflow-card__icon" aria-hidden="true">↗</span><h3>Close the loop</h3><p>Keep quotes, invoices, and records with the work.</p></article>
-                </div>
-                <p class="workflow-footnote">A clearer path through the work, from the first conversation onward.</p>
-            </div>
-        </section>
 
-        <section class="section section--day" id="day" aria-labelledby="day-title">
-            <div class="section-wrap day-layout">
-                <div class="day-copy">
-                    <p class="eyebrow"><span class="eyebrow__number">03</span> The shape of a day</p>
-                    <h2 id="day-title">Make room for the workday around the work.</h2>
-                    <p class="section-lede">Not every useful thing is a project. Keep quick lists, quiet focus time, and the routines you want to return to in the same place you plan your work.</p>
-                    <a class="text-link" href="<?php echo e($publicDocsUrl); ?>">See what’s inside <span aria-hidden="true">↗</span></a>
-                </div>
-                <div class="day-visual">
-                    <div class="day-image day-image--large day-image--shot"><img src="<?php echo e(APP_URL); ?>/assets/images/app-habits.webp" width="1400" height="1064" alt="The Habits screen with weekly routines like morning planning and sending invoices on Friday (sample data)" loading="lazy" decoding="async"></div>
-                    <div class="day-note"><span class="day-note__line"></span><span>Progress, with a little more perspective.</span></div>
-                    <div class="routine-card">
-                        <span class="routine-card__label">YOUR DAY, YOUR WAY</span>
-                        <div class="routine-row"><span class="routine-row__icon">○</span><span>Choose what comes next</span><span class="routine-row__arrow">↗</span></div>
-                        <div class="routine-row"><span class="routine-row__icon">◷</span><span>Protect a little focus time</span><span class="routine-row__arrow">↗</span></div>
-                        <div class="routine-row"><span class="routine-row__icon">✳</span><span>Make a routine your own</span><span class="routine-row__arrow">↗</span></div>
+                <div class="op-area">
+                    <div class="op-area__intro">
+                        <h3>Plan and do the work</h3>
+                        <p>Start with a project, break it into tasks, and see the month on the calendar.</p>
+                        <figure class="op-area__shot">
+                            <img src="<?php echo e(APP_URL); ?>/assets/images/app-projects.webp" width="1400" height="1064" alt="The Projects screen with three client projects and their progress (sample data)" loading="lazy" decoding="async">
+                            <figcaption>Projects &middot; sample data</figcaption>
+                        </figure>
                     </div>
+                    <dl class="op-modules">
+                        <div class="op-module"><dt>Dashboard</dt><dd>Opens on what matters today: pending tasks, active projects, habits, water and revenue, with quick actions and a focus timer.</dd></div>
+                        <div class="op-module"><dt>Projects</dt><dd>Give each piece of work a project with a client, colour and status. The project page shows its tasks on a drag-and-drop board and a progress bar that fills as tasks are done.</dd></div>
+                        <div class="op-module"><dt>Tasks</dt><dd>
+                            <p>Add tasks with a priority, start and due dates, a time estimate, subtasks and a colour, and make them repeat daily, weekly or monthly.</p>
+                            <ul>
+                                <li>Work on a kanban board or a list, and filter by project, status, priority or date.</li>
+                                <li>Start a timer on a task to log the time you spend.</li>
+                                <li>Move or close several tasks at once, save templates, and export to CSV.</li>
+                                <li><strong>AI Improve</strong> rewrites a description and <strong>AI Breakdown</strong> suggests subtasks.</li>
+                            </ul>
+                        </dd></div>
+                        <div class="op-module"><dt>Calendar and meetings</dt><dd>A month view of every task by due date, plus meetings with time, place, attendees and the client or project they belong to.</dd></div>
+                        <div class="op-module"><dt>Reminders</dt><dd>The bell lists overdue and due-soon tasks. Turn on browser notifications and sounds in Settings.</dd></div>
+                    </dl>
+                </div>
+
+                <div class="op-area">
+                    <div class="op-area__intro">
+                        <h3>Clients and money</h3>
+                        <p>The people you work for, what you bill them, and what comes in and goes out.</p>
+                        <figure class="op-area__shot">
+                            <img src="<?php echo e(APP_URL); ?>/assets/images/app-invoices.webp" width="1400" height="1064" alt="The Invoices screen with paid, pending and overdue totals (sample data)" loading="lazy" decoding="async">
+                            <figcaption>Invoices &middot; sample data</figcaption>
+                        </figure>
+                    </div>
+                    <dl class="op-modules">
+                        <div class="op-module"><dt>Clients</dt><dd>One record per client with contact details, company and notes. Their page shows linked projects and a summary of what you have invoiced and been paid.</dd></div>
+                        <div class="op-module"><dt>Invoices</dt><dd>Add line items; the tax rate and currency (USD, EUR, GBP or ZAR) come from your business settings. Mark each one draft, sent, paid or overdue, and download it as a PDF to send.</dd></div>
+                        <div class="op-module"><dt>Advanced invoices</dt><dd>For formal billing: your company header and logo, customer ID, property address and contract dates, bank payment details, custom fields, notes and footer, a currency per invoice, and Classic or Modern layouts.</dd></div>
+                        <div class="op-module"><dt>Finance</dt><dd>Record income and expenses and link them to a client. Paid invoices count as revenue automatically, and a six-month chart shows the trend.</dd></div>
+                        <div class="op-module"><dt>Inventory</dt><dd>Products with SKU, category, cost and selling price, and a reorder point. Record stock in and out with a note and see each item&rsquo;s history; items at or below their reorder point are marked in red. <strong>AI Generate</strong> suggests items to add.</dd></div>
+                    </dl>
+                </div>
+
+                <div class="op-area">
+                    <div class="op-area__intro">
+                        <h3>Notes and knowledge</h3>
+                        <p>Keep what you know beside the work it belongs to, and let the assistant read it.</p>
+                    </div>
+                    <dl class="op-modules">
+                        <div class="op-module"><dt>Notes</dt><dd>Write with bold, italic and lists, add a checklist inside the note, and tag, pin or favourite it. The side pane filters by tag, pinned or favourites.</dd></div>
+                        <div class="op-module"><dt>Notes AI</dt><dd>Press <strong>Ctrl+I</strong> in a note to improve, expand, summarise or rewrite it, turn it into tasks, or ask questions about it.</dd></div>
+                        <div class="op-module"><dt>Knowledge base</dt><dd>Folders of Markdown and XML documents. Upload, search and rename them, or save a note or an AI answer straight in. Choose a folder in the assistant and it answers from those documents.</dd></div>
+                    </dl>
+                </div>
+
+                <div class="op-area">
+                    <div class="op-area__intro">
+                        <h3>Your day</h3>
+                        <p>Small routines that keep the work, and you, going.</p>
+                        <figure class="op-area__shot">
+                            <img src="<?php echo e(APP_URL); ?>/assets/images/app-habits.webp" width="1400" height="1064" alt="The Habits screen with routines like morning planning and sending invoices on Friday (sample data)" loading="lazy" decoding="async">
+                            <figcaption>Habits &middot; sample data</figcaption>
+                        </figure>
+                    </div>
+                    <dl class="op-modules">
+                        <div class="op-module"><dt>Habits</dt><dd>Daily or one-off habits with a category, reminder time and target length. Time a session, keep your current and longest streaks, and look back on a calendar and history. The AI can suggest habits too.</dd></div>
+                        <div class="op-module"><dt>Pomodoro</dt><dd>A focus timer with presets or your own lengths (1 to 180 minutes of focus, 1 to 60 of break) that counts your sessions. Add your own focus music; a small player and timer follow you from page to page.</dd></div>
+                        <div class="op-module"><dt>Water plan</dt><dd>Set a daily goal, reminder times and browser notifications, then log glasses with one tap from the dashboard.</dd></div>
+                    </dl>
                 </div>
             </div>
         </section>
 
-        <section class="section section--assistant" id="assistant" aria-labelledby="assistant-title">
-            <div class="section-wrap assistant-layout">
-                <div class="assistant-mark" aria-hidden="true"><span>✳</span><span class="assistant-mark__orbit assistant-mark__orbit--one"></span><span class="assistant-mark__orbit assistant-mark__orbit--two"></span></div>
-                <div class="assistant-copy">
-                    <p class="eyebrow"><span class="eyebrow__number">04</span> A little help, when you want it</p>
-                    <h2 id="assistant-title">Turn a thought into a next step.</h2>
-                    <p>OpenPlan includes an optional assistant that can help with supported everyday actions—like capturing a task, updating a project, or saving a note from a simple request.</p>
-                    <a class="text-link" href="<?php echo e($publicDocsUrl); ?>">Learn about the assistant <span aria-hidden="true">↗</span></a>
+        <section class="op-section op-section--soft" id="assistant" aria-labelledby="assistant-title">
+            <div class="section-wrap op-columns">
+                <div class="op-prose">
+                    <h2 id="assistant-title" class="op-prose__title">An assistant that does the admin.</h2>
+                    <p>Open <strong>AI Assistant</strong> and ask in plain words. In agent mode it carries out the work: it creates and updates tasks and projects, adds clients, makes invoices and advanced invoices, logs income and expenses, writes notes, adds habits and stock, starts a Pomodoro and logs water. It acts straight away, then tells you what it did.</p>
+                    <h3>Which AI it uses</h3>
+                    <p>Add your own key from Groq, OpenRouter or Google Gemini, or point it at your own Ollama server, or use a plan on our keys. Agent actions run on OpenRouter and Gemini models; Groq models are kept for fast chat and writing. With two or more providers set up, <strong>Smart mode</strong> sends long or complex requests to the stronger one.</p>
+                    <h3>It can answer from your files</h3>
+                    <p>Choose a Knowledge Base folder and the assistant reads it before it answers. Save any answer to Notes or the Knowledge Base, or export it as Markdown. The PRD tool turns an idea into a product requirements document.</p>
                 </div>
-                <div class="assistant-quote" aria-label="Example assistant request">
-                    <span class="assistant-quote__label">A QUICK THOUGHT</span>
-                    <p>“Add a task to send the project outline to my client tomorrow.”</p>
-                    <span class="assistant-quote__rule"></span>
-                    <span class="assistant-quote__answer"><span class="assistant-quote__check">✓</span> A clear next step, captured.</span>
-                    <small>Illustrative example</small>
-                </div>
-            </div>
-        </section>
-
-        <section class="section section--ownership" id="ownership" aria-labelledby="ownership-title">
-            <div class="section-wrap ownership-layout">
-                <div class="ownership-copy">
-                    <p class="eyebrow"><span class="eyebrow__number">05</span> Yours to shape</p>
-                    <h2 id="ownership-title">Your business is yours. Your workspace should feel that way.</h2>
-                    <p class="section-lede">Choose where your workspace runs and keep the day-to-day details under your control. Information is encrypted while it’s stored, so the things you keep here stay private.</p>
-                    <a class="text-link" href="<?php echo e($publicDocsUrl); ?>">Read about keeping your information safe <span aria-hidden="true">↗</span></a>
-                </div>
-                <div class="ownership-image">
-                    <img class="app-shot" src="<?php echo e(APP_URL); ?>/assets/images/app-invoices.webp" width="1400" height="1064" alt="The Invoices screen with revenue, pending and overdue totals (sample data)" loading="lazy" decoding="async">
-                    <div class="ownership-stamp"><span class="ownership-stamp__icon" aria-hidden="true">✳</span><span><strong>Work, on your terms.</strong><small>A space that feels like yours.</small></span></div>
+                <div>
+                    <div class="op-chat" aria-label="Example conversation with the assistant">
+                        <p class="op-chat__you">Add Lumen Physio as a client and make a draft invoice for the booking flow: 12 hours at R650.</p>
+                        <div class="op-chat__ai">Done:
+                            <ul>
+                                <li>Created the client Lumen Physio</li>
+                                <li>Created a draft invoice with one line, 12 hours at R650.00</li>
+                            </ul>
+                        </div>
+                        <p class="op-chat__you">Remind me to send it on Friday.</p>
+                        <p class="op-chat__ai">Added the task &ldquo;Send Lumen Physio invoice&rdquo;, due Friday.</p>
+                    </div>
+                    <p class="op-chat__note">Illustrative example of agent mode. Wording varies by model.</p>
                 </div>
             </div>
         </section>
 
-        <section class="section section--mobile" id="mobile" aria-labelledby="mobile-title">
+        <section class="op-section op-section--paper" id="mcp" aria-labelledby="mcp-title">
+            <div class="section-wrap op-columns">
+                <div class="op-prose">
+                    <h2 id="mcp-title" class="op-prose__title">Your own AI apps can work in it too.</h2>
+                    <p><?php echo e($siteName); ?> has a built-in MCP server with 86 tools, so AI apps that support the Model Context Protocol, such as Claude Code and Cursor, can read and update your workspace. Ask your app what is due this week, add a client, log an expense, search your notes or write a Knowledge Base page.</p>
+                    <p>The tools cover todos, projects, tasks, clients, meetings, notes, the knowledge base, invoices, advanced invoices, finance, inventory, habits and water.</p>
+                    <p><strong>Keep the token private.</strong> It opens your whole workspace, like your master password. You can revoke it in the same place you made it.</p>
+                    <p><a class="text-link" href="<?php echo e($publicDocsUrl); ?>#mcp">Full MCP set-up guide <?php echo $publicIcon('arrow-up-right'); ?></a></p>
+                </div>
+                <div>
+                    <ol class="op-steps">
+                        <li><div><h3>Make a token</h3><p>In <?php echo e($siteName); ?>, open Settings &rarr; Developer Tools &rarr; MCP Config and press Generate. Copy the token; it is shown once.</p></div></li>
+                        <li><div><h3>Add the server to your AI app</h3><p>Paste this into your app&rsquo;s MCP settings, for example <code>.mcp.json</code> in Claude Code:</p>
+<pre class="op-code">{
+  "mcpServers": {
+    "openplan": {
+      "type": "http",
+      "url": "<?php echo e($publicBaseUrl); ?>/api/mcp-server.php",
+      "headers": { "X-MCP-Api-Token": "YOUR_TOKEN" }
+    }
+  }
+}</pre></div></li>
+                        <li><div><h3>Ask</h3><p>&ldquo;What&rsquo;s overdue in OpenPlan?&rdquo; or &ldquo;Log a R450 software expense for today.&rdquo;</p></div></li>
+                    </ol>
+                </div>
+            </div>
+        </section>
+
+        <section class="op-section op-section--soft" id="privacy" aria-labelledby="privacy-title">
+            <div class="section-wrap">
+                <div class="op-section__head">
+                    <h2 id="privacy-title">Encrypted with your own master password.</h2>
+                    <p>Plainly, here is what that protects and what it does not.</p>
+                </div>
+                <dl class="op-facts">
+                    <div><dt>Two passwords</dt><dd>Your login password signs you in. Your master password, asked for next, is what unlocks your data.</dd></div>
+                    <div><dt>How it is stored</dt><dd>Your projects, clients, invoices, notes and everything else are saved as encrypted files (AES-256-GCM) with a key made from your master password. The master password is not stored with your data.</dd></div>
+                    <div><dt>What the server sees</dt><dd>Your name and email, so you can sign in. While you are signed in, your server session (kept on the server until you sign out or it expires) holds the master password so the app can open your data, and anything you send to the AI goes to that AI provider. This protects stored data; it is not end-to-end encryption.</dd></div>
+                    <div><dt>If you forget it</dt><dd>Nobody can reset the master password, and the data it protects cannot be opened without it. Write it down somewhere safe.</dd></div>
+                    <div><dt>Your copy</dt><dd>Export everything as an encrypted ZIP, as a readable JSON file (not encrypted, so keep it somewhere safe) or as CSV per module, and import it into any <?php echo e($siteName); ?>, including one you host yourself.</dd></div>
+                </dl>
+            </div>
+        </section>
+
+        <section class="op-section op-section--paper section--mobile" id="mobile" aria-labelledby="mobile-title">
             <div class="section-wrap mobile-layout">
                 <div class="mobile-visual mobile-visual--phone">
                     <img class="app-shot--phone" src="<?php echo e(APP_URL); ?>/assets/images/app-mobile-dashboard.webp" width="600" height="1298" alt="The mobile dashboard with tasks, projects, habits and the water tracker (sample data)" loading="lazy" decoding="async">
-                    <span class="mobile-photo-note">A little clarity, wherever the day goes.</span>
                 </div>
                 <div class="mobile-copy">
-                    <p class="eyebrow"><span class="eyebrow__number">06</span> Work goes where you go</p>
-                    <h2 id="mobile-title">A clear view, even away from your desk.</h2>
-                    <p class="section-lede">Pick up your plans, check a task, or find a client detail from your phone. The mobile experience keeps the essentials close when the day takes you out of the office.</p>
-                    <div class="mobile-actions">
+                    <h2 id="mobile-title" class="op-prose__title">On your phone, too.</h2>
+                    <p class="section-lede">Use the mobile web app in any phone browser, or install the Android app. Same account, same data, a layout made for one hand. On an unfolded phone or a tablet it switches to a wider layout with a side menu.</p>
+                    <div class="op-cta-row">
                         <?php if ($hasApkRelease): ?>
-                            <a class="button button--dark" href="<?php echo e($apkDownloadUrl); ?>">
-                                Download for Android
-                                <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                            </a>
-                            <span class="mobile-build">Android download available</span>
-                        <?php else: ?>
-                            <a class="button button--dark" href="<?php echo e($publicDocsUrl); ?>">Explore mobile access</a>
+                            <a class="button button--dark" href="<?php echo e($apkDownloadUrl); ?>" download>Download for Android <?php echo $publicIcon('arrow-down'); ?></a>
                         <?php endif; ?>
+                        <a class="text-link" href="<?php echo e($publicMobileUrl); ?>">Phone and Android guide <?php echo $publicIcon('arrow-up-right'); ?></a>
                     </div>
                 </div>
             </div>
@@ -229,9 +316,8 @@ $structuredData = [
         <section class="section section--pricing" id="pricing" aria-labelledby="pricing-title">
             <div class="section-wrap">
                 <div class="pricing-heading">
-                    <p class="eyebrow"><span class="eyebrow__number">07</span> Pricing</p>
-                    <h2 id="pricing-title">Start free. Add AI when you want it.</h2>
-                    <p class="section-lede">Your workspace is free. Plans add built-in AI requests, so you don’t need your own API keys.</p>
+                    <h2 id="pricing-title">Free workspace. Pay only for AI on our keys.</h2>
+                    <p class="section-lede">Every part of the workspace is free. A plan lets the assistant use our AI keys, so you don&rsquo;t need an AI account of your own.</p>
                 </div>
                 <div class="pricing-grid">
                     <?php require __DIR__ . '/partials/public-pricing-cards.php'; ?>
@@ -239,22 +325,41 @@ $structuredData = [
                 <?php if (!$isAuthenticated && $plans !== []): ?>
                     <?php require __DIR__ . '/partials/public-plan-note.php'; ?>
                 <?php endif; ?>
-                <p class="pricing-more"><a class="text-link" href="<?php echo e($publicPricingUrl); ?>">View the dedicated pricing page <span aria-hidden="true">↗</span></a></p>
+                <p class="pricing-more"><a class="text-link" href="<?php echo e($publicPricingUrl); ?>#faq">Pricing questions answered <?php echo $publicIcon('arrow-up-right'); ?></a></p>
+            </div>
+        </section>
+
+        <section class="op-section op-section--soft" id="open-source" aria-labelledby="open-source-title">
+            <div class="section-wrap op-columns">
+                <div class="op-prose">
+                    <h2 id="open-source-title" class="op-prose__title">Open source. Host it yourself if you like.</h2>
+                    <p><?php echo e($siteName); ?> is free software under the AGPL-3.0. You can run it on your own server, change it and use it for paid client work. If you offer a changed version to other people over a network, you share your changes under the same licence.</p>
+                    <p>A self-hosted copy has every feature. Bring your own AI keys; there is nothing to buy.</p>
+                    <div class="op-cta-row">
+                        <a class="button button--dark" href="<?php echo e($sourceDownloadUrl); ?>">Download the code (.zip)</a>
+                        <a class="text-link" href="<?php echo e($repoUrl); ?>" target="_blank" rel="noreferrer">View on GitHub <?php echo $publicIcon('arrow-up-right'); ?></a>
+                    </div>
+                </div>
+                <ol class="op-steps">
+                    <li><div><h3>Download</h3><p>Get the ZIP above, or clone the repository from GitHub.</p></div></li>
+                    <li><div><h3>Upload to a PHP server</h3><p>PHP 8.0 or newer on Apache, with the json, mbstring, openssl, curl and zip extensions. No database is needed; the <code>data/</code> folder must be writable.</p></div></li>
+                    <li><div><h3>Run the setup page</h3><p>Open the site in your browser. Setup creates your admin account and asks whether it is just for you or for several people.</p></div></li>
+                    <li><div><h3>Optional extras</h3><p>Copy <code>.env.example</code> to <code>.env</code> for email, sign-up rules and the daily job. The <a href="<?php echo e($publicDocsUrl); ?>#self-host">self-hosting guide</a> covers each setting.</p></div></li>
+                </ol>
             </div>
         </section>
 
         <section class="section section--closing" id="get-started" aria-labelledby="closing-title">
             <div class="section-wrap closing-panel">
                 <div class="closing-decoration" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-                <p class="eyebrow eyebrow--light"><span class="eyebrow__number">08</span> A fresh start for the work ahead</p>
-                <h2 id="closing-title">Bring a little more order to your work.</h2>
-                <p>Give the projects, people, and plans you care about a place to come together.</p>
+                <h2 id="closing-title">Bring the whole business into one place.</h2>
+                <p>Create a free workspace in a minute. Add a plan only if you want the AI on our keys.</p>
                 <div class="closing-actions">
                     <a class="button button--light" href="<?php echo e($primaryActionUrl); ?>">
                         <?php echo e($primaryActionText); ?>
                         <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </a>
-                    <a class="text-link text-link--light" href="<?php echo e($publicDocsUrl); ?>">Explore the documentation <span aria-hidden="true">↗</span></a>
+                    <a class="text-link text-link--light" href="<?php echo e($publicDocsUrl); ?>">Read the documentation <?php echo $publicIcon('arrow-up-right'); ?></a>
                 </div>
             </div>
         </section>
@@ -262,5 +367,6 @@ $structuredData = [
 
     <?php require __DIR__ . '/partials/public-site-footer.php'; ?>
     <?php require __DIR__ . '/partials/public-site-scripts.php'; ?>
+    <script src="<?php echo e(APP_URL); ?>/assets/js/public-hero.js?v=<?php echo (int) @filemtime(ROOT_PATH . '/assets/js/public-hero.js'); ?>" defer></script>
 </body>
 </html>

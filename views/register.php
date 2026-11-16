@@ -105,7 +105,7 @@ require __DIR__ . '/partials/chosen-plan.php';
                 </svg>
             </button>
         </div>
-        <p class="auth-helper">Your second password. It encrypts your workspace so we cannot read it, and we cannot reset it. Write it down.</p>
+        <p class="auth-helper">Your second password. It encrypts your stored workspace, and nobody can reset it. Write it down.</p>
     </div>
 
     <button type="submit"

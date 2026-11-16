@@ -13,7 +13,7 @@
                 <a href="<?php echo e($publicDocsUrl); ?>">Documentation</a>
                 <?php if ($hasApkRelease): ?><a href="<?php echo e($apkDownloadUrl); ?>" download>Android download</a><?php endif; ?>
                 <a href="<?php echo e($sourceDownloadUrl); ?>">Download source (.zip)</a>
-                <a href="<?php echo e($repoUrl); ?>" target="_blank" rel="noreferrer">Open source on GitHub <span aria-hidden="true">↗</span></a>
+                <a href="<?php echo e($repoUrl); ?>" target="_blank" rel="noreferrer">Open source on GitHub <?php echo $publicIcon('arrow-up-right'); ?></a>
             </div>
         </div>
         <div class="footer-bottom">

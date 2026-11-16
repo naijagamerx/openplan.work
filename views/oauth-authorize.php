@@ -38,7 +38,7 @@
 
   <div class="border-l-4 border-blue-400 bg-blue-50 p-3 mb-4 text-xs text-blue-900">
     <p class="font-bold mb-1">Security note</p>
-    <p>Your master code is wrapped with a server-side platform key so Alexa can decrypt your data on each request. This reduces zero-knowledge guarantees while linked.</p>
+    <p>Your master code is wrapped with a server-side platform key so Alexa can decrypt your data on each request. So while Alexa is linked, this site can open your data without your master password. Unlink it in Settings to stop that.</p>
   </div>
 
   <form method="POST" action="/api/oauth/authorize.php" class="space-y-3">

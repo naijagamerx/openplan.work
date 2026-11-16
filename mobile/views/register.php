@@ -436,7 +436,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <svg class="icon-hide h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 3l18 18"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 7.5a3 3 0 015.16-2.1"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 10h2m4.59 0H17a1 1 0 011 1v7a1 1 0 01-1 1H7a1 1 0 01-1-1v-7a1 1 0 011-1"></path></svg>
                         </button>
                     </div>
-                    <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Your second password. It encrypts your workspace so we cannot read it, and we cannot reset it. Write it down.</p>
+                    <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Your second password. It encrypts your stored workspace, and nobody can reset it. Write it down.</p>
                 </div>
 
                 <div class="mt-4">
