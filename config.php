@@ -258,6 +258,8 @@ $requestedPage = preg_replace('/[^a-z0-9_-]/i', '', (string)($_GET['page'] ?? ''
 // Same-origin framing only for pages the app itself embeds (invoice previews, wide-screen notes pane)
 $isEmbeddedFrameRequest = (($_GET['embedded'] ?? '') === '1') && in_array($requestedPage, ['invoice-view', 'advanced-invoice-view', 'view-notes'], true);
 $frameAncestorsPolicy = $isEmbeddedFrameRequest ? "'self'" : "'none'";
+// Card checkout posts a signed form to PayFast; only the buy-plan page may submit forms off-site.
+$formActionPolicy = $requestedPage === 'buy-plan' ? "'self' https://www.payfast.co.za https://sandbox.payfast.co.za" : "'self'";
 
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: ' . ($isEmbeddedFrameRequest ? 'SAMEORIGIN' : 'DENY'));
@@ -273,7 +275,7 @@ header(
     "font-src 'self' https://fonts.gstatic.com data:; " .
     "img-src 'self' data: blob:; " .
     "connect-src 'self' https://api.groq.com https://openrouter.ai; " .
-    "media-src 'self' blob: https://assets.mixkit.co; frame-ancestors {$frameAncestorsPolicy}; base-uri 'self'; form-action 'self';"
+    "media-src 'self' blob: https://assets.mixkit.co; frame-ancestors {$frameAncestorsPolicy}; base-uri 'self'; form-action {$formActionPolicy};"
 );
 
 // Autoload classes

@@ -113,6 +113,13 @@ foreach ($users as $u) {
                         </div>
 
                         <div>
+                            <?php if (($p['provider'] ?? '') === 'payfast'): ?>
+                            <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Card payment</p>
+                            <p class="text-sm text-gray-700">Paid through PayFast<?php echo !empty($p['parentPaymentId']) ? ' (automatic renewal)' : ''; ?>. No proof needed: the plan starts when PayFast confirms the payment.</p>
+                            <?php if (!empty($p['gatewayPaymentId'])): ?>
+                                <p class="text-xs text-gray-500 mt-2">PayFast reference: <span class="font-mono"><?php echo e($p['gatewayPaymentId']); ?></span></p>
+                            <?php endif; ?>
+                            <?php else: ?>
                             <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Proof</p>
                             <?php if ($isPdf): ?>
                                 <a href="<?php echo e($proofUrl); ?>" target="_blank" class="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold uppercase tracking-widest hover:border-black">
@@ -125,6 +132,7 @@ foreach ($users as $u) {
                                 </a>
                             <?php endif; ?>
                             <a href="<?php echo e($proofUrl); ?>&download=1" class="block mt-2 text-xs text-gray-500 hover:text-black underline">Download original</a>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>

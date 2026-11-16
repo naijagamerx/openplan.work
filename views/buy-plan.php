@@ -27,6 +27,13 @@ if (!$plan || empty($plan['active'])) {
 }
 $methods = $methodsApi->findAll(['activeOnly' => true]);
 $symbol = getCurrencySymbol($plan['currency'] ?? 'USD');
+
+// Card checkout (PayFast, ZAR): offered when PayFast is configured and the plan has a rand price.
+require_once INCLUDES_PATH . '/PayFast.php';
+$cardAmount = PayFast::isConfigured() ? PayFast::zarAmountForPlan($plan) : null;
+$cardFrequency = $cardAmount !== null ? PayFast::frequencyFor((int)($plan['durationDays'] ?? 30)) : null;
+$cardRenews = [3 => 'every month', 4 => 'every 3 months', 5 => 'every 6 months', 6 => 'every year'][$cardFrequency[0] ?? 0] ?? '';
+$cardCancelled = ($_GET['payfast'] ?? '') === 'cancelled';
 ?>
 
 <div>
@@ -43,12 +50,42 @@ $symbol = getCurrencySymbol($plan['currency'] ?? 'USD');
         </div>
     </div>
 
-    <?php if (empty($methods)): ?>
+    <?php if ($cardCancelled): ?>
+        <div class="bg-gray-50 border border-gray-200 rounded-2xl p-4 mb-6 text-sm text-gray-700" role="status">
+            Card payment cancelled. Nothing was charged. You can try again, or pay another way below.
+        </div>
+    <?php endif; ?>
+
+    <?php if ($cardAmount !== null): ?>
+        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
+            <div class="p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <h3 class="font-bold text-lg">Pay by card</h3>
+                    <p class="text-sm text-gray-500 mt-1">
+                        <?php if ($cardRenews !== ''): ?>
+                            R<?php echo e(number_format($cardAmount, 2)); ?> <?php echo e($cardRenews); ?>. Renews automatically; cancel any time in My Subscription.
+                        <?php else: ?>
+                            R<?php echo e(number_format($cardAmount, 2)); ?> once, for <?php echo (int)($plan['durationDays'] ?? 30); ?> days.
+                        <?php endif; ?>
+                        Secure checkout by PayFast. Your plan starts as soon as the payment clears.
+                    </p>
+                </div>
+                <button type="button" id="card-pay-btn" class="shrink-0 px-8 py-3 bg-black text-white rounded-xl text-sm font-bold uppercase tracking-widest hover:bg-gray-800 transition">
+                    Pay R<?php echo e(number_format($cardAmount, 2)); ?>
+                </button>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if (empty($methods) && $cardAmount === null): ?>
         <div class="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-6 mb-6">
             <p class="text-sm text-yellow-900 font-bold mb-1">No payment methods available</p>
             <p class="text-sm text-yellow-800">The admin has not configured any payment methods yet. Please check back later or contact support.</p>
         </div>
-    <?php else: ?>
+    <?php elseif (!empty($methods)): ?>
+        <?php if ($cardAmount !== null): ?>
+            <p class="text-xs font-bold uppercase tracking-widest text-gray-500 mb-3">Or pay by bank transfer or crypto</p>
+        <?php endif; ?>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div class="p-6 border-b border-gray-100">
@@ -109,6 +146,44 @@ $symbol = getCurrencySymbol($plan['currency'] ?? 'USD');
 
 <script>
 (function() {
+    // Card checkout: ask the server for a signed PayFast form, then post it to PayFast.
+    const cardBtn = document.getElementById('card-pay-btn');
+    if (cardBtn) {
+        cardBtn.addEventListener('click', async () => {
+            const label = cardBtn.innerHTML;
+            cardBtn.disabled = true;
+            cardBtn.innerHTML = 'Opening PayFast...';
+            try {
+                const response = await fetch((typeof APP_URL !== 'undefined' ? APP_URL + '/' : '') + 'api/payfast.php?action=checkout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                    body: JSON.stringify({ planId: <?php echo json_encode($planId, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>, csrf_token: CSRF_TOKEN })
+                });
+                const result = await response.json();
+                const data = result && result.data;
+                if (!response.ok || !result.success || !data || !/^https:\/\/(www|sandbox)\.payfast\.co\.za\//.test(data.action || '')) {
+                    throw new Error((result && result.error && result.error.message) || 'Could not start the card payment');
+                }
+                const payForm = document.createElement('form');
+                payForm.method = 'POST';
+                payForm.action = data.action;
+                Object.entries(data.fields || {}).forEach(([name, value]) => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = name;
+                    input.value = value;
+                    payForm.appendChild(input);
+                });
+                document.body.appendChild(payForm);
+                payForm.submit();
+            } catch (err) {
+                showToast(err.message || 'Could not start the card payment', 'error');
+                cardBtn.disabled = false;
+                cardBtn.innerHTML = label;
+            }
+        });
+    }
+
     const methodButtons = document.querySelectorAll('.method-btn');
     const detailsEl = document.getElementById('method-details');
     const hiddenId = document.getElementById('selected-method-id');

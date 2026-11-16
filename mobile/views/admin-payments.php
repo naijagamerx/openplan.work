@@ -95,6 +95,13 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
         </div>
 
         <div class="pt-2 border-t border-gray-200">
+          <?php if (($p['provider'] ?? '') === 'payfast'): ?>
+            <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Card payment</p>
+            <p class="text-xs text-gray-700">Paid through PayFast<?= !empty($p['parentPaymentId']) ? ' (automatic renewal)' : '' ?>. No proof needed.</p>
+            <?php if (!empty($p['gatewayPaymentId'])): ?>
+              <p class="text-[10px] text-gray-500 mt-1">PayFast ref: <span class="font-mono"><?= htmlspecialchars($p['gatewayPaymentId']) ?></span></p>
+            <?php endif; ?>
+          <?php else: ?>
           <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Proof</p>
           <?php if ($isPdf): ?>
             <a href="<?= htmlspecialchars($proofUrl) ?>" target="_blank" class="inline-block border border-black px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest">View PDF</a>
@@ -102,6 +109,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
             <a href="<?= htmlspecialchars($proofUrl) ?>" target="_blank"><img src="<?= htmlspecialchars($proofUrl) ?>" alt="Proof" class="w-full max-h-48 object-contain border border-black"></a>
           <?php endif; ?>
           <a href="<?= htmlspecialchars($proofUrl) ?>&download=1" class="block mt-1 text-[10px] text-gray-500 underline">Download original</a>
+          <?php endif; ?>
         </div>
 
         <?php if ($status === 'pending'): ?>

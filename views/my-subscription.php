@@ -12,6 +12,7 @@ $active = $api->getActiveByUser($userId);
 $history = $api->getByUser($userId);
 $usage = getMonthlyUsage($userId);
 $usageTotal = (int)($usage['totalRequests'] ?? 0);
+$cardReturn = ($_GET['payfast'] ?? '') === 'return';
 ?>
 
 <div>
@@ -21,6 +22,17 @@ $usageTotal = (int)($usage['totalRequests'] ?? 0);
             <p class="text-gray-500 font-medium tracking-tight">Your active plan and history.</p>
         </div>
     </div>
+
+    <?php if ($cardReturn): ?>
+        <div class="bg-gray-50 border border-gray-200 rounded-2xl p-4 mb-6 text-sm text-gray-700" role="status">
+            <?php if ($active): ?>
+                Thank you. Your card payment went through and your plan is active.
+            <?php else: ?>
+                Thank you. PayFast is confirming your payment; your plan appears here within a minute or two.
+                <a href="?page=my-subscription" class="font-bold underline">Refresh</a>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
 
     <?php if ($active):
         $expiresAt = strtotime((string)($active['expiresAt'] ?? ''));
@@ -68,9 +80,22 @@ $usageTotal = (int)($usage['totalRequests'] ?? 0);
                 </div>
             <?php endif; ?>
 
+            <?php if (($active['provider'] ?? '') === 'payfast'): ?>
+                <div class="mt-4 text-sm text-white/70">
+                    <?php if (!empty($active['autoRenew'])): ?>
+                        <span class="font-bold">Card auto-renew is on.</span> PayFast charges your card each period; cancel any time and keep access until <?php echo e(date('M j, Y', $expiresAt)); ?>.
+                    <?php else: ?>
+                        <span class="font-bold">Auto-renew is off.</span> Your plan ends on <?php echo e(date('M j, Y', $expiresAt)); ?>.
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+
             <div class="mt-6 flex flex-wrap gap-2">
-                <a href="?page=settings#ai-quota" class="px-4 py-2 bg-white text-black rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-100 transition">Configure AI Quota Toggle</a>
+                <a href="?page=settings#ai-quota" class="px-4 py-2 bg-white text-black rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-100 transition">Platform AI Settings</a>
                 <a href="?page=subscription" class="px-4 py-2 border border-white/40 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition">Extend / Switch Plan</a>
+                <?php if (($active['provider'] ?? '') === 'payfast' && !empty($active['autoRenew'])): ?>
+                    <button type="button" id="cancel-autorenew-btn" class="px-4 py-2 border border-white/40 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition">Cancel Auto-Renew</button>
+                <?php endif; ?>
             </div>
         </div>
     <?php else: ?>
@@ -120,3 +145,31 @@ $usageTotal = (int)($usage['totalRequests'] ?? 0);
         </div>
     <?php endif; ?>
 </div>
+
+<script>
+(function() {
+    const btn = document.getElementById('cancel-autorenew-btn');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+        confirmAction('Stop charging your card? Your plan stays active until it expires.', async () => {
+            btn.disabled = true;
+            try {
+                const response = await fetch((typeof APP_URL !== 'undefined' ? APP_URL + '/' : '') + 'api/payfast.php?action=cancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                    body: JSON.stringify({ csrf_token: CSRF_TOKEN })
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error((result && result.error && result.error.message) || 'Could not cancel auto-renew');
+                }
+                showToast(result.message || 'Auto-renew is off', 'success');
+                setTimeout(() => window.location.reload(), 800);
+            } catch (err) {
+                showToast(err.message || 'Could not cancel auto-renew', 'error');
+                btn.disabled = false;
+            }
+        });
+    });
+})();
+</script>

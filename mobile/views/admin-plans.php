@@ -68,6 +68,10 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
             <option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="ZAR">ZAR</option>
           </select>
         </div>
+        <div class="col-span-2">
+          <label class="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Card price ZAR (0 = no card)</label>
+          <input type="number" name="zarPrice" min="0" step="0.01" class="w-full px-3 py-2 border border-black text-sm" placeholder="279.00">
+        </div>
         <div>
           <label class="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Days</label>
           <input type="number" name="durationDays" min="1" required class="w-full px-3 py-2 border border-black text-sm" placeholder="30">
@@ -141,6 +145,7 @@ function openPlanForm() {
   card.querySelector('[name=id]').value = '';
   card.querySelector('[name=name]').value = '';
   card.querySelector('[name=price]').value = '';
+  card.querySelector('[name=zarPrice]').value = '';
   card.querySelector('[name=durationDays]').value = '30';
   card.querySelector('[name=monthlyRequestCap]').value = '';
   card.querySelector('[name=description]').value = '';
@@ -157,6 +162,7 @@ function editPlan(plan) {
   card.querySelector('[name=name]').value = plan.name || '';
   card.querySelector('[name=price]').value = plan.price || '';
   card.querySelector('[name=currency]').value = plan.currency || 'USD';
+  card.querySelector('[name=zarPrice]').value = plan.zarPrice ?? '';
   card.querySelector('[name=durationDays]').value = plan.durationDays || 30;
   card.querySelector('[name=monthlyRequestCap]').value = plan.monthlyRequestCap || 0;
   card.querySelector('[name=description]').value = plan.description || '';
@@ -184,6 +190,7 @@ document.getElementById('plan-form').addEventListener('submit', async (e) => {
     name: fd.get('name'),
     price: parseFloat(fd.get('price')),
     currency: fd.get('currency'),
+    zarPrice: parseFloat(fd.get('zarPrice') || '0'),
     durationDays: parseInt(fd.get('durationDays'), 10),
     monthlyRequestCap: parseInt(fd.get('monthlyRequestCap') || 0, 10),
     description: fd.get('description'),

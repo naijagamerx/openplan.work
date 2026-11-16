@@ -10,6 +10,14 @@
  * Proof files are NEVER directly web-readable (.htaccess Deny + random
  * filenames). All reads go through api/payment-proof.php which checks
  * ownership or admin role.
+ *
+ * Card payments (provider "payfast") have no proof file. Checkout creates a
+ * record with status "awaiting_gateway"; a verified PayFast notification turns
+ * it into "approved" and activates the plan. Each later recurring charge is a
+ * new approved record pointing at the first one (parentPaymentId).
+ *
+ * Every load-modify-save of the payments file runs under lockPayments(), taken
+ * before the subscriptions lock (never the other way round).
  */
 
 require_once __DIR__ . '/Database.php';
@@ -39,6 +47,22 @@ class PaymentsAPI {
 
     public static function proofRoot(): string {
         return ROOT_PATH . '/uploads/payment-proofs';
+    }
+
+    /** Exclusive lock for a load-modify-save of the payments file. Release with unlockPayments(). */
+    private function lockPayments() {
+        $handle = @fopen(DATA_PATH . '/payments.lock', 'c');
+        if ($handle !== false) {
+            flock($handle, LOCK_EX);
+        }
+        return $handle;
+    }
+
+    private function unlockPayments($handle): void {
+        if ($handle !== false) {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
     }
 
     public function submit(string $userId, string $planId, string $methodId, array $proofFile): array {
@@ -99,9 +123,14 @@ class PaymentsAPI {
             'rejectionReason' => null
         ];
 
-        $payments = $this->db->load('payments', true);
-        $payments[] = $record;
-        $this->db->save('payments', $payments);
+        $lock = $this->lockPayments();
+        try {
+            $payments = $this->db->load('payments', true);
+            $payments[] = $record;
+            $this->db->save('payments', $payments);
+        } finally {
+            $this->unlockPayments($lock);
+        }
 
         if (class_exists('Audit')) {
             try {
@@ -141,23 +170,13 @@ class PaymentsAPI {
     }
 
     public function approve(string $paymentId, string $adminId, string $note = ''): array {
-        // Acquire per-payment lock so two simultaneous approve clicks cannot
-        // each pass the status check and produce duplicate subscriptions.
-        $lockPath = sys_get_temp_dir() . '/lazyman_payment_' . md5($paymentId) . '.lock';
-        $lockHandle = @fopen($lockPath, 'c');
-        $haveLock = false;
-        if ($lockHandle !== false) {
-            $haveLock = flock($lockHandle, LOCK_EX);
-        }
+        // The payments lock also stops two simultaneous approve clicks from each
+        // passing the status check and producing duplicate subscriptions.
+        $lock = $this->lockPayments();
         try {
             return $this->approveLocked($paymentId, $adminId, $note);
         } finally {
-            if ($lockHandle !== false) {
-                if ($haveLock) {
-                    flock($lockHandle, LOCK_UN);
-                }
-                fclose($lockHandle);
-            }
+            $this->unlockPayments($lock);
         }
     }
 
@@ -224,6 +243,17 @@ class PaymentsAPI {
     }
 
     public function reject(string $paymentId, string $adminId, string $reason): array {
+        $lock = $this->lockPayments();
+        try {
+            $rejected = $this->rejectLocked($paymentId, $adminId, $reason);
+        } finally {
+            $this->unlockPayments($lock);
+        }
+        $this->sendEmailToUser($rejected['userId'] ?? '', 'sendPaymentRejectedEmail', $rejected);
+        return $rejected;
+    }
+
+    private function rejectLocked(string $paymentId, string $adminId, string $reason): array {
         $payments = $this->db->load('payments', true);
         $idx = -1;
         foreach ($payments as $i => $p) {
@@ -251,7 +281,6 @@ class PaymentsAPI {
                 error_log('reject audit failed: ' . $e->getMessage());
             }
         }
-        $this->sendEmailToUser($payments[$idx]['userId'] ?? '', 'sendPaymentRejectedEmail', $payments[$idx]);
         return $payments[$idx];
     }
 
@@ -271,14 +300,18 @@ class PaymentsAPI {
             if (!$recipient || empty($recipient['email'])) {
                 return;
             }
-            $masterPassword = getMasterPassword();
+            // Admin approving: use the admin's own mail settings. No session (a PayFast
+            // notification): Mailer falls back to the SMTP settings in .env.
+            $config = [];
             $senderId = class_exists('Auth') ? Auth::userId() : null;
-            if (!$senderId || $masterPassword === '') {
-                return;
+            if ($senderId) {
+                $masterPassword = getMasterPassword();
+                if ($masterPassword !== '') {
+                    $loaded = (new Database($masterPassword, $senderId))->load('config', false);
+                    $config = is_array($loaded) ? $loaded : [];
+                }
             }
-            $senderDb = new Database($masterPassword, $senderId);
-            $config = $senderDb->load('config', false);
-            $mailer = new Mailer(is_array($config) ? $config : []);
+            $mailer = new Mailer($config);
             if (method_exists($mailer, $method)) {
                 $mailer->{$method}($recipient, ...$args);
             }
@@ -308,6 +341,244 @@ class PaymentsAPI {
         return $real;
     }
 
+    /**
+     * Pending record for a PayFast card checkout. Its id goes to PayFast as
+     * m_payment_id and comes back on every notification for this purchase.
+     * Reuses the user's own unpaid checkout for the same plan and amount from
+     * the last 24 hours, so repeated clicks do not pile up records.
+     */
+    public function createCardCheckout(string $userId, array $plan, float $amount, ?array $frequency): array {
+        require_once __DIR__ . '/PayFast.php';
+        if ($userId === '' || empty($plan['id'])) {
+            throw new Exception('Missing user or plan');
+        }
+        $amount = round($amount, 2);
+        $lock = $this->lockPayments();
+        try {
+            $payments = $this->db->load('payments', true);
+            $cutoff = time() - 86400;
+            foreach ($payments as $p) {
+                if (($p['userId'] ?? '') === $userId
+                    && ($p['provider'] ?? '') === 'payfast'
+                    && ($p['status'] ?? '') === 'awaiting_gateway'
+                    && ($p['planId'] ?? '') === (string)$plan['id']
+                    && abs((float)($p['amount'] ?? 0) - $amount) < 0.005
+                    && (bool)($p['recurring'] ?? false) === ($frequency !== null)
+                    && (strtotime((string)($p['submittedAt'] ?? '')) ?: 0) >= $cutoff) {
+                    return $p;
+                }
+            }
+            $record = [
+                'id' => $this->db->generateId(),
+                'userId' => $userId,
+                'planId' => (string)$plan['id'],
+                'planSnapshot' => [
+                    'name' => $plan['name'] ?? '',
+                    'price' => (float)($plan['price'] ?? 0),
+                    'currency' => $plan['currency'] ?? 'USD',
+                    'durationDays' => (int)($plan['durationDays'] ?? 30),
+                    'providers' => $plan['providers'] ?? [],
+                    'monthlyRequestCap' => (int)($plan['monthlyRequestCap'] ?? 0)
+                ],
+                'amount' => $amount,
+                'currency' => 'ZAR',
+                'provider' => 'payfast',
+                'methodId' => null,
+                'methodSnapshot' => ['type' => 'card', 'label' => 'Card (PayFast)'],
+                'recurring' => $frequency !== null,
+                'billingPeriod' => $frequency[1] ?? '',
+                'graceDays' => $frequency !== null ? PayFast::GRACE_DAYS : 0,
+                'proof' => null,
+                'status' => 'awaiting_gateway',
+                'submittedAt' => date('c'),
+                'reviewedAt' => null,
+                'reviewedBy' => null,
+                'adminNote' => null,
+                'rejectionReason' => null
+            ];
+            $payments[] = $record;
+            $this->db->save('payments', $payments);
+            return $record;
+        } finally {
+            $this->unlockPayments($lock);
+        }
+    }
+
+    /**
+     * Apply one PayFast notification that the caller has ALREADY verified
+     * (signature, source address, PayFast's own VALID reply). Safe to repeat:
+     * each charge (pf_payment_id) is applied at most once.
+     * Returns ['result' => activated|renewed|duplicate|cancelled|failed|ignored|unknown|amount_mismatch, ...].
+     */
+    public function applyPayFastNotification(array $itn): array {
+        $lock = $this->lockPayments();
+        try {
+            $outcome = $this->applyPayFastNotificationLocked($itn);
+        } finally {
+            $this->unlockPayments($lock);
+        }
+        if (in_array($outcome['result'], ['activated', 'renewed'], true) && !empty($outcome['payment'])) {
+            $this->sendEmailToUser($outcome['payment']['userId'] ?? '', 'sendPaymentApprovedEmail', $outcome['payment']);
+        }
+        return $outcome;
+    }
+
+    private function applyPayFastNotificationLocked(array $itn): array {
+        require_once __DIR__ . '/PayFast.php';
+        $mId = trim((string)($itn['m_payment_id'] ?? ''));
+        $pfId = trim((string)($itn['pf_payment_id'] ?? ''));
+        $status = strtoupper(trim((string)($itn['payment_status'] ?? '')));
+        $token = trim((string)($itn['token'] ?? ''));
+
+        $payments = $this->db->load('payments', true);
+        $idx = -1;
+        foreach ($payments as $i => $p) {
+            if (($p['provider'] ?? '') !== 'payfast' || !empty($p['parentPaymentId'])) {
+                continue;
+            }
+            $matches = $mId !== ''
+                ? ($p['id'] ?? '') === $mId
+                : ($token !== '' && ($p['gatewayToken'] ?? '') === $token);
+            if ($matches) {
+                $idx = $i;
+                break;
+            }
+        }
+        if ($idx < 0) {
+            return ['result' => 'unknown'];
+        }
+        $original = $payments[$idx];
+
+        if ($status === 'CANCELLED') {
+            if (($original['status'] ?? '') === 'awaiting_gateway') {
+                $payments[$idx]['status'] = 'cancelled';
+                $payments[$idx]['reviewedAt'] = date('c');
+                $this->db->save('payments', $payments);
+            }
+            $subscription = $this->cancelAutoRenew((string)($original['subscriptionId'] ?? ''), $token !== '' ? $token : (string)($original['gatewayToken'] ?? ''));
+            return ['result' => 'cancelled', 'subscriptionId' => $subscription['id'] ?? null];
+        }
+
+        if ($status === 'FAILED') {
+            if (($original['status'] ?? '') === 'awaiting_gateway') {
+                $payments[$idx]['status'] = 'failed';
+                $payments[$idx]['reviewedAt'] = date('c');
+                $this->db->save('payments', $payments);
+            }
+            return ['result' => 'failed'];
+        }
+
+        if ($status !== 'COMPLETE') {
+            return ['result' => 'ignored'];
+        }
+        if ($pfId === '') {
+            return ['result' => 'ignored'];
+        }
+        foreach ($payments as $p) {
+            if (($p['gatewayPaymentId'] ?? '') === $pfId) {
+                return ['result' => 'duplicate', 'paymentId' => $p['id'] ?? null];
+            }
+        }
+        if (!PayFast::amountMatches((float)($original['amount'] ?? 0), $itn['amount_gross'] ?? null)) {
+            error_log('PayFast ITN amount mismatch for payment ' . $original['id'] . ': expected '
+                . number_format((float)($original['amount'] ?? 0), 2, '.', '') . ', got ' . (string)($itn['amount_gross'] ?? ''));
+            return ['result' => 'amount_mismatch'];
+        }
+
+        $nowIso = date('c');
+        $isFirst = ($original['status'] ?? '') !== 'approved';
+        $charge = $original;
+        if (!$isFirst) {
+            // A later recurring charge: its own record, linked to the first one.
+            $charge['id'] = $this->db->generateId();
+            $charge['parentPaymentId'] = $original['id'];
+            $charge['submittedAt'] = $nowIso;
+            unset($charge['subscriptionId']);
+        }
+        $charge['status'] = 'approved';
+        $charge['gatewayPaymentId'] = $pfId;
+        if ($token !== '') {
+            $charge['gatewayToken'] = $token;
+        }
+        $charge['amount'] = round((float)$itn['amount_gross'], 2);
+        $charge['reviewedAt'] = $nowIso;
+        $charge['reviewedBy'] = 'payfast';
+
+        // Record the charge BEFORE touching the subscription: if anything fails after this,
+        // a repeated notification is a duplicate and can never extend access twice.
+        if ($isFirst) {
+            $payments[$idx] = $charge;
+            $chargeIdx = $idx;
+        } else {
+            $payments[] = $charge;
+            $chargeIdx = array_key_last($payments);
+        }
+        $this->db->save('payments', $payments);
+
+        $subscription = $this->upsertSubscription($charge);
+        $payments[$chargeIdx]['subscriptionId'] = $subscription['id'];
+        $this->db->save('payments', $payments);
+
+        return [
+            'result' => $isFirst ? 'activated' : 'renewed',
+            'payment' => $payments[$chargeIdx],
+            'subscriptionId' => $subscription['id'],
+        ];
+    }
+
+    /** The user's live card subscription that will charge again, or null. */
+    public function findActiveCardSubscription(string $userId): ?array {
+        $subs = $this->db->load('subscriptions', true);
+        $now = time();
+        foreach ($subs as $s) {
+            if (($s['userId'] ?? '') === $userId
+                && ($s['status'] ?? '') === 'active'
+                && ($s['provider'] ?? '') === 'payfast'
+                && !empty($s['autoRenew'])
+                && !empty($s['gatewayToken'])
+                && (strtotime((string)($s['expiresAt'] ?? '')) ?: 0) > $now) {
+                return $s;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Stop future charges on a subscription (matched by id, else by card token).
+     * Access continues until expiresAt. Returns the updated subscription or null.
+     */
+    public function cancelAutoRenew(string $subscriptionId, string $token = ''): ?array {
+        if ($subscriptionId === '' && $token === '') {
+            return null;
+        }
+        require_once __DIR__ . '/SubscriptionHelper.php';
+        $lock = saas_lockSubscriptions();
+        try {
+            $subs = $this->db->load('subscriptions', true);
+            foreach ($subs as $i => $s) {
+                $hit = ($subscriptionId !== '' && ($s['id'] ?? '') === $subscriptionId)
+                    || ($subscriptionId === '' && $token !== '' && ($s['gatewayToken'] ?? '') === $token);
+                if (!$hit) {
+                    continue;
+                }
+                // A late cancel for an OLD card token must not stop the card that replaced it.
+                if ($token !== '' && !empty($s['gatewayToken']) && $s['gatewayToken'] !== $token) {
+                    return $s;
+                }
+                if (!empty($subs[$i]['autoRenew']) || empty($subs[$i]['cancelledAt'])) {
+                    $subs[$i]['autoRenew'] = false;
+                    $subs[$i]['cancelledAt'] = $subs[$i]['cancelledAt'] ?? date('c');
+                    $subs[$i]['updatedAt'] = date('c');
+                    $this->db->save('subscriptions', $subs);
+                }
+                return $subs[$i];
+            }
+        } finally {
+            saas_unlockSubscriptions($lock);
+        }
+        return null;
+    }
+
     private function upsertSubscription(array $payment): array {
         require_once __DIR__ . '/SubscriptionHelper.php';
         $lock = saas_lockSubscriptions();
@@ -322,6 +593,31 @@ class PaymentsAPI {
         $userId = $payment['userId'];
         $snapshot = $payment['planSnapshot'] ?? [];
         $durationDays = max(1, (int)($snapshot['durationDays'] ?? 30));
+
+        // Card subscriptions renew on the same day each month/year, so they extend by a
+        // calendar period ("+1 month") instead of a fixed number of days, and a new one
+        // gets a few grace days so a renewal that lands late does not cut access.
+        $period = (string)($payment['billingPeriod'] ?? '');
+        $extend = static function (int $from) use ($period, $durationDays): int {
+            if ($period !== '') {
+                $next = strtotime($period, $from);
+                if ($next !== false && $next > $from) {
+                    return $next;
+                }
+            }
+            return $from + $durationDays * 86400;
+        };
+        $graceSeconds = max(0, (int)($payment['graceDays'] ?? 0)) * 86400;
+        $gatewayFields = [];
+        $provider = (string)($payment['provider'] ?? '');
+        if ($provider !== '' && $provider !== 'manual') {
+            $gatewayFields['provider'] = $provider;
+            if (!empty($payment['gatewayToken'])) {
+                $gatewayFields['gatewayToken'] = (string)$payment['gatewayToken'];
+                $gatewayFields['autoRenew'] = true;
+                $gatewayFields['cancelledAt'] = null;
+            }
+        }
 
         $subs = $this->db->load('subscriptions', true);
         $now = time();
@@ -341,7 +637,8 @@ class PaymentsAPI {
         if ($existingIdx >= 0) {
             $current = $subs[$existingIdx];
             $currentExpiry = strtotime((string)$current['expiresAt']);
-            $newExpiry = $currentExpiry + ($durationDays * 86400);
+            $newExpiry = $extend($currentExpiry);
+            $subs[$existingIdx] = array_merge($subs[$existingIdx], $gatewayFields);
             $subs[$existingIdx]['expiresAt'] = date('c', $newExpiry);
             $subs[$existingIdx]['planId'] = $payment['planId'];
             $subs[$existingIdx]['planSnapshot'] = $snapshot;
@@ -362,7 +659,7 @@ class PaymentsAPI {
             'paymentId' => $payment['id'],
             'status' => 'active',
             'startsAt' => $nowIso,
-            'expiresAt' => date('c', $now + $durationDays * 86400),
+            'expiresAt' => date('c', $extend($now) + $graceSeconds),
             'cancelledAt' => null,
             'providers' => $snapshot['providers'] ?? [],
             'monthlyRequestCap' => (int)($snapshot['monthlyRequestCap'] ?? 0),
@@ -370,6 +667,7 @@ class PaymentsAPI {
             'createdAt' => $nowIso,
             'updatedAt' => $nowIso
         ];
+        $sub = array_merge($sub, $gatewayFields);
         $subs[] = $sub;
         $this->db->save('subscriptions', $subs);
         return $sub;

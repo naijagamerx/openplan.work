@@ -30,6 +30,13 @@ if (!$plan || empty($plan['active'])) {
 $methods = $methodsApi->findAll(['activeOnly' => true]);
 $symbol = getCurrencySymbol($plan['currency'] ?? 'USD');
 $siteName = getSiteName() ?? 'LazyMan';
+
+// Card checkout (PayFast, ZAR): offered when PayFast is configured and the plan has a rand price.
+require_once INCLUDES_PATH . '/PayFast.php';
+$cardAmount = PayFast::isConfigured() ? PayFast::zarAmountForPlan($plan) : null;
+$cardFrequency = $cardAmount !== null ? PayFast::frequencyFor((int)($plan['durationDays'] ?? 30)) : null;
+$cardRenews = [3 => 'every month', 4 => 'every 3 months', 5 => 'every 6 months', 6 => 'every year'][$cardFrequency[0] ?? 0] ?? '';
+$cardCancelled = ($_GET['payfast'] ?? '') === 'cancelled';
 ?>
 <!DOCTYPE html>
 <html class="light overflow-x-hidden" lang="en">
@@ -71,12 +78,38 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     <?php endif; ?>
   </section>
 
-  <?php if (empty($methods)): ?>
+  <?php if ($cardCancelled): ?>
+    <section class="border border-black p-3 text-xs text-gray-700" role="status">
+      Card payment cancelled. Nothing was charged. Try again, or pay another way below.
+    </section>
+  <?php endif; ?>
+
+  <?php if ($cardAmount !== null): ?>
+    <section class="border-2 border-black p-4">
+      <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500">Pay by card</p>
+      <p class="text-sm text-gray-700 mt-1">
+        <?php if ($cardRenews !== ''): ?>
+          <span class="font-bold">R<?= htmlspecialchars(number_format($cardAmount, 2)) ?></span> <?= htmlspecialchars($cardRenews) ?>. Renews automatically; cancel any time in My Subscription.
+        <?php else: ?>
+          <span class="font-bold">R<?= htmlspecialchars(number_format($cardAmount, 2)) ?></span> once, for <?= (int)($plan['durationDays'] ?? 30) ?> days.
+        <?php endif; ?>
+      </p>
+      <p class="text-[10px] text-gray-500 mt-1">Secure checkout by PayFast. Your plan starts as soon as the payment clears.</p>
+      <button type="button" id="card-pay-btn" class="mt-3 w-full bg-black text-white py-3 font-bold text-xs uppercase tracking-widest active:scale-95 transition-transform touch-target">
+        Pay R<?= htmlspecialchars(number_format($cardAmount, 2)) ?> by card
+      </button>
+    </section>
+  <?php endif; ?>
+
+  <?php if (empty($methods) && $cardAmount === null): ?>
     <section class="border-2 border-yellow-400 bg-yellow-50 p-4">
       <p class="text-sm font-bold text-yellow-900">No payment methods available</p>
       <p class="text-xs text-yellow-800 mt-1">Admin has not configured any payment methods yet.</p>
     </section>
-  <?php else: ?>
+  <?php elseif (!empty($methods)): ?>
+    <?php if ($cardAmount !== null): ?>
+      <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500">Or pay by bank transfer or crypto</p>
+    <?php endif; ?>
 
     <section>
       <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">1. Choose Payment Method</p>
@@ -133,6 +166,45 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 
 <script>
 (function() {
+  // Card checkout: ask the server for a signed PayFast form, then post it to PayFast.
+  const cardBtn = document.getElementById('card-pay-btn');
+  if (cardBtn) {
+    cardBtn.addEventListener('click', async () => {
+      const label = cardBtn.innerHTML;
+      cardBtn.disabled = true;
+      cardBtn.innerHTML = 'Opening PayFast...';
+      try {
+        const response = await fetch((APP_URL ? APP_URL + '/' : '') + 'api/payfast.php?action=checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+          body: JSON.stringify({ planId: <?= json_encode($planId, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>, returnTo: 'mobile', csrf_token: CSRF_TOKEN })
+        });
+        const result = await response.json();
+        const data = result && result.data;
+        if (!response.ok || !result.success || !data || !/^https:\/\/(www|sandbox)\.payfast\.co\.za\//.test(data.action || '')) {
+          throw new Error((result && result.error && result.error.message) || 'Could not start the card payment');
+        }
+        const payForm = document.createElement('form');
+        payForm.method = 'POST';
+        payForm.action = data.action;
+        Object.entries(data.fields || {}).forEach(([name, value]) => {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = name;
+          input.value = value;
+          payForm.appendChild(input);
+        });
+        document.body.appendChild(payForm);
+        payForm.submit();
+      } catch (err) {
+        const message = err.message || 'Could not start the card payment';
+        if (window.Mobile && Mobile.ui && Mobile.ui.toast) { Mobile.ui.toast(message); } else { alert(message); }
+        cardBtn.disabled = false;
+        cardBtn.innerHTML = label;
+      }
+    });
+  }
+
   const methodButtons = document.querySelectorAll('.method-btn');
   const detailsEl = document.getElementById('method-details');
   const hiddenId = document.getElementById('selected-method-id');

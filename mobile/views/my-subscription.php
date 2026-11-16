@@ -18,6 +18,7 @@ $history = $api->getByUser($userId);
 $usage = getMonthlyUsage($userId);
 $usageTotal = (int)($usage['totalRequests'] ?? 0);
 $siteName = getSiteName() ?? 'LazyMan';
+$cardReturn = ($_GET['payfast'] ?? '') === 'return';
 ?>
 <!DOCTYPE html>
 <html class="light overflow-x-hidden" lang="en">
@@ -42,6 +43,17 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 ?>
 
 <main class="flex-1 overflow-y-auto max-w-md w-full mx-auto px-4 pt-6 pb-40 space-y-5 text-zinc-900 dark:text-zinc-100">
+
+  <?php if ($cardReturn): ?>
+    <section class="border border-black p-3 text-xs text-gray-700" role="status">
+      <?php if ($active): ?>
+        Thank you. Your card payment went through and your plan is active.
+      <?php else: ?>
+        Thank you. PayFast is confirming your payment; your plan appears here within a minute or two.
+        <a href="?page=my-subscription" class="font-bold underline">Refresh</a>
+      <?php endif; ?>
+    </section>
+  <?php endif; ?>
 
   <?php if ($active):
     $expiresAt = strtotime((string)($active['expiresAt'] ?? ''));
@@ -84,9 +96,22 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
         <p class="mt-3 text-xs text-white/70"><span class="font-bold">Providers:</span> <?= htmlspecialchars(implode(', ', $active['providers'])) ?></p>
       <?php endif; ?>
 
+      <?php if (($active['provider'] ?? '') === 'payfast'): ?>
+        <p class="mt-3 text-xs text-white/70">
+          <?php if (!empty($active['autoRenew'])): ?>
+            <span class="font-bold">Card auto-renew is on.</span> Cancel any time; access stays until <?= htmlspecialchars(date('M j, Y', $expiresAt)) ?>.
+          <?php else: ?>
+            <span class="font-bold">Auto-renew is off.</span> Your plan ends on <?= htmlspecialchars(date('M j, Y', $expiresAt)) ?>.
+          <?php endif; ?>
+        </p>
+      <?php endif; ?>
+
       <div class="mt-4 flex flex-col gap-2">
-        <a href="?page=settings" class="block bg-white text-black px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-center">Configure AI Quota</a>
+        <a href="?page=settings" class="block bg-white text-black px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-center">Platform AI Settings</a>
         <a href="?page=subscription" class="block border border-white/40 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-center">Extend / Switch</a>
+        <?php if (($active['provider'] ?? '') === 'payfast' && !empty($active['autoRenew'])): ?>
+          <button type="button" id="cancel-autorenew-btn" data-csrf="<?= htmlspecialchars(Auth::csrfToken()) ?>" class="block w-full border border-white/40 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-center touch-target">Cancel Auto-Renew</button>
+        <?php endif; ?>
       </div>
     </section>
   <?php else: ?>
@@ -129,5 +154,33 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 <?php include MOBILE_VIEW_PATH . '/partials/bottom-nav.php'; ?>
 
 </div>
+<script>
+(function() {
+  const btn = document.getElementById('cancel-autorenew-btn');
+  if (!btn) return;
+  const say = (message) => { if (window.Mobile && Mobile.ui && Mobile.ui.toast) { Mobile.ui.toast(message); } else { alert(message); } };
+  btn.addEventListener('click', async () => {
+    if (!confirm('Stop charging your card? Your plan stays active until it expires.')) return;
+    btn.disabled = true;
+    try {
+      const token = btn.getAttribute('data-csrf') || '';
+      const response = await fetch(<?= json_encode(APP_URL . '/api/payfast.php?action=cancel', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES) ?>, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+        body: JSON.stringify({ csrf_token: token })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error((result && result.error && result.error.message) || 'Could not cancel auto-renew');
+      }
+      say(result.message || 'Auto-renew is off');
+      setTimeout(() => window.location.reload(), 900);
+    } catch (err) {
+      say(err.message || 'Could not cancel auto-renew');
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
 </body>
 </html>

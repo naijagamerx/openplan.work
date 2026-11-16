@@ -7,6 +7,7 @@ class PlansAPI extends BaseAPI {
             'name',
             'price',
             'currency',
+            'zarPrice',
             'durationDays',
             'providers',
             'monthlyRequestCap',
@@ -30,6 +31,8 @@ class PlansAPI extends BaseAPI {
         $data['durationDays'] = max(1, (int)($data['durationDays'] ?? 30));
         $data['price'] = round((float)($data['price'] ?? 0), 2);
         $data['currency'] = strtoupper(trim((string)($data['currency'] ?? 'USD'))) ?: 'USD';
+        // Card price in rand for PayFast (ZAR only); 0 = no card checkout unless the plan itself is in ZAR.
+        $data['zarPrice'] = max(0, round((float)($data['zarPrice'] ?? 0), 2));
         $data['sortOrder'] = (int)($data['sortOrder'] ?? 0);
         return parent::create($data);
     }
@@ -53,6 +56,9 @@ class PlansAPI extends BaseAPI {
         }
         if (isset($data['currency'])) {
             $data['currency'] = strtoupper(trim((string)$data['currency'])) ?: 'USD';
+        }
+        if (isset($data['zarPrice'])) {
+            $data['zarPrice'] = max(0, round((float)$data['zarPrice'], 2));
         }
         if (isset($data['active'])) {
             $data['active'] = (bool)$data['active'];

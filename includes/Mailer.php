@@ -253,7 +253,7 @@ HTML;
             <h2>Payment approved</h2>
             <p>Your payment for <strong>' . e($planName) . '</strong> has been approved.</p>
             <p class="pill">Amount: ' . e($currency . ' ' . $amount) . '</p>
-            <p>Your subscription is now active. Toggle "Use admin shared AI keys" in Settings to consume the shared quota.</p>
+            <p>Your subscription is now active, and the AI features use the platform keys included in your plan. You can switch this off in Settings if you prefer your own API keys.</p>
             <p><a class="btn" href="' . e($subscriptionUrl) . '">View My Subscription</a></p>
         ';
         return $this->send((string)($user['email'] ?? ''), $subject, $message, [], 'Payment Approved', 'Your subscription is active.');

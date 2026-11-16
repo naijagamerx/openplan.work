@@ -64,6 +64,12 @@ $plans = $plansApi->findAll();
                 </div>
 
                 <div>
+                    <label class="block text-sm font-bold text-gray-500 mb-2 uppercase tracking-widest">Card Price (ZAR)</label>
+                    <input type="number" name="zarPrice" min="0" step="0.01" class="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:border-black outline-none transition-colors bg-white" placeholder="279.00">
+                    <p class="mt-1 text-xs text-gray-500">What PayFast charges in rand (minimum R5). 0 = no card option, unless the plan currency is ZAR. 30, 90, 180 or 365 days renew automatically.</p>
+                </div>
+
+                <div>
                     <label class="block text-sm font-bold text-gray-500 mb-2 uppercase tracking-widest">Duration (days)</label>
                     <input type="number" name="durationDays" min="1" required class="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:border-black outline-none transition-colors bg-white" placeholder="30">
                     <p class="mt-1 text-xs text-gray-500">7 = weekly, 30 = monthly, 365 = yearly</p>
@@ -183,6 +189,7 @@ $plans = $plansApi->findAll();
             form.elements['name'].value = plan.name || '';
             form.elements['price'].value = plan.price ?? '';
             form.elements['currency'].value = plan.currency || 'USD';
+            form.elements['zarPrice'].value = plan.zarPrice ?? '';
             form.elements['durationDays'].value = plan.durationDays || 30;
             form.elements['monthlyRequestCap'].value = plan.monthlyRequestCap || 0;
             form.elements['description'].value = plan.description || '';
@@ -249,6 +256,7 @@ $plans = $plansApi->findAll();
             name: (form.elements['name'].value || '').trim(),
             price: parseFloat(form.elements['price'].value || '0'),
             currency: form.elements['currency'].value || 'USD',
+            zarPrice: parseFloat(form.elements['zarPrice'].value || '0'),
             durationDays: parseInt(form.elements['durationDays'].value || '30', 10),
             monthlyRequestCap: parseInt(form.elements['monthlyRequestCap'].value || '0', 10),
             providers: providers,
