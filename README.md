@@ -71,4 +71,11 @@ Maintainers can generate a clean zip for GitHub releases or deployment handoff w
 
 - The export pipeline regenerates an empty `data/` folder in the release artifact.
 - `includes/master_password.php` and all live `data/` contents are excluded from the export.
-- If you plan to publish this publicly, add a `LICENSE` file before treating it as a true open-source release.
+
+## License
+
+OpenPlan is free software under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+
+- You may use, self-host, study, modify and share it, including for commercial work.
+- If you change it and let other people use your changed version over a network (for example as a hosted service), you must offer those users the source code of your changed version under the same license.
+- It comes with no warranty. See [LICENSE](LICENSE) for the full terms.

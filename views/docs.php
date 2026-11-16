@@ -189,8 +189,9 @@ require __DIR__ . '/partials/public-site-head.php';
 
                 <section class="public-docs-section" id="license" aria-labelledby="license-title">
                     <p class="eyebrow"><span class="eyebrow__number">12</span> License</p>
-                    <h2 id="license-title">Before distributing</h2>
-                    <p>Add and review a LICENSE file before distributing the project as open source. Confirm that bundled dependencies and assets are compatible with the chosen license.</p>
+                    <h2 id="license-title">Free software under the AGPL-3.0</h2>
+                    <p>OpenPlan is licensed under the GNU Affero General Public License v3.0. You may use, self-host, modify and share it, including for commercial work. If you run a changed version for other people over a network, you must offer them the source of your changes under the same license. The software comes with no warranty.</p>
+                    <p><a href="<?php echo e($repoUrl); ?>/blob/main/LICENSE" target="_blank" rel="noreferrer">Read the full license on GitHub <span aria-hidden="true">↗</span></a></p>
                 </section>
             </article>
         </div>

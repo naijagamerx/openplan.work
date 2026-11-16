@@ -1,6 +1,7 @@
 {
     "name": "lazyman/tools",
     "description": "PHP Task Management System with encrypted JSON storage",
+    "license": "AGPL-3.0-only",
     "type": "project",
     "require": {
         "php": ">=8.0",
