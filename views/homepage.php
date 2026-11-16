@@ -237,7 +237,7 @@ $structuredData = [
                     <?php require __DIR__ . '/partials/public-pricing-cards.php'; ?>
                 </div>
                 <?php if (!$isAuthenticated && $plans !== []): ?>
-                    <p class="pricing-note">Choosing a plan asks you to log in first. New here? <a href="<?php echo e($primaryActionUrl); ?>"><?php echo e($primaryActionText); ?></a>, then pick a plan.</p>
+                    <?php require __DIR__ . '/partials/public-plan-note.php'; ?>
                 <?php endif; ?>
                 <p class="pricing-more"><a class="text-link" href="<?php echo e($publicPricingUrl); ?>">View the dedicated pricing page <span aria-hidden="true">↗</span></a></p>
             </div>

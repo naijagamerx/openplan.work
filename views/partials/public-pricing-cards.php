@@ -29,6 +29,11 @@
                 <li>AI by <?php echo e(implode(', ', $providers)); ?></li>
             <?php endif; ?>
         </ul>
-        <a class="button button--dark plan-card__action" href="<?php echo e($planActionUrl($plan)); ?>">Choose <?php echo e($plan['name'] ?? 'plan'); ?></a>
+        <?php if ($publicTrialDays > 0): ?>
+            <a class="button button--dark plan-card__action" href="<?php echo e($planActionUrl($plan)); ?>">Start free trial</a>
+            <p class="plan-card__note"><?php echo (int) $publicTrialDays; ?> days &middot; <?php echo (int) $publicTrialRequests; ?> AI requests &middot; no card</p>
+        <?php else: ?>
+            <a class="button button--dark plan-card__action" href="<?php echo e($planActionUrl($plan)); ?>">Choose <?php echo e($plan['name'] ?? 'plan'); ?></a>
+        <?php endif; ?>
     </article>
 <?php endforeach; ?>

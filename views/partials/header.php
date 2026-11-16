@@ -6,8 +6,8 @@ $headerSub = getActiveSubscription(Auth::userId() ?? '');
 $headerCap = $headerSub ? (int)($headerSub['monthlyRequestCap'] ?? 0) : 0;
 $headerUsed = 0;
 if ($headerSub) {
-    $headerUsage = getMonthlyUsage(Auth::userId() ?? '');
-    $headerUsed = (int)($headerUsage['totalRequests'] ?? 0);
+    // A trial's requests count over the whole trial; a plan's over this month.
+    $headerUsed = (int)subscriptionUsage(Auth::userId() ?? '', $headerSub)['used'];
 }
 $headerRemaining = $headerCap > 0 ? max(0, $headerCap - $headerUsed) : null;
 
@@ -58,7 +58,7 @@ if ($page === 'advanced-invoices') {
 
             <?php if ($headerSub): ?>
                 <a href="?page=settings#ai-quota"
-                   title="AI requests this month"
+                   title="<?php echo !empty($headerSub['trial']) ? 'AI requests left in your free trial' : 'AI requests left this month'; ?>"
                    class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:border-black transition">
                     <svg class="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>

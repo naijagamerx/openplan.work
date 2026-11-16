@@ -53,8 +53,10 @@ if (!$featureAvailable) {
 }
 
 $showConfirm = ($pendingToken !== '' && !$success && $error === '');
-$ctaHref = (Auth::check() && !Auth::shouldRestrictToVerification()) ? '?page=dashboard' : '?page=login';
-$ctaLabel = (Auth::check() && !Auth::shouldRestrictToVerification()) ? 'Continue to Dashboard' : 'Continue to Sign In';
+// Signed in and verified: the login route forwards to the right place (a saved
+// ?redirect= target, the plan picked before sign-up, or the dashboard) on click.
+$ctaHref = '?page=login';
+$ctaLabel = (Auth::check() && !Auth::shouldRestrictToVerification()) ? 'Continue' : 'Continue to Sign In';
 ?>
 
 <div class="mb-16">

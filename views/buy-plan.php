@@ -56,6 +56,13 @@ $cardCancelled = ($_GET['payfast'] ?? '') === 'cancelled';
         </div>
     <?php endif; ?>
 
+    <?php
+    // New accounts can try the AI first: offered above the payment options.
+    $trialOfferClass = 'mb-6';
+    $trialOfferAfter = '?page=ai-assistant';
+    require __DIR__ . '/partials/trial-offer.php';
+    ?>
+
     <?php if ($cardAmount !== null): ?>
         <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
             <div class="p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">

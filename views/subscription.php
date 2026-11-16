@@ -16,18 +16,23 @@ $currentSub = getActiveSubscription(Auth::userId());
     <div class="flex items-center gap-4 mb-8">
         <div>
             <h2 class="text-3xl font-bold text-gray-900">Subscription Plans</h2>
-            <p class="text-gray-500 font-medium tracking-tight">Choose a plan to unlock admin-shared AI access.</p>
+            <p class="text-gray-500 font-medium tracking-tight">A plan lets you use the AI on our keys. Your own API keys keep working either way.</p>
         </div>
     </div>
+
+    <?php
+    $trialOfferClass = 'mb-6';
+    require __DIR__ . '/partials/trial-offer.php';
+    ?>
 
     <?php if ($currentSub): ?>
         <div class="mb-6 bg-black text-white rounded-2xl p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-                <p class="text-[10px] font-bold uppercase tracking-widest text-white/60 mb-1">Active subscription</p>
+                <p class="text-[10px] font-bold uppercase tracking-widest text-white/60 mb-1"><?php echo !empty($currentSub['trial']) ? 'Free trial' : 'Active subscription'; ?></p>
                 <p class="text-2xl font-bold"><?php echo e($currentSub['planSnapshot']['name'] ?? 'Active plan'); ?></p>
                 <p class="text-sm text-white/70 mt-1">
                     Expires <?php echo e(date('M j, Y', strtotime((string)($currentSub['expiresAt'] ?? '')))); ?>
-                    &middot; <?php echo max(0, (int)(strtotime((string)$currentSub['expiresAt']) - time()) / 86400); ?> days left
+                    &middot; <?php echo max(0, (int)ceil((strtotime((string)$currentSub['expiresAt']) - time()) / 86400)); ?> days left
                 </p>
             </div>
             <div class="flex gap-2">
@@ -90,7 +95,7 @@ $currentSub = getActiveSubscription(Auth::userId());
                     </ul>
 
                     <a href="?page=buy-plan&id=<?php echo e($plan['id']); ?>" class="w-full text-center px-6 py-3 bg-black text-white rounded-xl text-sm font-bold uppercase tracking-widest hover:bg-gray-800 transition inline-flex items-center justify-center gap-2">
-                        <?php echo $currentSub ? 'Switch / Extend' : 'Get this Plan'; ?>
+                        <?php echo ($currentSub && empty($currentSub['trial'])) ? 'Switch / Extend' : 'Get this Plan'; ?>
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
                     </a>
                 </div>

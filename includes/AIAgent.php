@@ -1428,7 +1428,7 @@ PROMPT;
         if ($useShared) {
             if (overQuota($userId, $subscription)) {
                 throw new APIException(
-                    'Monthly AI request quota exceeded for your subscription plan. Upgrade or wait for the next month.',
+                    quotaExceededMessage($subscription),
                     'QUOTA_EXCEEDED',
                     429
                 );

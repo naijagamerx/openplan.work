@@ -23,6 +23,9 @@ if (!isRegistrationEnabled()) {
     exit;
 }
 
+// The plan picked on the pricing page (?plan=ID), shown on top and posted with the form.
+require __DIR__ . '/../../views/partials/chosen-plan.php';
+
 // Handle form submission
 $error = '';
 $success = false;
@@ -77,6 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($result['success']) {
             $newUser = $result['user'];
+            // The plan picked on the pricing page, kept on the account for after sign-in.
+            Auth::rememberIntendedPlan((string)$newUser['id'], (string)($_POST['plan'] ?? ''));
             $userDb = new Database($masterPassword, $newUser['id']);
 
             $userDb->save('config', [
@@ -315,8 +320,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             <?php endif; ?>
 
+            <?php if ($chosenPlanNote !== ''): ?>
+                <p class="mb-6 text-sm font-medium text-[#111317] dark:text-white bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-3"><?= htmlspecialchars($chosenPlanNote) ?></p>
+            <?php endif; ?>
+
             <form id="register-form" class="flex flex-col gap-6" method="POST">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                <?php if ($chosenPlanId !== ''): ?><input type="hidden" name="plan" value="<?= htmlspecialchars($chosenPlanId) ?>"><?php endif; ?>
 
                 <div class="flex flex-col">
                     <label for="name" class="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 mb-1">
@@ -426,7 +436,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <svg class="icon-hide h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 3l18 18"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 7.5a3 3 0 015.16-2.1"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 10h2m4.59 0H17a1 1 0 011 1v7a1 1 0 01-1 1H7a1 1 0 01-1-1v-7a1 1 0 011-1"></path></svg>
                         </button>
                     </div>
-                    <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Required to encrypt your data.</p>
+                    <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Your second password. It encrypts your workspace so we cannot read it, and we cannot reset it. Write it down.</p>
                 </div>
 
                 <div class="mt-4">

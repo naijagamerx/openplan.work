@@ -769,8 +769,86 @@ class Auth {
             && !empty($_SESSION['auth_verification_required']);
     }
 
+    /**
+     * Page (with query) to open after signing in, without the leading "?page=".
+     * Verification comes first. Then, once only, the plan the person picked on the
+     * pricing page before signing up (saved on the account, so it survives email
+     * verification, another browser or a phone). Otherwise the dashboard.
+     */
     public static function getPostLoginDestination(): string {
-        return self::shouldRestrictToVerification() ? 'verification-required' : 'dashboard';
+        if (self::shouldRestrictToVerification()) {
+            return 'verification-required';
+        }
+        $userId = self::userId();
+        if ($userId) {
+            $planId = self::takeIntendedPlan($userId);
+            if ($planId !== null) {
+                return 'buy-plan&id=' . rawurlencode($planId) . '&welcome=1';
+            }
+        }
+        return 'dashboard';
+    }
+
+    /**
+     * Full URL to open after signing in. A stored ?redirect= target (Alexa account
+     * linking, a deep link) is kept while the account still needs email
+     * verification, and used once verification is done.
+     */
+    public static function postLoginUrl(): string {
+        if (self::shouldRestrictToVerification()) {
+            return APP_URL . '?page=verification-required';
+        }
+        if (!empty($_SESSION['post_login_redirect'])) {
+            $target = (string)$_SESSION['post_login_redirect'];
+            unset($_SESSION['post_login_redirect']);
+            return $target;
+        }
+        return APP_URL . '?page=' . self::getPostLoginDestination();
+    }
+
+    /**
+     * Remember on the account which published plan a visitor picked before
+     * signing up. Ignored unless it is an active plan.
+     */
+    public static function rememberIntendedPlan(string $userId, string $planId): void {
+        $planId = trim($planId);
+        if ($userId === '' || $planId === '' || strlen($planId) > 64 || !preg_match('/^[A-Za-z0-9_-]+$/', $planId)) {
+            return;
+        }
+        try {
+            if (self::activePlanExists($planId)) {
+                (new Database(APP_NAME))->update('users', $userId, ['intendedPlanId' => $planId]);
+            }
+        } catch (Throwable $e) {
+            error_log('rememberIntendedPlan failed: ' . $e->getMessage());
+        }
+    }
+
+    /** Returns the remembered plan id once (and clears it), if that plan is still on sale. */
+    private static function takeIntendedPlan(string $userId): ?string {
+        try {
+            $db = new Database(APP_NAME);
+            $user = $db->findById('users', $userId);
+            $planId = is_array($user) ? (string)($user['intendedPlanId'] ?? '') : '';
+            if ($planId === '') {
+                return null;
+            }
+            $db->update('users', $userId, ['intendedPlanId' => null]);
+            return self::activePlanExists($planId) ? $planId : null;
+        } catch (Throwable $e) {
+            error_log('takeIntendedPlan failed: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    private static function activePlanExists(string $planId): bool {
+        require_once __DIR__ . '/PlansAPI.php';
+        foreach ((new PlansAPI(new Database(APP_NAME), 'plans'))->findAll(['activeOnly' => true]) as $plan) {
+            if (($plan['id'] ?? '') === $planId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function initializeUserKeyVerifier(string $userId): bool {

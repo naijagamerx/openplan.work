@@ -42,16 +42,18 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 
   <section>
     <h2 class="text-2xl font-black">Subscription Plans</h2>
-    <p class="text-xs text-gray-500 mt-1">Unlock shared platform AI access.</p>
+    <p class="text-xs text-gray-500 mt-1">A plan lets you use the AI on our keys. Your own API keys keep working either way.</p>
   </section>
+
+  <?php require __DIR__ . '/../../views/partials/trial-offer.php'; ?>
 
   <?php if ($currentSub): ?>
     <section class="bg-black text-white p-4">
-      <p class="text-[10px] font-bold uppercase tracking-widest text-white/60">Active subscription</p>
+      <p class="text-[10px] font-bold uppercase tracking-widest text-white/60"><?= !empty($currentSub['trial']) ? 'Free trial' : 'Active subscription' ?></p>
       <p class="text-lg font-black mt-1"><?= htmlspecialchars($currentSub['planSnapshot']['name'] ?? 'Active plan') ?></p>
       <p class="text-xs text-white/70 mt-1">
         Expires <?= htmlspecialchars(date('M j, Y', strtotime((string)($currentSub['expiresAt'] ?? '')))) ?>
-        &middot; <?= max(0, (int)((strtotime((string)$currentSub['expiresAt']) - time()) / 86400)) ?> days left
+        &middot; <?= max(0, (int)ceil((strtotime((string)$currentSub['expiresAt']) - time()) / 86400)) ?> days left
       </p>
       <a href="?page=my-subscription" class="inline-block mt-3 bg-white text-black px-3 py-2 text-[10px] font-bold uppercase tracking-widest">View details</a>
     </section>
@@ -101,7 +103,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
             </li>
           </ul>
           <a href="?page=buy-plan&id=<?= htmlspecialchars($plan['id']) ?>" class="block w-full text-center bg-black text-white py-3 font-bold text-xs uppercase tracking-widest active:scale-95 transition-transform touch-target">
-            <?= $currentSub ? 'Switch / Extend' : 'Get this Plan' ?>
+            <?= ($currentSub && empty($currentSub['trial'])) ? 'Switch / Extend' : 'Get this Plan' ?>
           </a>
         </article>
       <?php endforeach; ?>

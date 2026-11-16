@@ -302,6 +302,32 @@ HTML;
         return $this->send((string)($user['email'] ?? ''), $subject, $message, [], 'Subscription Expired', 'Renew to restore access.');
     }
 
+    public function sendTrialEndingEmail(array $user, array $subscription): bool {
+        $expiresAt = (string)($subscription['expiresAt'] ?? '');
+        $expiryLabel = $expiresAt !== '' ? date('M j, Y', strtotime($expiresAt)) : 'soon';
+        $plansUrl = APP_URL . '?page=subscription';
+        $subject = 'Your free trial ends on ' . $expiryLabel;
+        $message = '
+            <h2>Your free trial ends soon</h2>
+            <p>Your free trial of the AI on our keys ends on <strong>' . e($expiryLabel) . '</strong>. Nothing is charged: it simply stops.</p>
+            <p>To keep the AI assistant, Notes AI and task generation running on our keys after that, pick a plan. Your workspace and everything in it stay either way.</p>
+            <p><a class="btn" href="' . e($plansUrl) . '">See plans</a></p>
+        ';
+        return $this->send((string)($user['email'] ?? ''), $subject, $message, [], 'Trial Ending', 'Nothing is charged when it ends.');
+    }
+
+    public function sendTrialEndedEmail(array $user, array $subscription): bool {
+        $plansUrl = APP_URL . '?page=subscription';
+        $subject = 'Your free trial has ended';
+        $message = '
+            <h2>Your free trial has ended</h2>
+            <p>Your workspace, projects, clients, invoices and notes are all still there. Only the AI on our keys has stopped.</p>
+            <p>Pick a plan to turn it back on, or add your own Groq, OpenRouter or Gemini key in Settings.</p>
+            <p><a class="btn" href="' . e($plansUrl) . '">See plans</a></p>
+        ';
+        return $this->send((string)($user['email'] ?? ''), $subject, $message, [], 'Trial Ended', 'Your workspace stays.');
+    }
+
     public function sendTicketReplyEmail(array $user, array $ticket, string $replyBody): bool {
         $subject = (string)($ticket['subject'] ?? 'Support ticket update');
         $ticketUrl = APP_URL . '?page=ticket-view&id=' . urlencode((string)($ticket['id'] ?? ''));

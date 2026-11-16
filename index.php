@@ -44,7 +44,9 @@ $isAuthenticated = Auth::check();
 // Stored in session so it survives the 2-step (password → master code) login.
 if ($page === 'login' && !empty($_GET['redirect'])) {
     $candidate = (string)$_GET['redirect'];
-    if (strpos($candidate, '/') === 0 && strpos($candidate, '//') !== 0 && strpos($candidate, '://') === false) {
+    // Same-site paths only: no "//host", no scheme, and no backslash ("/\host" is
+    // read as "//host" by browsers).
+    if (strpos($candidate, '/') === 0 && strpos($candidate, '//') !== 0 && strpos($candidate, '://') === false && strpos($candidate, "\\") === false) {
         $_SESSION['post_login_redirect'] = $candidate;
     }
 }
@@ -101,6 +103,8 @@ if ($page === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($result['success']) {
             $newUser = $result['user'];
+            // The plan picked on the pricing page, kept on the account for after sign-in.
+            Auth::rememberIntendedPlan((string)$newUser['id'], (string)($_POST['plan'] ?? ''));
             $userDb = new Database($masterPassword, $newUser['id']);
             $userDb->save('config', [
                 'siteName' => '',
@@ -187,15 +191,10 @@ if ($page === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Redirect to dashboard if authenticated and on login page.
-// Honor stored ?redirect=... target if present (used by Alexa OAuth flow).
+// Honor stored ?redirect=... target if present (used by Alexa OAuth flow), but only
+// once the account no longer needs email verification.
 if (in_array($page, ['login', 'register', 'thank-you', 'forgot-password', 'reset-password'], true) && $isAuthenticated) {
-    if (!empty($_SESSION['post_login_redirect'])) {
-        $target = (string)$_SESSION['post_login_redirect'];
-        unset($_SESSION['post_login_redirect']);
-        header('Location: ' . $target);
-        exit;
-    }
-    header('Location: ' . APP_URL . '?page=' . Auth::getPostLoginDestination());
+    header('Location: ' . Auth::postLoginUrl());
     exit;
 }
 
@@ -371,11 +370,11 @@ if ($page === 'master-code') {
                             $_SESSION['master_code_error']
                         );
 
-                        // Resolve final redirect destination — honor pre-login redirect target if set.
-                        $finalRedirect = APP_URL . '?page=' . Auth::getPostLoginDestination() . '&login=success';
-                        if (!empty($_SESSION['post_login_redirect'])) {
-                            $finalRedirect = (string)$_SESSION['post_login_redirect'];
-                            unset($_SESSION['post_login_redirect']);
+                        // Resolve final redirect destination: verification first, then a
+                        // pre-login redirect target, then the plan picked before sign-up.
+                        $finalRedirect = Auth::postLoginUrl();
+                        if ($finalRedirect === APP_URL . '?page=dashboard') {
+                            $finalRedirect .= '&login=success';
                         }
 
                         ob_end_clean();
@@ -385,7 +384,8 @@ if ($page === 'master-code') {
                         <html>
                         <head>
                             <meta http-equiv="refresh" content="0;url=<?php echo htmlspecialchars($finalRedirect, ENT_QUOTES); ?>">
-                            <script>window.location.href = '<?php echo htmlspecialchars($finalRedirect, ENT_QUOTES); ?>';</script>
+                            <?php // json_encode, not htmlspecialchars: entities are not decoded inside <script>, so "&amp;" broke every query string. ?>
+                            <script>window.location.href = <?php echo json_encode($finalRedirect, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES); ?>;</script>
                             <style>
                                 body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #fff; }
                                 .loader { text-align: center; }

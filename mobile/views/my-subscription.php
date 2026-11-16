@@ -57,21 +57,28 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 
   <?php if ($active):
     $expiresAt = strtotime((string)($active['expiresAt'] ?? ''));
-    $daysLeft = max(0, (int)(($expiresAt - time()) / 86400));
+    $daysLeft = max(0, (int)ceil(($expiresAt - time()) / 86400));
     $cap = (int)($active['monthlyRequestCap'] ?? 0);
-    $usagePct = ($cap > 0) ? min(100, ($usageTotal / $cap) * 100) : 0;
+    $isTrial = !empty($active['trial']);
+    // A trial's requests count over the whole trial; a plan's over this month.
+    $capUsed = (int)subscriptionUsage($userId, $active)['used'];
+    $usagePct = ($cap > 0) ? min(100, ($capUsed / $cap) * 100) : 0;
     $symbol = getCurrencySymbol($active['planSnapshot']['currency'] ?? 'USD');
   ?>
     <section class="bg-black text-white p-5">
-      <p class="text-[10px] font-bold uppercase tracking-widest text-white/60">Active Plan</p>
+      <p class="text-[10px] font-bold uppercase tracking-widest text-white/60"><?= $isTrial ? 'Free trial' : 'Active Plan' ?></p>
       <h2 class="text-2xl font-black mt-1"><?= htmlspecialchars($active['planSnapshot']['name'] ?? '') ?></h2>
       <p class="text-xs text-white/70 mt-1">
-        <?= htmlspecialchars($symbol . number_format((float)($active['planSnapshot']['price'] ?? 0), 2)) ?>
-        &middot; <?= (int)($active['planSnapshot']['durationDays'] ?? 30) ?> days
+        <?php if ($isTrial): ?>
+          No card &middot; ends by itself after <?= (int)($active['planSnapshot']['durationDays'] ?? 14) ?> days
+        <?php else: ?>
+          <?= htmlspecialchars($symbol . number_format((float)($active['planSnapshot']['price'] ?? 0), 2)) ?>
+          &middot; <?= (int)($active['planSnapshot']['durationDays'] ?? 30) ?> days
+        <?php endif; ?>
       </p>
 
       <div class="mt-4 pt-4 border-t border-white/20">
-        <p class="text-[10px] font-bold uppercase tracking-widest text-white/60">Expires</p>
+        <p class="text-[10px] font-bold uppercase tracking-widest text-white/60"><?= $isTrial ? 'Ends in' : 'Expires' ?></p>
         <p class="text-xl font-black mt-1"><?= $daysLeft ?> days left</p>
         <p class="text-xs text-white/70"><?= htmlspecialchars(date('M j, Y', $expiresAt)) ?></p>
       </div>
@@ -79,8 +86,8 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
       <?php if ($cap > 0): ?>
         <div class="mt-4 pt-4 border-t border-white/20">
           <div class="flex items-center justify-between text-xs mb-1">
-            <span>This month</span>
-            <span><?= number_format($usageTotal) ?> / <?= number_format($cap) ?></span>
+            <span><?= $isTrial ? 'Trial requests' : 'This month' ?></span>
+            <span><?= number_format($capUsed) ?> / <?= number_format($cap) ?></span>
           </div>
           <div class="h-1.5 bg-white/20 overflow-hidden">
             <div class="h-full bg-white" style="width: <?= (int)$usagePct ?>%"></div>
@@ -107,18 +114,24 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
       <?php endif; ?>
 
       <div class="mt-4 flex flex-col gap-2">
+        <?php if ($isTrial): ?>
+          <a href="?page=subscription" class="block bg-white text-black px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-center touch-target">Choose a plan</a>
+          <a href="?page=ai-assistant" class="block border border-white/40 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-center touch-target">Open AI assistant</a>
+        <?php else: ?>
         <a href="?page=settings" class="block bg-white text-black px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-center">Platform AI Settings</a>
         <a href="?page=subscription" class="block border border-white/40 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-center">Extend / Switch</a>
+        <?php endif; ?>
         <?php if (($active['provider'] ?? '') === 'payfast' && !empty($active['autoRenew'])): ?>
           <button type="button" id="cancel-autorenew-btn" data-csrf="<?= htmlspecialchars(Auth::csrfToken()) ?>" class="block w-full border border-white/40 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-center touch-target">Cancel Auto-Renew</button>
         <?php endif; ?>
       </div>
     </section>
   <?php else: ?>
-    <section class="border-2 border-black p-6 text-center">
-      <p class="text-sm font-bold text-gray-900 mb-1">No active subscription</p>
-      <p class="text-xs text-gray-500 mb-4">Using your own keys. Subscribe to consume admin's shared quota.</p>
-      <a href="?page=subscription" class="inline-block bg-black text-white px-4 py-2 text-xs font-bold uppercase tracking-widest">Browse Plans</a>
+    <?php require __DIR__ . '/../../views/partials/trial-offer.php'; ?>
+    <section class="border-2 border-black dark:border-white p-6 text-center">
+      <p class="text-sm font-bold mb-1">No active plan</p>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">A plan lets you use the AI on our keys. Without one, the AI works only with your own API keys from Settings.</p>
+      <a href="?page=subscription" class="inline-block bg-black text-white px-4 py-2 text-xs font-bold uppercase tracking-widest touch-target">See plans</a>
     </section>
   <?php endif; ?>
 

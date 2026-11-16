@@ -23,8 +23,8 @@ $mobHeaderRemaining = null;
 if ($mobHeaderSub) {
     $cap = (int)($mobHeaderSub['monthlyRequestCap'] ?? 0);
     if ($cap > 0) {
-        $usage = getMonthlyUsage(Auth::userId() ?? '');
-        $mobHeaderRemaining = max(0, $cap - (int)($usage['totalRequests'] ?? 0));
+        // A trial's requests count over the whole trial; a plan's over this month.
+        $mobHeaderRemaining = max(0, $cap - (int)subscriptionUsage(Auth::userId() ?? '', $mobHeaderSub)['used']);
     }
 }
 

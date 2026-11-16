@@ -339,7 +339,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
     $usage = getMonthlyUsage(Auth::userId() ?? '');
     $usageTotal = (int)($usage['totalRequests'] ?? 0);
     $cap = (int)($activeSub['monthlyRequestCap'] ?? 0);
-    $usagePct = ($cap > 0) ? min(100, ($usageTotal / $cap) * 100) : 0;
+    // A trial's requests count over the whole trial; a plan's over this month.
+    $capUsed = $activeSub ? (int)subscriptionUsage(Auth::userId() ?? '', $activeSub)['used'] : $usageTotal;
+    $usagePct = ($cap > 0) ? min(100, ($capUsed / $cap) * 100) : 0;
     $useShared = userUsesSharedKeys($config, $activeSub);
     ?>
     <div class="settings-section bg-white rounded-xl border border-gray-200" data-ss="ai-quota" data-ss-label="AI Quota">
@@ -352,10 +354,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
             <input type="hidden" name="csrf_token" value="<?php echo Auth::csrfToken(); ?>">
 
             <?php if (!$activeSub): ?>
+                <?php require __DIR__ . '/partials/trial-offer.php'; ?>
                 <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                    <p class="text-sm text-gray-700 font-medium mb-2">No active subscription</p>
-                    <p class="text-xs text-gray-500 mb-3">Buy a plan to consume the admin's shared AI quota.</p>
-                    <a href="?page=subscription" class="inline-block px-4 py-2 bg-black text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-800 transition">Browse Plans</a>
+                    <p class="text-sm text-gray-700 font-medium mb-2">No active plan</p>
+                    <p class="text-xs text-gray-500 mb-3">A plan lets you use the AI on our keys instead of your own.</p>
+                    <a href="?page=subscription" class="inline-block px-4 py-2 bg-black text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-800 transition">See plans</a>
                 </div>
             <?php else: ?>
                 <div class="p-4 bg-green-50 border border-green-200 rounded-lg space-y-2">
@@ -366,7 +369,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
                     <?php if ($cap > 0): ?>
                         <div>
                             <div class="flex items-center justify-between text-xs text-green-800 mb-1">
-                                <span><?php echo number_format($usageTotal); ?> / <?php echo number_format($cap); ?> requests this month</span>
+                                <span><?php echo number_format($capUsed); ?> / <?php echo number_format($cap); ?> requests <?php echo !empty($activeSub['trial']) ? 'in your free trial' : 'this month'; ?></span>
                                 <span><?php echo round($usagePct); ?>%</span>
                             </div>
                             <div class="h-2 bg-green-100 rounded-full overflow-hidden">

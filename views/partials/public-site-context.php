@@ -39,14 +39,37 @@ try {
 }
 
 $appPath = rtrim((string) (parse_url(APP_URL, PHP_URL_PATH) ?? ''), '/');
-$planActionUrl = static function (array $plan) use ($isAuthenticated, $appPath, $publicBaseUrl): string {
-    $buyQuery = '?page=buy-plan&id=' . rawurlencode((string) ($plan['id'] ?? ''));
+$planActionUrl = static function (array $plan) use ($isAuthenticated, $registrationEnabled, $appPath, $publicBaseUrl): string {
+    $planId = (string) ($plan['id'] ?? '');
+    $buyQuery = '?page=buy-plan&id=' . rawurlencode($planId);
     if ($isAuthenticated) {
         return $publicBaseUrl . '/' . $buyQuery;
+    }
+    if ($registrationEnabled) {
+        // New visitors sign up first. The plan is saved on the new account and
+        // opened after the first sign-in (Auth::getPostLoginDestination).
+        return $publicBaseUrl . '/?page=register&plan=' . rawurlencode($planId);
     }
 
     return $publicBaseUrl . '/?page=login&redirect=' . rawurlencode($appPath . '/' . $buyQuery);
 };
+
+// Free trial wording for visitors: only when it is switched on, sign-up is open
+// and a platform key exists for at least one trial provider.
+$publicTrialDays = 0;
+$publicTrialRequests = 0;
+if (!$isAuthenticated && $registrationEnabled) {
+    try {
+        require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+        $publicTrial = trialSettings();
+        if ($publicTrial['enabled'] && array_filter($publicTrial['providers'], static fn($p) => getAdminSharedKey($p) !== null) !== []) {
+            $publicTrialDays = (int) $publicTrial['days'];
+            $publicTrialRequests = (int) $publicTrial['requests'];
+        }
+    } catch (Throwable $e) {
+        $publicTrialDays = 0;
+    }
+}
 $planPeriod = static function (int $days): string {
     $named = [7 => 'week', 30 => 'month', 365 => 'year'];
     return isset($named[$days]) ? '/ ' . $named[$days] : '/ ' . $days . ' days';

@@ -117,14 +117,18 @@ $hideAgentControls = !empty($enabledProviders)
     </div>
 
     <?php if (!$hasAnyKey): ?>
-        <!-- API Key Warning -->
-        <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex items-start gap-3">
-            <svg class="w-6 h-6 text-yellow-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        <?php
+        // No plan and no own key: offer the free trial first, then a plan or an own key.
+        $trialOfferAfter = '?page=ai-assistant';
+        require __DIR__ . '/partials/trial-offer.php';
+        ?>
+        <div class="bg-white border border-gray-200 rounded-xl p-4 flex items-start gap-3">
+            <svg class="w-6 h-6 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
             </svg>
             <div>
-                <p class="font-medium text-yellow-800">API Keys Required</p>
-                <p class="text-sm text-yellow-700 mt-1">Please add your Groq or OpenRouter API key in <a href="?page=settings" class="underline">Settings</a> to use AI features.</p>
+                <p class="font-medium text-gray-900">Turn on the AI</p>
+                <p class="text-sm text-gray-600 mt-1"><?php echo $trialOfferShown ? 'Or pick' : 'Pick'; ?> a <a href="?page=subscription" class="font-semibold underline">plan</a> to use the AI on our keys, or add your own Groq, OpenRouter or Gemini key in <a href="?page=settings" class="font-semibold underline">Settings</a>.</p>
             </div>
         </div>
     <?php endif; ?>
@@ -680,6 +684,17 @@ function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+// Errors that mean the trial or plan, not the provider, said no. Retrying another
+// provider cannot help with a used-up quota (it is shared by every provider).
+const PLAN_LIMIT_CODES = ['QUOTA_EXCEEDED', 'MODEL_NOT_IN_PLAN', 'PROVIDER_NOT_IN_PLAN'];
+function planLimitCode(error) {
+    const code = error?.response?.error?.code || '';
+    return PLAN_LIMIT_CODES.includes(code) ? code : '';
+}
+function planLimitMessage(message) {
+    return message + '\n\n[See plans](?page=subscription)';
 }
 
 function renderMarkdown(content) {
@@ -1333,13 +1348,14 @@ async function sendAgentMessage(message) {
                     showToast(`${label} unavailable, trying next...`, 'warning');
                     continue;
                 }
-                addChatMessage('assistant', 'Error: ' + (response.error || 'Failed to get response'));
+                addChatMessage('assistant', 'Error: ' + (response.error?.message || response.error || 'Failed to get response'));
                 return;
             }
         } catch (error) {
             stopPolling();
             hideTypingIndicator();
-            if (isSmart && i < providersToTry.length - 1) {
+            const limitCode = planLimitCode(error);
+            if (isSmart && i < providersToTry.length - 1 && limitCode !== 'QUOTA_EXCEEDED') {
                 const label = effectiveProvider.charAt(0).toUpperCase() + effectiveProvider.slice(1);
                 showToast(`${label} failed, trying next...`, 'warning');
                 // Re-show typing for retry
@@ -1348,7 +1364,7 @@ async function sendAgentMessage(message) {
                 continue;
             }
             const errorMessage = error.response?.error?.message || error.message || 'Failed to connect to AI service';
-            addChatMessage('assistant', 'Error: ' + errorMessage);
+            addChatMessage('assistant', limitCode ? planLimitMessage(errorMessage) : 'Error: ' + errorMessage);
             return;
         }
     }
@@ -1491,11 +1507,12 @@ async function sendChatMessage(message) {
                     showTypingIndicator();
                     continue;
                 }
-                addChatMessage('assistant', 'Error: ' + (response.error || 'Failed to get response'));
+                addChatMessage('assistant', 'Error: ' + (response.error?.message || response.error || 'Failed to get response'));
                 return;
             }
         } catch (error) {
             const errMsg = error.response?.error?.message || error.message || 'Failed to connect to AI service';
+            const limitCode = planLimitCode(error);
             const isTpmError = isChatOnly && /request too large|tokens per minute|\bTPM\b/i.test(errMsg);
             if (isTpmError) {
                 // Show banner so user can switch manually. No silent fallback —
@@ -1511,14 +1528,14 @@ async function sendChatMessage(message) {
             // Smart Auto cycles through providers on generic errors. Explicit
             // picks do NOT — they show the error so the user knows their choice
             // failed and can decide what to do.
-            if (isSmart && hasNextProvider) {
+            if (isSmart && hasNextProvider && limitCode !== 'QUOTA_EXCEEDED') {
                 const label = effectiveProvider.charAt(0).toUpperCase() + effectiveProvider.slice(1);
                 showToast(`${label} failed, trying next...`, 'warning');
                 showTypingIndicator();
                 continue;
             }
             hideTypingIndicator();
-            addChatMessage('assistant', 'Error: ' + errMsg);
+            addChatMessage('assistant', limitCode ? planLimitMessage(errMsg) : 'Error: ' + errMsg);
             return;
         }
     }

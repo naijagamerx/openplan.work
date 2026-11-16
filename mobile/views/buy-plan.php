@@ -84,6 +84,12 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
     </section>
   <?php endif; ?>
 
+  <?php
+  // New accounts can try the AI first: offered above the payment options.
+  $trialOfferAfter = '?page=ai-assistant';
+  require __DIR__ . '/../../views/partials/trial-offer.php';
+  ?>
+
   <?php if ($cardAmount !== null): ?>
     <section class="border-2 border-black p-4">
       <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500">Pay by card</p>

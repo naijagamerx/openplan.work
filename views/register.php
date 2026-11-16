@@ -2,6 +2,7 @@
 
 $registrationError = isset($registrationError) ? (string)$registrationError : '';
 $registrationValues = isset($registrationValues) && is_array($registrationValues) ? $registrationValues : [];
+require __DIR__ . '/partials/chosen-plan.php';
 
 ?>
 
@@ -19,10 +20,14 @@ $registrationValues = isset($registrationValues) && is_array($registrationValues
 <div class="mb-10">
     <h2 class="text-[#111317] text-3xl font-bold tracking-tight mb-2">Create Account</h2>
     <p class="text-gray-500 text-sm">Set up your encrypted workspace account.</p>
+    <?php if ($chosenPlanNote !== ''): ?>
+        <p class="mt-4 text-sm font-medium text-[#111317] bg-gray-50 border border-gray-200 rounded-lg px-4 py-3"><?php echo e($chosenPlanNote); ?></p>
+    <?php endif; ?>
 </div>
 
 <form method="POST" class="flex flex-col gap-8">
     <input type="hidden" name="csrf_token" value="<?php echo e(Auth::csrfToken()); ?>">
+    <?php if ($chosenPlanId !== ''): ?><input type="hidden" name="plan" value="<?php echo e($chosenPlanId); ?>"><?php endif; ?>
 
     <div class="auth-field">
         <label class="auth-label">Full Name</label>
@@ -100,7 +105,7 @@ $registrationValues = isset($registrationValues) && is_array($registrationValues
                 </svg>
             </button>
         </div>
-        <p class="auth-helper">This key encrypts your data. Keep it safe.</p>
+        <p class="auth-helper">Your second password. It encrypts your workspace so we cannot read it, and we cannot reset it. Write it down.</p>
     </div>
 
     <button type="submit"
@@ -114,7 +119,7 @@ $registrationValues = isset($registrationValues) && is_array($registrationValues
 
 <div class="mt-10 pt-8 border-t border-gray-100 flex flex-col items-center gap-4">
     <p class="text-sm text-gray-500">Already have an account?</p>
-    <a href="?page=login" class="text-[11px] font-bold uppercase tracking-[0.2em] border border-black text-black px-6 py-2 rounded hover:bg-black hover:text-white transition-all">
+    <a href="<?php echo e($chosenPlanLoginUrl); ?>" class="text-[11px] font-bold uppercase tracking-[0.2em] border border-black text-black px-6 py-2 rounded hover:bg-black hover:text-white transition-all">
         Sign In
     </a>
 </div>

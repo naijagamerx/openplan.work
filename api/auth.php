@@ -367,6 +367,8 @@ switch ($action) {
             if ($isBootstrapRegistration) {
                 savePublicConfig(['installMode' => $installMode]);
             }
+            // The plan picked on the pricing page, kept on the account for after sign-in.
+            Auth::rememberIntendedPlan((string)$newUser['id'], (string)($body['plan'] ?? ''));
             $userDb = new Database($masterPassword, $newUser['id']);
             $userDb->save('config', [
                 'siteName' => '',

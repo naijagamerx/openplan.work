@@ -32,6 +32,8 @@ if (!function_exists('getActiveSubscription')) {
             return null;
         }
         $now = time();
+        // A paid subscription wins over a free trial if both are somehow active.
+        $trialFallback = null;
         foreach ($subs as $sub) {
             if (($sub['userId'] ?? '') !== $userId) {
                 continue;
@@ -41,6 +43,10 @@ if (!function_exists('getActiveSubscription')) {
             }
             $expiresAt = strtotime((string)($sub['expiresAt'] ?? ''));
             if ($expiresAt === false || $expiresAt < $now) {
+                continue;
+            }
+            if (!empty($sub['trial'])) {
+                $trialFallback = $trialFallback ?? $sub;
                 continue;
             }
 
@@ -72,7 +78,7 @@ if (!function_exists('getActiveSubscription')) {
             }
             return $sub;
         }
-        return null;
+        return $trialFallback;
     }
 }
 
@@ -195,12 +201,46 @@ if (!function_exists('incrementUsage')) {
 
 if (!function_exists('overQuota')) {
     function overQuota(string $userId, array $subscription): bool {
-        $cap = (int)($subscription['monthlyRequestCap'] ?? 0);
-        if ($cap <= 0) {
+        $usage = subscriptionUsage($userId, $subscription);
+        if ($usage['cap'] <= 0) {
             return false; // Zero/unset cap means unlimited.
         }
-        $usage = getMonthlyUsage($userId);
-        return ((int)($usage['totalRequests'] ?? 0)) >= $cap;
+        return $usage['used'] >= $usage['cap'];
+    }
+}
+
+if (!function_exists('quotaExceededMessage')) {
+    /** What to tell someone who has used up the requests on their trial or plan. */
+    function quotaExceededMessage(array $subscription): string {
+        if (!empty($subscription['trial'])) {
+            return 'You have used all the AI requests in your free trial. Pick a plan to keep going, or add your own API key in Settings.';
+        }
+        return 'You have used all of this month\'s AI requests on your plan. Upgrade, add your own API key in Settings, or wait for next month.';
+    }
+}
+
+if (!function_exists('subscriptionUsage')) {
+    /**
+     * Requests used against this subscription's cap: ['used', 'cap', 'perTrial'].
+     * A paid plan counts the current calendar month. A free trial counts every
+     * platform-key request since it started (a trial is only given to accounts
+     * that never had a plan, and only platform-key use is counted, so all counted
+     * requests in those months belong to the trial).
+     */
+    function subscriptionUsage(string $userId, array $subscription): array {
+        $cap = (int)($subscription['monthlyRequestCap'] ?? 0);
+        if (empty($subscription['trial'])) {
+            return ['used' => (int)(getMonthlyUsage($userId)['totalRequests'] ?? 0), 'cap' => $cap, 'perTrial' => false];
+        }
+        $start = strtotime((string)($subscription['startsAt'] ?? '')) ?: time();
+        $used = 0;
+        $month = strtotime(date('Y-m-01', $start));
+        $guard = 0;
+        while ($month <= time() && $guard++ < 24) {
+            $used += (int)(getMonthlyUsage($userId, date('Y-m', $month))['totalRequests'] ?? 0);
+            $month = strtotime('+1 month', $month);
+        }
+        return ['used' => $used, 'cap' => $cap, 'perTrial' => true];
     }
 }
 
@@ -388,5 +428,134 @@ if (!function_exists('subscriptionUnlocksProvider')) {
             return false;
         }
         return in_array($provider, $providers, true);
+    }
+}
+
+/* ---------------------------------------------------------------------------
+ * Free trial: no card, a fixed number of AI requests on the platform keys for a
+ * fixed number of days, once per account. Off unless TRIAL_ENABLED=1, because it
+ * spends the operator's AI money.
+ * ------------------------------------------------------------------------- */
+
+if (!function_exists('trialSettings')) {
+    function trialSettings(): array {
+        $enabled = filter_var(getenv('TRIAL_ENABLED') ?: '0', FILTER_VALIDATE_BOOLEAN);
+        $days = max(1, min(60, (int)(getenv('TRIAL_DAYS') ?: 14)));
+        $requests = max(1, min(10000, (int)(getenv('TRIAL_REQUESTS') ?: 50)));
+        $known = ['groq', 'openrouter', 'gemini'];
+        $providers = array_values(array_unique(array_filter(
+            array_map(fn($p) => strtolower(trim($p)), explode(',', (string)(getenv('TRIAL_PROVIDERS') ?: 'groq'))),
+            fn($p) => in_array($p, $known, true)
+        )));
+        // Optional TRIAL_MODELS="groq:llama-3.1-8b-instant,openrouter:some/model".
+        $allowed = [];
+        foreach (array_filter(array_map('trim', explode(',', (string)(getenv('TRIAL_MODELS') ?: '')))) as $pair) {
+            [$p, $m] = array_pad(explode(':', $pair, 2), 2, '');
+            $p = strtolower(trim($p));
+            $m = trim($m);
+            if (in_array($p, $providers, true) && $m !== '') {
+                $allowed[$p][] = $m;
+            }
+        }
+        return ['enabled' => $enabled, 'days' => $days, 'requests' => $requests, 'providers' => $providers, 'allowedModels' => $allowed];
+    }
+}
+
+if (!function_exists('trialEligibility')) {
+    /**
+     * Whether $userId may start a free trial now.
+     * Returns ['ok' => bool, 'code' => string, 'message' => string].
+     */
+    function trialEligibility(string $userId): array {
+        $no = fn(string $code, string $message) => ['ok' => false, 'code' => $code, 'message' => $message];
+        $settings = trialSettings();
+        if (!$settings['enabled'] || $userId === '') {
+            return $no('TRIAL_UNAVAILABLE', 'Free trials are not available right now.');
+        }
+        $db = saas_globalDatabase();
+        $user = null;
+        foreach ($db->load('users', true) as $u) {
+            if (($u['id'] ?? '') === $userId) {
+                $user = $u;
+                break;
+            }
+        }
+        if ($user === null) {
+            return $no('TRIAL_UNAVAILABLE', 'Free trials are not available right now.');
+        }
+        if (function_exists('isEmailVerificationEnabled') && isEmailVerificationEnabled() && empty($user['emailVerifiedAt'])) {
+            return $no('EMAIL_NOT_VERIFIED', 'Verify your email address first, then start your free trial.');
+        }
+        if (!empty($user['trialStartedAt'])) {
+            return $no('TRIAL_USED', 'You have already used your free trial. Pick a plan to keep using the AI on our keys.');
+        }
+        foreach ($db->load('subscriptions', true) as $s) {
+            if (($s['userId'] ?? '') === $userId) {
+                return $no('TRIAL_USED', 'Free trials are for accounts that have not had a plan yet. Pick a plan instead.');
+            }
+        }
+        $covered = array_filter($settings['providers'], fn($p) => getAdminSharedKey($p) !== null);
+        if ($covered === []) {
+            return $no('TRIAL_UNAVAILABLE', 'Free trials are not available right now.');
+        }
+        return ['ok' => true, 'code' => 'OK', 'message' => ''];
+    }
+}
+
+if (!function_exists('startTrial')) {
+    /**
+     * Start the free trial for $userId. Returns ['ok' => true, 'subscription' => [...]]
+     * or the refusal from trialEligibility(). The check and the write happen under
+     * the subscriptions lock, so two clicks cannot start two trials.
+     */
+    function startTrial(string $userId): array {
+        $settings = trialSettings();
+        $lock = saas_lockSubscriptions();
+        try {
+            $check = trialEligibility($userId);
+            if (!$check['ok']) {
+                return $check;
+            }
+            $db = saas_globalDatabase();
+            $providers = array_values(array_filter($settings['providers'], fn($p) => getAdminSharedKey($p) !== null));
+            $now = time();
+            $nowIso = date('c', $now);
+            $sub = [
+                'id' => $db->generateId(),
+                'userId' => $userId,
+                'planId' => null,
+                'trial' => true,
+                'provider' => 'trial',
+                'planSnapshot' => [
+                    'name' => 'Pro trial',
+                    'price' => 0,
+                    'currency' => 'USD',
+                    'durationDays' => $settings['days'],
+                    'providers' => $providers,
+                    'monthlyRequestCap' => $settings['requests'],
+                ],
+                'paymentId' => null,
+                'status' => 'active',
+                'startsAt' => $nowIso,
+                'expiresAt' => date('c', $now + $settings['days'] * 86400),
+                'cancelledAt' => null,
+                'providers' => $providers,
+                'monthlyRequestCap' => $settings['requests'],
+                'noticePending' => false,
+                'createdAt' => $nowIso,
+                'updatedAt' => $nowIso,
+            ];
+            if ($settings['allowedModels'] !== []) {
+                $sub['allowedModels'] = $settings['allowedModels'];
+            }
+            $subs = $db->load('subscriptions', true);
+            $subs[] = $sub;
+            $db->save('subscriptions', $subs);
+            // Second marker on the account (the subscription record is the first).
+            $db->update('users', $userId, ['trialStartedAt' => $nowIso]);
+            return ['ok' => true, 'subscription' => $sub];
+        } finally {
+            saas_unlockSubscriptions($lock);
+        }
     }
 }

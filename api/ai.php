@@ -356,7 +356,7 @@ if (!empty($config['useAdminSharedAiKeys'])) {
     $actionCallsModel = !in_array($action, ['import_tasks', 'save_prd', 'models', 'create_inventory_items', 'check_requirements'], true);
     if (!empty($sharedKey) && $actionCallsModel) {
         if (overQuota(Auth::userId() ?? '', $tierSub)) {
-            errorResponse('Monthly AI request quota reached for your plan. Upgrade, use your own API key, or wait for next month.', 429, 'QUOTA_EXCEEDED');
+            errorResponse(quotaExceededMessage($tierSub), 429, 'QUOTA_EXCEEDED');
         }
         // The platform pays for this call, so the model must be one the plan allows.
         [$planModel, $planModelError] = choosePlanModel($tierSub, $provider, $model, $autoModelRequested);

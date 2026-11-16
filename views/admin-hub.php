@@ -27,7 +27,9 @@ $ticketsApi = new TicketsAPI();
 $awaitingTickets = count(array_filter($ticketsApi->getAll(), fn($t) => ($t['status'] ?? '') === 'awaiting_admin'));
 
 $subsApi = new SubscriptionsAPI();
-$activeSubsCount = count(array_filter($subsApi->getAll(), fn($s) => ($s['status'] ?? '') === 'active'));
+$activeSubs = array_filter($subsApi->getAll(), fn($s) => ($s['status'] ?? '') === 'active');
+$activeSubsCount = count(array_filter($activeSubs, fn($s) => empty($s['trial'])));
+$trialSubsCount = count($activeSubs) - $activeSubsCount;
 
 $plansApi = new PlansAPI($globalDb, 'plans');
 $plansCount = count($plansApi->findAll(['activeOnly' => true]));
@@ -73,9 +75,9 @@ $cards = [
     [
         'page' => 'admin-subscriptions',
         'title' => 'Subscribers',
-        'description' => 'Active subscribers. Cancel or extend subscriptions.',
+        'description' => 'Paying subscribers' . ($trialSubsCount > 0 ? ', plus ' . $trialSubsCount . ' on a free trial' : '') . '. Cancel or extend subscriptions.',
         'count' => $activeSubsCount,
-        'countLabel' => 'active',
+        'countLabel' => 'paying',
         'icon' => 'M17 20h5v-1a4 4 0 00-5-4m-4 5H2v-1a4 4 0 015-4m6 5v-1a4 4 0 00-4-4H7m6-8a4 4 0 11-8 0 4 4 0 018 0zm6 2a3 3 0 11-6 0 3 3 0 016 0z'
     ],
     [

@@ -254,6 +254,7 @@ h1, h2 { font-family: Inter, system-ui, sans-serif; font-weight: 600; letter-spa
 .plan-card__list { flex: 1; margin: 0 0 1.5rem; padding: 0; border-top: 1px solid var(--line); list-style: none; }
 .plan-card__list li { padding: .7rem 0; border-bottom: 1px solid var(--line); color: var(--ink-soft); font-size: .84rem; line-height: 1.5; }
 .plan-card__action { justify-content: center; width: 100%; }
+.plan-card__note { margin: .65rem 0 0; color: var(--ink-soft); font-size: .78rem; text-align: center; }
 .button--outline { border: 1px solid var(--ink); background: transparent; color: var(--ink); }
 .button--outline:hover { background: var(--accent-soft); }
 .pricing-note { margin: 1.5rem 0 0; color: var(--muted); font-size: .84rem; }

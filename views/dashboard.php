@@ -1812,7 +1812,12 @@ function startWaterReminder() {
 }
 </script>
 
-<?php if (!empty($showAiPopup)): ?>
+<?php if (!empty($showAiPopup)):
+    // Offer the free trial first when this account can start one.
+    $popupTrial = trialEligibility((string)(Auth::userId() ?? ''));
+    $popupTrialOk = !empty($popupTrial['ok']);
+    $popupTrialSettings = trialSettings();
+?>
 <!-- Post-login AI subscription popup (monochrome glass) -->
 <div id="ai-promo-overlay" class="fixed inset-0 z-[70] hidden">
     <div class="absolute inset-0 bg-black/70 backdrop-blur-xl" data-ai-promo-close></div>
@@ -1827,17 +1832,22 @@ function startWaterReminder() {
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
 
-                <div class="relative p-8 text-white">
+                <div class="relative p-8 text-white trial-offer">
                     <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white/15 border border-white/20 backdrop-blur mb-6">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                         </svg>
                     </div>
 
-                    <p class="text-[10px] font-bold uppercase tracking-[0.3em] text-white/60 mb-3">AI Subscription</p>
+                    <p class="text-[10px] font-bold uppercase tracking-[0.3em] text-white/60 mb-3"><?php echo $popupTrialOk ? 'Free trial' : 'AI plans'; ?></p>
                     <h2 class="text-2xl font-semibold leading-tight tracking-tight mb-3">Unlock the AI features in your workspace.</h2>
                     <p class="text-sm text-white/70 leading-relaxed mb-6">
-                        Generate tasks from a sentence, get a written morning brief, plug Claude or Cursor into your data via MCP, and keep a Knowledge Base your agent can cite. A subscription turns these on across the desktop and mobile app.
+                        Generate tasks from a sentence, get a written morning brief, and ask an agent that works on your projects, clients and notes.
+                        <?php if ($popupTrialOk): ?>
+                            Try it free for <?php echo (int)$popupTrialSettings['days']; ?> days on our AI keys: <?php echo (int)$popupTrialSettings['requests']; ?> requests, no card.
+                        <?php else: ?>
+                            A plan runs it on our AI keys, on desktop and mobile.
+                        <?php endif; ?>
                     </p>
 
                     <ul class="space-y-2.5 mb-7">
@@ -1847,7 +1857,7 @@ function startWaterReminder() {
                         </li>
                         <li class="flex items-start gap-2.5 text-sm text-white/80">
                             <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                            <span>MCP server for Claude / Cursor / desktop clients</span>
+                            <span>AI in Notes: summaries, checklists and rewrites</span>
                         </li>
                         <li class="flex items-start gap-2.5 text-sm text-white/80">
                             <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
@@ -1856,14 +1866,25 @@ function startWaterReminder() {
                     </ul>
 
                     <div class="flex items-center gap-3">
+                        <?php if ($popupTrialOk): ?>
+                            <button type="button"
+                                    class="trial-offer-start inline-flex items-center justify-center flex-1 px-5 h-11 rounded-xl bg-white text-black text-sm font-semibold hover:bg-white/90 transition disabled:opacity-60"
+                                    data-endpoint="<?php echo e(rtrim((string)APP_URL, '/') . '/api/subscriptions.php?action=start_trial'); ?>"
+                                    data-csrf="<?php echo e(Auth::csrfToken()); ?>"
+                                    data-after="?page=ai-assistant">Start free trial</button>
+                            <a href="?page=subscription" class="px-4 h-11 inline-flex items-center rounded-xl text-sm font-medium text-white/80 hover:text-white transition">See plans</a>
+                        <?php else: ?>
                         <a href="?page=subscription" class="inline-flex items-center justify-center flex-1 px-5 h-11 rounded-xl bg-white text-black text-sm font-semibold hover:bg-white/90 transition">
                             See plans
                             <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
                         </a>
+                        <?php endif; ?>
                         <button type="button" data-ai-promo-close class="px-4 h-11 rounded-xl text-sm font-medium text-white/70 hover:text-white transition">
                             Maybe later
                         </button>
                     </div>
+                    <p class="trial-offer-error hidden mt-4 text-sm text-white" role="alert"></p>
+                    <?php if ($popupTrialOk) { require __DIR__ . '/partials/trial-offer-script.php'; } ?>
                 </div>
             </div>
         </div>

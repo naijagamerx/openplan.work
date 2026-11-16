@@ -32,7 +32,9 @@ if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
 $usage = getMonthlyUsage($userId, $month);
 $sub = getActiveSubscription($userId);
 $cap = $sub ? (int)($sub['monthlyRequestCap'] ?? 0) : 0;
-$remaining = $cap > 0 ? max(0, $cap - (int)($usage['totalRequests'] ?? 0)) : null;
+// A free trial's cap covers the whole trial, not one calendar month.
+$planUsage = $sub ? subscriptionUsage($userId, $sub) : ['used' => (int)($usage['totalRequests'] ?? 0), 'perTrial' => false];
+$remaining = $cap > 0 ? max(0, $cap - (int)$planUsage['used']) : null;
 
 successResponse([
     'month' => $month,
@@ -40,5 +42,7 @@ successResponse([
     'byProvider' => $usage['byProvider'] ?? [],
     'cap' => $cap > 0 ? $cap : null,
     'remaining' => $remaining,
-    'hasActiveSubscription' => $sub !== null
+    'hasActiveSubscription' => $sub !== null,
+    'trial' => $sub !== null && !empty($sub['trial']),
+    'capUsed' => (int)$planUsage['used'],
 ]);

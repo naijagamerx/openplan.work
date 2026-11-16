@@ -57,13 +57,18 @@ foreach ($users as $u) {
                         $status = $s['status'] ?? 'expired';
                         $statusColor = match ($status) {
                             'active' => 'text-green-700 bg-green-50 border-green-200',
-                            'cancelled' => 'text-gray-700 bg-gray-50 border-gray-200',
+                            'cancelled', 'converted' => 'text-gray-700 bg-gray-50 border-gray-200',
                             default => 'text-red-700 bg-red-50 border-red-200'
                         };
                     ?>
                         <tr class="border-t border-gray-100">
                             <td class="px-6 py-4 font-bold"><?php echo e($userLabel); ?></td>
-                            <td class="px-6 py-4"><?php echo e($s['planSnapshot']['name'] ?? ''); ?></td>
+                            <td class="px-6 py-4">
+                                <?php echo e($s['planSnapshot']['name'] ?? ''); ?>
+                                <?php if (!empty($s['trial'])): ?>
+                                    <span class="ml-2 inline-flex text-[10px] font-bold uppercase tracking-widest border border-gray-300 text-gray-600 px-2 py-0.5 rounded-full">Trial</span>
+                                <?php endif; ?>
+                            </td>
                             <td class="px-6 py-4"><?php echo e(date('M j, Y', strtotime((string)($s['startsAt'] ?? '')))); ?></td>
                             <td class="px-6 py-4"><?php echo e(date('M j, Y', strtotime((string)($s['expiresAt'] ?? '')))); ?></td>
                             <td class="px-6 py-4">

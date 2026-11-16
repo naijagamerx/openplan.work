@@ -36,7 +36,7 @@ require __DIR__ . '/partials/public-site-head.php';
             <?php if ($plans === []): ?>
                 <p class="pricing-note">No built-in AI plans are currently published. You can still choose to configure the assistant with your own provider keys.</p>
             <?php elseif (!$isAuthenticated): ?>
-                <p class="pricing-note">Choosing a plan asks you to log in first. You can start with the free workspace, then choose a published plan.</p>
+                <?php require __DIR__ . '/partials/public-plan-note.php'; ?>
             <?php endif; ?>
         </div>
     </section>

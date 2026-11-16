@@ -6,6 +6,8 @@
  * GET   /api/subscriptions.php?id=X — specific sub (owner or admin).
  * POST  /api/subscriptions.php?id=X&action=cancel — admin only.
  * POST  /api/subscriptions.php?id=X&action=extend  body: { days } — admin only.
+ * POST  /api/subscriptions.php?action=start_trial — the caller starts their own free
+ *       trial. Errors: TRIAL_UNAVAILABLE (503), EMAIL_NOT_VERIFIED (403), TRIAL_USED (409).
  */
 
 require_once __DIR__ . '/../config.php';
@@ -49,6 +51,30 @@ if ($method === 'GET') {
 if ($method !== 'POST') {
     errorResponse('Method not allowed', 405);
     exit;
+}
+
+// Any signed-in user: start their own free trial (no card).
+if ($action === 'start_trial') {
+    $body = getJsonBody();
+    $csrf = $body['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    if (!Auth::isTokenAuth() && !Auth::validateCsrf((string)$csrf)) {
+        errorResponse('Invalid CSRF token', 403);
+    }
+    require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+    $result = startTrial((string)Auth::userId());
+    if (empty($result['ok'])) {
+        $status = ($result['code'] ?? '') === 'TRIAL_UNAVAILABLE' ? 503 : 409;
+        if (($result['code'] ?? '') === 'EMAIL_NOT_VERIFIED') {
+            $status = 403;
+        }
+        errorResponse($result['message'] ?? 'The free trial could not be started.', $status, $result['code'] ?? 'ERROR');
+    }
+    $trial = $result['subscription'];
+    successResponse([
+        'expiresAt' => $trial['expiresAt'],
+        'requests' => (int)$trial['monthlyRequestCap'],
+        'providers' => $trial['providers'],
+    ], 'Your free trial has started.');
 }
 
 if (!Auth::isAdmin()) {

@@ -54,7 +54,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
       $status = $s['status'] ?? 'expired';
       $statusBg = match ($status) {
         'active' => 'bg-green-100 text-green-800',
-        'cancelled' => 'bg-gray-100 text-gray-700',
+        'cancelled', 'converted' => 'bg-gray-100 text-gray-700',
         default => 'bg-red-100 text-red-800'
       };
     ?>
@@ -62,7 +62,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
         <div class="flex items-start justify-between gap-3">
           <div class="flex-1 min-w-0">
             <p class="font-bold text-sm truncate"><?= htmlspecialchars($userLabel) ?></p>
-            <p class="text-[10px] text-gray-500 mt-0.5"><?= htmlspecialchars($s['planSnapshot']['name'] ?? '') ?></p>
+            <p class="text-[10px] text-gray-500 mt-0.5"><?= htmlspecialchars($s['planSnapshot']['name'] ?? '') ?><?php if (!empty($s['trial'])): ?> <span class="ml-1 border border-gray-400 px-1 text-[9px] font-bold uppercase tracking-widest">Trial</span><?php endif; ?></p>
           </div>
           <span class="<?= $statusBg ?> px-2 py-1 text-[9px] font-bold uppercase tracking-widest shrink-0"><?= htmlspecialchars($status) ?></span>
         </div>

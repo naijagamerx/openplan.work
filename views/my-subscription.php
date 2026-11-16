@@ -36,23 +36,30 @@ $cardReturn = ($_GET['payfast'] ?? '') === 'return';
 
     <?php if ($active):
         $expiresAt = strtotime((string)($active['expiresAt'] ?? ''));
-        $daysLeft = max(0, (int)(($expiresAt - time()) / 86400));
+        $daysLeft = max(0, (int)ceil(($expiresAt - time()) / 86400));
         $cap = (int)($active['monthlyRequestCap'] ?? 0);
-        $usagePct = ($cap > 0) ? min(100, ($usageTotal / $cap) * 100) : 0;
+        $isTrial = !empty($active['trial']);
+        // A trial's requests count over the whole trial; a plan's over this month.
+        $capUsed = (int)subscriptionUsage($userId, $active)['used'];
+        $usagePct = ($cap > 0) ? min(100, ($capUsed / $cap) * 100) : 0;
         $symbol = getCurrencySymbol($active['planSnapshot']['currency'] ?? 'USD');
     ?>
         <div class="bg-black text-white rounded-2xl p-8 mb-6">
             <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
                 <div>
-                    <p class="text-[10px] font-bold uppercase tracking-widest text-white/60 mb-2">Active Plan</p>
+                    <p class="text-[10px] font-bold uppercase tracking-widest text-white/60 mb-2"><?php echo $isTrial ? 'Free trial' : 'Active Plan'; ?></p>
                     <h3 class="text-3xl font-bold mb-2"><?php echo e($active['planSnapshot']['name'] ?? ''); ?></h3>
                     <p class="text-white/70">
-                        <?php echo e($symbol . number_format((float)($active['planSnapshot']['price'] ?? 0), 2)); ?>
-                        &middot; <?php echo (int)($active['planSnapshot']['durationDays'] ?? 30); ?> days
+                        <?php if ($isTrial): ?>
+                            No card &middot; ends by itself after <?php echo (int)($active['planSnapshot']['durationDays'] ?? 14); ?> days
+                        <?php else: ?>
+                            <?php echo e($symbol . number_format((float)($active['planSnapshot']['price'] ?? 0), 2)); ?>
+                            &middot; <?php echo (int)($active['planSnapshot']['durationDays'] ?? 30); ?> days
+                        <?php endif; ?>
                     </p>
                 </div>
                 <div class="text-right">
-                    <p class="text-[10px] font-bold uppercase tracking-widest text-white/60 mb-2">Expires</p>
+                    <p class="text-[10px] font-bold uppercase tracking-widest text-white/60 mb-2"><?php echo $isTrial ? 'Ends in' : 'Expires'; ?></p>
                     <p class="text-2xl font-bold"><?php echo $daysLeft; ?> days</p>
                     <p class="text-white/70 text-sm"><?php echo e(date('M j, Y', $expiresAt)); ?></p>
                 </div>
@@ -61,8 +68,8 @@ $cardReturn = ($_GET['payfast'] ?? '') === 'return';
             <?php if ($cap > 0): ?>
                 <div class="mt-6 pt-6 border-t border-white/20">
                     <div class="flex items-center justify-between text-sm mb-2">
-                        <span>This month&apos;s usage</span>
-                        <span><?php echo number_format($usageTotal); ?> / <?php echo number_format($cap); ?></span>
+                        <span><?php echo $isTrial ? 'AI requests used in your trial' : 'This month&apos;s usage'; ?></span>
+                        <span><?php echo number_format($capUsed); ?> / <?php echo number_format($cap); ?></span>
                     </div>
                     <div class="h-2 bg-white/20 rounded-full overflow-hidden">
                         <div class="h-full bg-white" style="width: <?php echo (int)$usagePct; ?>%"></div>
@@ -91,18 +98,27 @@ $cardReturn = ($_GET['payfast'] ?? '') === 'return';
             <?php endif; ?>
 
             <div class="mt-6 flex flex-wrap gap-2">
+                <?php if ($isTrial): ?>
+                    <a href="?page=subscription" class="px-4 py-2 bg-white text-black rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-100 transition">Choose a plan</a>
+                    <a href="?page=ai-assistant" class="px-4 py-2 border border-white/40 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition">Open AI assistant</a>
+                <?php else: ?>
                 <a href="?page=settings#ai-quota" class="px-4 py-2 bg-white text-black rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-100 transition">Platform AI Settings</a>
                 <a href="?page=subscription" class="px-4 py-2 border border-white/40 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition">Extend / Switch Plan</a>
+                <?php endif; ?>
                 <?php if (($active['provider'] ?? '') === 'payfast' && !empty($active['autoRenew'])): ?>
                     <button type="button" id="cancel-autorenew-btn" class="px-4 py-2 border border-white/40 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition">Cancel Auto-Renew</button>
                 <?php endif; ?>
             </div>
         </div>
     <?php else: ?>
+        <?php
+        $trialOfferClass = 'mb-6';
+        require __DIR__ . '/partials/trial-offer.php';
+        ?>
         <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 mb-6 text-center">
-            <p class="text-gray-700 font-bold mb-2">No active subscription</p>
-            <p class="text-sm text-gray-500 mb-4">You&apos;re using your own AI API keys. Subscribe to consume the admin&apos;s shared quota instead.</p>
-            <a href="?page=subscription" class="inline-block px-6 py-2 bg-black text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-800 transition">Browse Plans</a>
+            <p class="text-gray-700 font-bold mb-2">No active plan</p>
+            <p class="text-sm text-gray-500 mb-4">A plan lets you use the AI on our keys. Without one, the AI works only with your own API keys from Settings.</p>
+            <a href="?page=subscription" class="inline-block px-6 py-2 bg-black text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-800 transition">See plans</a>
         </div>
     <?php endif; ?>
 
@@ -125,7 +141,7 @@ $cardReturn = ($_GET['payfast'] ?? '') === 'return';
                         $status = $h['status'] ?? 'expired';
                         $statusColor = match ($status) {
                             'active' => 'text-green-700 bg-green-50 border-green-200',
-                            'cancelled' => 'text-gray-700 bg-gray-50 border-gray-200',
+                            'cancelled', 'converted' => 'text-gray-700 bg-gray-50 border-gray-200',
                             default => 'text-red-700 bg-red-50 border-red-200'
                         };
                     ?>

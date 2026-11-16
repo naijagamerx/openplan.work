@@ -159,8 +159,15 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 ?>
 
 <?php if (!$hasAnyKey): ?>
-<div class="px-4 py-3 bg-yellow-50 border-b border-yellow-200">
-  <p class="text-xs font-bold uppercase tracking-widest text-yellow-800">API keys are required in Settings.</p>
+<div class="px-4 pt-4 space-y-3">
+  <?php
+  // No plan and no own key: offer the free trial first, then a plan or an own key.
+  $trialOfferAfter = '?page=ai-assistant';
+  require __DIR__ . '/../../views/partials/trial-offer.php';
+  ?>
+  <div class="rounded-xl border border-gray-200 dark:border-white/10 p-4 text-sm text-gray-700 dark:text-gray-300">
+    <?= $trialOfferShown ? 'Or pick' : 'Pick' ?> a <a href="?page=subscription" class="font-bold underline">plan</a> to use the AI on our keys, or add your own Groq or OpenRouter key in <a href="?page=settings" class="font-bold underline">Settings</a>.
+  </div>
 </div>
 <?php endif; ?>
 
@@ -334,6 +341,16 @@ function showToast(message, type) {
 }
 function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str == null ? '' : String(str); return d.innerHTML; }
 
+// Errors that mean the trial or plan, not the provider, said no. Retrying another
+// provider cannot help with a used-up quota (it is shared by every provider).
+const PLAN_LIMIT_CODES = ['QUOTA_EXCEEDED', 'MODEL_NOT_IN_PLAN', 'PROVIDER_NOT_IN_PLAN'];
+function planLimitCode(error) {
+  const code = error?.code || error?.response?.error?.code || '';
+  return PLAN_LIMIT_CODES.includes(code) ? code : '';
+}
+function planLimitMessage(message) {
+  return message + '\n\n[See plans](?page=subscription)';
+}
 function renderMarkdown(content) {
   if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
     return escapeHtml(content);
@@ -707,9 +724,10 @@ async function sendStandardMessage(message) {
         addChatMessage('assistant', 'Groq hit its per-minute token limit. Wait ~60s or pick OpenRouter / Gemini above.');
         return;
       }
-      if (isSmart && hasNext) { showToast(`${effectiveProvider} failed, trying next...`, 'warning'); showTyping(); continue; }
+      const limitCode = planLimitCode(error);
+      if (isSmart && hasNext && limitCode !== 'QUOTA_EXCEEDED') { showToast(`${effectiveProvider} failed, trying next...`, 'warning'); showTyping(); continue; }
       hideTyping();
-      addChatMessage('assistant', 'Error: ' + errMsg);
+      addChatMessage('assistant', limitCode ? planLimitMessage(errMsg) : 'Error: ' + errMsg);
       return;
     }
   }
@@ -787,9 +805,11 @@ async function sendAgentMessage(message) {
       } else { addChatMessage('assistant', 'Error: ' + (response.error || 'Failed to get response')); return; }
     } catch (error) {
       stopMobileAgentPolling();
-      if (isSmart && i < providersToTry.length - 1) { startMobileAgentPolling(); continue; }
+      const limitCode = planLimitCode(error);
+      if (isSmart && i < providersToTry.length - 1 && limitCode !== 'QUOTA_EXCEEDED') { startMobileAgentPolling(); continue; }
       hideTyping();
-      addChatMessage('assistant', 'Error: ' + (error.message || 'Network error')); return;
+      const errMsg = error.message || 'Network error';
+      addChatMessage('assistant', limitCode ? planLimitMessage(errMsg) : 'Error: ' + errMsg); return;
     }
   }
   stopMobileAgentPolling(); hideTyping();

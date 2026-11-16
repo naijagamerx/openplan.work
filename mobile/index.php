@@ -48,7 +48,9 @@ require_once __DIR__ . '/config.php';
 $page = $_GET['page'] ?? 'dashboard';
 
 // Ensure user is authenticated for protected pages
-$publicPages = ['login', 'setup', 'register', 'logout', '404', 'terms', 'privacy', 'refunds'];
+// master-code is step 2 of sign-in (the person is not signed in yet); without it
+// here, /mobile/ (the Android app's start URL) bounced step 2 back to step 1.
+$publicPages = ['login', 'master-code', 'setup', 'register', 'logout', '404', 'terms', 'privacy', 'refunds'];
 
 if (!in_array($page, $publicPages)) {
     if (!Auth::check()) {
@@ -60,6 +62,13 @@ if (!in_array($page, $publicPages)) {
 
 // Sanitize page name to prevent directory traversal
 $page = preg_replace('/[^a-z0-9_-]/i', '', $page);
+
+// Same rule as the desktop router (index.php): an account that still has to verify
+// its email address only sees the verification pages until it does.
+$verificationAllowedMobilePages = ['verification-required', 'verify-email', 'logout', 'login', 'register', 'terms', 'privacy', 'refunds', '404'];
+if (Auth::check() && Auth::shouldRestrictToVerification() && !in_array($page, $verificationAllowedMobilePages, true)) {
+    $page = 'verification-required';
+}
 $viewFile = MOBILE_VIEW_PATH . '/' . $page . '.php';
 
 // Check if view exists

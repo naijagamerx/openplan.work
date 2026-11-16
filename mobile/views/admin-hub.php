@@ -20,7 +20,9 @@ require_once INCLUDES_PATH . '/AISharedKeysAPI.php';
 $globalDb = new Database(APP_NAME);
 $pendingPayments = count((new PaymentsAPI())->getAll('pending'));
 $awaitingTickets = count(array_filter((new TicketsAPI())->getAll(), fn($t) => ($t['status'] ?? '') === 'awaiting_admin'));
-$activeSubsCount = count(array_filter((new SubscriptionsAPI())->getAll(), fn($s) => ($s['status'] ?? '') === 'active'));
+$activeSubs = array_filter((new SubscriptionsAPI())->getAll(), fn($s) => ($s['status'] ?? '') === 'active');
+$activeSubsCount = count(array_filter($activeSubs, fn($s) => empty($s['trial'])));
+$trialSubsCount = count($activeSubs) - $activeSubsCount;
 $plansCount = count((new PlansAPI($globalDb, 'plans'))->findAll(['activeOnly' => true]));
 $methodsCount = count((new PaymentMethodsAPI($globalDb, 'payment_methods'))->findAll(['activeOnly' => true]));
 $sharedKeys = (new AISharedKeysAPI())->getMaskedKeys();
@@ -33,7 +35,7 @@ $cards = [
     ['page' => 'admin-plans', 'title' => 'Plans', 'desc' => 'Subscription plans.', 'count' => $plansCount, 'label' => 'active'],
     ['page' => 'admin-payment-methods', 'title' => 'Payment Methods', 'desc' => 'Bank + crypto wallets.', 'count' => $methodsCount, 'label' => 'method' . ($methodsCount === 1 ? '' : 's')],
     ['page' => 'admin-payments', 'title' => 'Payment Approvals', 'desc' => 'Approve / reject payments.', 'count' => $pendingPayments, 'label' => 'pending', 'highlight' => $pendingPayments > 0],
-    ['page' => 'admin-subscriptions', 'title' => 'Subscribers', 'desc' => 'Cancel or extend subs.', 'count' => $activeSubsCount, 'label' => 'active'],
+    ['page' => 'admin-subscriptions', 'title' => 'Subscribers', 'desc' => ($trialSubsCount > 0 ? $trialSubsCount . ' on free trial. ' : '') . 'Cancel or extend subs.', 'count' => $activeSubsCount, 'label' => 'paying'],
     ['page' => 'admin-tickets', 'title' => 'Support Tickets', 'desc' => 'Reply to user tickets.', 'count' => $awaitingTickets, 'label' => 'awaiting', 'highlight' => $awaitingTickets > 0],
     ['page' => 'admin-shared-keys', 'title' => 'Shared AI Keys', 'desc' => 'Admin keys for subscribers.', 'count' => $keysConfiguredCount, 'label' => 'of 3'],
     ['page' => 'users', 'title' => 'Users', 'desc' => 'Promote, ban, remove.'],
