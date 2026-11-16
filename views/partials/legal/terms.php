@@ -85,6 +85,7 @@ $notSet = '<em>not published yet</em>';
         <li>A workspace with every module is free. Paid plans add AI requests on our provider keys.</li>
         <li>Each plan shows its price, currency, period, monthly AI request limit and AI providers before you pay. One request is one message you send to an AI feature, even if the assistant takes several steps to answer. Unused requests do not carry over to the next calendar month.</li>
         <li><strong>Card payments</strong> are processed by PayFast in South African rand. A card subscription renews automatically at the end of each period, at the same price, until you cancel. You can cancel any time under My Subscription; you keep access until the end of the period you have paid for.</li>
+        <li><strong>Free trial:</strong> if we offer one, it needs no card, gives the AI request limit and length shown when you start it, is available once per person, ends by itself and never charges you.</li>
         <li><strong>Bank transfer or crypto payments</strong> are once-off. Your plan starts when we have checked your proof of payment, normally within 2 business days, and does not renew by itself.</li>
         <li><strong>When your plan starts:</strong> card plans start as soon as PayFast confirms the payment, normally within minutes. There is no minimum term beyond the period you pay for.</li>
         <li><strong>Before you pay,</strong> the checkout shows the plan, its price and how it renews. You can go back, or cancel on PayFast's page, without being charged.</li>

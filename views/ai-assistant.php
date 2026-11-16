@@ -34,11 +34,10 @@ $aiUseShared = !empty($config['useAdminSharedAiKeys']);
 $aiActiveSub = $aiUseShared ? getActiveSubscription(Auth::userId() ?? '') : null;
 
 if ($aiUseShared) {
-    require_once INCLUDES_PATH . '/AISharedKeysAPI.php';
-    $sharedKeysApi = new AISharedKeysAPI();
-    $groqModels       = $sharedKeysApi->getSharedModels('groq');
-    $openRouterModels = $sharedKeysApi->getSharedModels('openrouter');
-    $geminiModels     = $sharedKeysApi->getSharedModels('gemini');
+    // Only the models this plan may run on the platform keys (plan allow-list).
+    $groqModels       = planSharedModels($aiActiveSub, 'groq');
+    $openRouterModels = planSharedModels($aiActiveSub, 'openrouter');
+    $geminiModels     = planSharedModels($aiActiveSub, 'gemini');
     // Ollama is local-only; not part of the shared pool.
     $ollamaModels     = [];
 } else {

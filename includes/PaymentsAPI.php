@@ -625,12 +625,21 @@ class PaymentsAPI {
         $now = time();
         $nowIso = date('c', $now);
 
-        // Look for an existing active sub to EXTEND.
+        // Look for an existing active sub to EXTEND. A free trial is never extended:
+        // buying ends it and starts a fresh paid subscription, so no trial flag,
+        // trial start date or trial request count carries over into the paid plan.
         $existingIdx = -1;
         foreach ($subs as $i => $s) {
             if (($s['userId'] ?? '') === $userId
                 && ($s['status'] ?? '') === 'active'
                 && strtotime((string)($s['expiresAt'] ?? '')) > $now) {
+                if (!empty($s['trial'])) {
+                    $subs[$i]['status'] = 'converted';
+                    $subs[$i]['expiresAt'] = $nowIso;
+                    $subs[$i]['convertedAt'] = $nowIso;
+                    $subs[$i]['updatedAt'] = $nowIso;
+                    continue;
+                }
                 $existingIdx = $i;
                 break;
             }
@@ -642,6 +651,8 @@ class PaymentsAPI {
             $newExpiry = $extend($currentExpiry);
             $subs[$existingIdx] = array_merge($subs[$existingIdx], $gatewayFields);
             $subs[$existingIdx]['expiresAt'] = date('c', $newExpiry);
+            // A new period gets its own "expiring soon" email.
+            $subs[$existingIdx]['expiringEmailSentAt'] = null;
             $subs[$existingIdx]['planId'] = $payment['planId'];
             $subs[$existingIdx]['planSnapshot'] = $snapshot;
             $subs[$existingIdx]['providers'] = $snapshot['providers'] ?? [];

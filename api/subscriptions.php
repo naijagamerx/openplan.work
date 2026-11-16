@@ -67,6 +67,22 @@ if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrf)) {
 }
 
 if ($action === 'cancel') {
+    $target = $api->find($id);
+    if (!$target) {
+        errorResponse('Subscription not found', 404, 'NOT_FOUND');
+    }
+    // A card subscription that still renews must be stopped at PayFast as well,
+    // or the customer keeps being charged for a plan we no longer give them.
+    if (($target['provider'] ?? '') === 'payfast' && !empty($target['autoRenew']) && !empty($target['gatewayToken'])) {
+        require_once INCLUDES_PATH . '/PayFast.php';
+        require_once INCLUDES_PATH . '/PaymentsAPI.php';
+        $result = PayFast::cancelSubscription((string)$target['gatewayToken']);
+        if (!$result['ok']) {
+            error_log('Admin cancel: PayFast cancel failed for subscription ' . $id . ': HTTP ' . $result['status'] . ' ' . $result['message']);
+            errorResponse('PayFast could not stop the card subscription, so nothing was cancelled. Try again, or cancel it in the PayFast dashboard first.', 502, 'PAYFAST_ERROR');
+        }
+        (new PaymentsAPI())->cancelAutoRenew($id, (string)$target['gatewayToken']);
+    }
     $sub = $api->cancel($id, Auth::userId());
     if ($sub) {
         successResponse($sub, 'Subscription cancelled');

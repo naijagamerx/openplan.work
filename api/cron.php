@@ -206,78 +206,81 @@ function executeCronJob($job, $db, $audit) {
 /**
  * Job: subscription expiry maintenance.
  *   - Marks expired subscriptions whose expiresAt < now and status=active.
- *   - Sends "expiring in 3 days" email for subscriptions in the 0-3 day window.
+ *   - Sends "expiring in 3 days" email for subscriptions in the 0-3 day window,
+ *     except card subscriptions that renew by themselves (PayFast emails those).
  *   - Sends "expired" email once on the transition.
+ *   - Trials get their own wording ("trial ends soon" / "trial ended").
+ *
+ * Runs under the subscriptions lock so a PayFast renewal arriving at the same
+ * moment is not overwritten. Emails go out after the lock is released, through
+ * the platform SMTP settings in .env (cron has no session, and a subscriber's
+ * own business mail settings are not ours to send from).
  */
 function runSubscriptionExpiryCheck() {
+    require_once INCLUDES_PATH . '/SubscriptionHelper.php';
     $globalDb = new Database(APP_NAME);
-    $subs = $globalDb->load('subscriptions', true);
-    if (!is_array($subs)) {
-        return ['success' => true, 'data' => ['expired' => 0, 'warned' => 0]];
-    }
     $now = time();
     $threeDays = 3 * 86400;
     $expiredCount = 0;
     $warnedCount = 0;
-    $changed = false;
+    $outbox = [];
 
-    // Build user lookup once.
-    $users = $globalDb->load('users', true);
-    $userMap = [];
-    foreach ($users as $u) {
-        $userMap[$u['id'] ?? ''] = $u;
-    }
-
-    foreach ($subs as $i => $s) {
-        if (($s['status'] ?? '') !== 'active') {
-            continue;
+    $lock = saas_lockSubscriptions();
+    try {
+        $subs = $globalDb->load('subscriptions', true);
+        if (!is_array($subs)) {
+            return ['success' => true, 'data' => ['expired' => 0, 'warned' => 0]];
         }
-        $expiresAt = strtotime((string)($s['expiresAt'] ?? ''));
-        if ($expiresAt === false) {
-            continue;
-        }
-        $user = $userMap[$s['userId'] ?? ''] ?? null;
-
-        if ($expiresAt <= $now) {
-            $subs[$i]['status'] = 'expired';
-            $subs[$i]['updatedAt'] = date('c');
-            $changed = true;
-            $expiredCount++;
-            if ($user && class_exists('Mailer') && method_exists('Mailer', 'sendSubscriptionExpiredEmail')) {
-                try {
-                    $masterPassword = getMasterPassword();
-                    if ($masterPassword !== '') {
-                        $userDb = new Database($masterPassword, $user['id']);
-                        $config = $userDb->load('config', false);
-                        $mailer = new Mailer(is_array($config) ? $config : []);
-                        $mailer->sendSubscriptionExpiredEmail($user, $subs[$i]);
-                    }
-                } catch (Throwable $e) {
-                    error_log('expired email failed: ' . $e->getMessage());
-                }
+        $changed = false;
+        foreach ($subs as $i => $s) {
+            if (($s['status'] ?? '') !== 'active') {
+                continue;
             }
-        } elseif (($expiresAt - $now) <= $threeDays && empty($s['expiringEmailSentAt'])) {
-            $subs[$i]['expiringEmailSentAt'] = date('c');
-            $changed = true;
-            $warnedCount++;
-            if ($user && class_exists('Mailer') && method_exists('Mailer', 'sendSubscriptionExpiringEmail')) {
-                try {
-                    $masterPassword = getMasterPassword();
-                    if ($masterPassword !== '') {
-                        $userDb = new Database($masterPassword, $user['id']);
-                        $config = $userDb->load('config', false);
-                        $mailer = new Mailer(is_array($config) ? $config : []);
-                        $mailer->sendSubscriptionExpiringEmail($user, $subs[$i]);
-                    }
-                } catch (Throwable $e) {
-                    error_log('expiring email failed: ' . $e->getMessage());
-                }
+            $expiresAt = strtotime((string)($s['expiresAt'] ?? ''));
+            if ($expiresAt === false) {
+                continue;
+            }
+            $isTrial = !empty($s['trial']);
+
+            if ($expiresAt <= $now) {
+                $subs[$i]['status'] = 'expired';
+                $subs[$i]['updatedAt'] = date('c');
+                $changed = true;
+                $expiredCount++;
+                $outbox[] = [$isTrial ? 'sendTrialEndedEmail' : 'sendSubscriptionExpiredEmail', $subs[$i]];
+            } elseif (($expiresAt - $now) <= $threeDays
+                && empty($s['expiringEmailSentAt'])
+                && empty($s['autoRenew'])) {
+                $subs[$i]['expiringEmailSentAt'] = date('c');
+                $changed = true;
+                $warnedCount++;
+                $outbox[] = [$isTrial ? 'sendTrialEndingEmail' : 'sendSubscriptionExpiringEmail', $subs[$i]];
             }
         }
+        if ($changed) {
+            $globalDb->save('subscriptions', $subs);
+        }
+    } finally {
+        saas_unlockSubscriptions($lock);
     }
 
-    if ($changed) {
-        $globalDb->save('subscriptions', $subs);
+    if ($outbox !== [] && class_exists('Mailer')) {
+        $userMap = [];
+        foreach ($globalDb->load('users', true) as $u) {
+            $userMap[$u['id'] ?? ''] = $u;
+        }
+        $mailer = new Mailer();
+        foreach ($outbox as [$method, $sub]) {
+            $user = $userMap[$sub['userId'] ?? ''] ?? null;
+            if (!$user || empty($user['email']) || !method_exists($mailer, $method)) {
+                continue;
+            }
+            try {
+                $mailer->{$method}($user, $sub);
+            } catch (Throwable $e) {
+                error_log("subscription email {$method} failed: " . $e->getMessage());
+            }
+        }
     }
     return ['success' => true, 'data' => ['expired' => $expiredCount, 'warned' => $warnedCount]];
 }

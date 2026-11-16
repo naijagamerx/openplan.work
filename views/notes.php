@@ -23,14 +23,30 @@ $hasGeminiKey = !empty($config['geminiApiKey']);
 $hasOllama = !empty($models['ollama']);
 $hasAnyKey = $hasGroqKey || $hasOpenRouterKey || $hasGeminiKey || $hasOllama;
 
+// A plan holder on the platform keys gets exactly the models their plan allows
+// (same rule as the AI assistant), so Notes AI never sends a model the server
+// would refuse with MODEL_NOT_IN_PLAN.
+require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+$notesPlanSub = getActiveSubscription(Auth::userId() ?? '');
+$notesOnPlan = $notesPlanSub !== null
+    && userUsesSharedKeys(is_array($config) ? $config : [], $notesPlanSub);
+
 // Filter enabled models
 $groqModels = array_filter($models['groq'] ?? [], fn($m) => $m['enabled'] ?? true);
 $openRouterModels = array_filter($models['openrouter'] ?? [], fn($m) => $m['enabled'] ?? true);
 $geminiModels = array_filter($models['gemini'] ?? [], fn($m) => $m['enabled'] ?? true);
 $ollamaModels = array_filter($models['ollama'] ?? [], fn($m) => $m['enabled'] ?? true);
 
-// Fallback to static model lists if database is empty
-if (empty($groqModels)) {
+if ($notesOnPlan) {
+    $groqModels = planSharedModels($notesPlanSub, 'groq');
+    $openRouterModels = planSharedModels($notesPlanSub, 'openrouter');
+    $geminiModels = planSharedModels($notesPlanSub, 'gemini');
+    $ollamaModels = array_values($ollamaModels);
+    $hasAnyKey = true;
+}
+
+// Fallback to static model lists if database is empty (own keys only)
+if (!$notesOnPlan && empty($groqModels)) {
     $staticModels = GroqAPI::getModels();
     $first = true;
     $groqModels = [];
@@ -39,11 +55,11 @@ if (empty($groqModels)) {
         $first = false;
     }
 }
-if (empty($openRouterModels)) {
+if (!$notesOnPlan && empty($openRouterModels)) {
     $openRouterModels = array_map(fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
         array_keys(OpenRouterAPI::getModels()), OpenRouterAPI::getModels());
 }
-if (empty($geminiModels) && $hasGeminiKey) {
+if (!$notesOnPlan && empty($geminiModels) && $hasGeminiKey) {
     $geminiModels = array_map(fn($id, $name) => ['modelId' => $id, 'displayName' => $name, 'enabled' => true, 'isDefault' => false],
         array_keys(GeminiAPI::getModels()), GeminiAPI::getModels());
 }

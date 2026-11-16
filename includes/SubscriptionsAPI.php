@@ -48,65 +48,71 @@ class SubscriptionsAPI {
     }
 
     public function cancel(string $id, string $adminId): ?array {
-        $subs = $this->db->load('subscriptions', true);
-        foreach ($subs as $i => $s) {
-            if (($s['id'] ?? '') !== $id) {
-                continue;
-            }
-            $subs[$i]['status'] = 'cancelled';
-            $subs[$i]['cancelledAt'] = date('c');
-            $subs[$i]['cancelledBy'] = $adminId;
-            $subs[$i]['updatedAt'] = date('c');
-            $this->db->save('subscriptions', $subs);
-            if (class_exists('Audit')) {
-                Audit::logData('update', 'subscription', $id, ['status' => 'cancelled']);
-            }
-            return $subs[$i];
-        }
-        return null;
+        return $this->updateLocked($id, function (array $s) use ($adminId): array {
+            $s['status'] = 'cancelled';
+            $s['autoRenew'] = false;
+            $s['cancelledAt'] = $s['cancelledAt'] ?? date('c');
+            $s['cancelledBy'] = $adminId;
+            return $s;
+        }, ['status' => 'cancelled']);
     }
 
     public function extend(string $id, int $extraDays, string $adminId): ?array {
         if ($extraDays <= 0) {
             return null;
         }
-        $subs = $this->db->load('subscriptions', true);
-        foreach ($subs as $i => $s) {
-            if (($s['id'] ?? '') !== $id) {
-                continue;
-            }
+        return $this->updateLocked($id, function (array $s) use ($extraDays, $adminId): array {
             $current = strtotime((string)($s['expiresAt'] ?? ''));
             if ($current === false || $current < time()) {
                 $current = time();
             }
-            $newExpiry = $current + $extraDays * 86400;
-            $subs[$i]['expiresAt'] = date('c', $newExpiry);
-            $subs[$i]['status'] = 'active';
-            $subs[$i]['updatedAt'] = date('c');
-            $subs[$i]['extendedBy'] = $adminId;
-            $this->db->save('subscriptions', $subs);
-            if (class_exists('Audit')) {
-                Audit::logData('update', 'subscription', $id, ['extendedDays' => $extraDays]);
-            }
-            return $subs[$i];
-        }
-        return null;
+            $s['expiresAt'] = date('c', $current + $extraDays * 86400);
+            $s['status'] = 'active';
+            $s['extendedBy'] = $adminId;
+            // The new end date gets its own "expiring soon" email.
+            $s['expiringEmailSentAt'] = null;
+            return $s;
+        }, ['extendedDays' => $extraDays]);
     }
 
     public function markExpired(string $id): ?array {
-        $subs = $this->db->load('subscriptions', true);
-        foreach ($subs as $i => $s) {
-            if (($s['id'] ?? '') !== $id) {
-                continue;
+        return $this->updateLocked($id, function (array $s): array {
+            $s['status'] = 'expired';
+            return $s;
+        }, ['status' => 'expired']);
+    }
+
+    /**
+     * Load-modify-save of one subscription under the subscriptions lock, so an
+     * admin change and a PayFast notification arriving together cannot overwrite
+     * each other.
+     */
+    private function updateLocked(string $id, callable $change, array $auditDetails): ?array {
+        require_once __DIR__ . '/SubscriptionHelper.php';
+        $updated = null;
+        $lock = saas_lockSubscriptions();
+        try {
+            $subs = $this->db->load('subscriptions', true);
+            foreach ($subs as $i => $s) {
+                if (($s['id'] ?? '') !== $id) {
+                    continue;
+                }
+                $subs[$i] = $change($s);
+                $subs[$i]['updatedAt'] = date('c');
+                $this->db->save('subscriptions', $subs);
+                $updated = $subs[$i];
+                break;
             }
-            $subs[$i]['status'] = 'expired';
-            $subs[$i]['updatedAt'] = date('c');
-            $this->db->save('subscriptions', $subs);
-            if (class_exists('Audit')) {
-                Audit::logData('update', 'subscription', $id, ['status' => 'expired']);
-            }
-            return $subs[$i];
+        } finally {
+            saas_unlockSubscriptions($lock);
         }
-        return null;
+        if ($updated !== null && class_exists('Audit')) {
+            try {
+                Audit::logData('update', 'subscription', $id, $auditDetails);
+            } catch (Throwable $e) {
+                error_log('subscription audit failed: ' . $e->getMessage());
+            }
+        }
+        return $updated;
     }
 }

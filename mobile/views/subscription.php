@@ -97,7 +97,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
             <?php endif; ?>
             <li class="flex items-start gap-2">
               <svg class="w-3.5 h-3.5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
-              <span>Cancel anytime &middot; no auto-renew</span>
+              <span>Card: renews monthly until you cancel &middot; Bank/crypto: no auto-renew</span>
             </li>
           </ul>
           <a href="?page=buy-plan&id=<?= htmlspecialchars($plan['id']) ?>" class="block w-full text-center bg-black text-white py-3 font-bold text-xs uppercase tracking-widest active:scale-95 transition-transform touch-target">

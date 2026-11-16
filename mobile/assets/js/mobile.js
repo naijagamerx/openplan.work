@@ -125,16 +125,25 @@ const App = {
             const response = await fetch(url, fetchOptions);
 
             if (!response.ok) {
-                const error = new Error(`HTTP ${response.status} for ${url}`);
-                error.status = response.status;
-                error.url = url;
                 const contentType = response.headers.get('content-type');
+                let body;
                 if (contentType && contentType.includes('application/json')) {
-                    error.response = await response.json().catch(() => ({}));
+                    body = await response.json().catch(() => ({}));
                 } else {
                     const text = await response.text().catch(() => '');
-                    error.response = { message: getResponsePreview(text), raw: text };
+                    body = { message: getResponsePreview(text), raw: text };
                 }
+                // Show people the server's own explanation (e.g. "Monthly AI request
+                // quota reached…"), not "HTTP 429 for https://…". The code stays
+                // available as error.code for pages that branch on it.
+                const serverMessage = (body && body.error && typeof body.error === 'object')
+                    ? body.error.message
+                    : (body && typeof body.error === 'string' ? body.error : '');
+                const error = new Error(serverMessage || `Request failed (HTTP ${response.status})`);
+                error.status = response.status;
+                error.url = url;
+                error.code = (body && body.error && body.error.code) || '';
+                error.response = body;
                 throw error;
             }
 

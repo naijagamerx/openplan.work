@@ -13,6 +13,17 @@ if (!Auth::isAdmin()) {
 require_once INCLUDES_PATH . '/PlansAPI.php';
 $plansApi = new PlansAPI(new Database(APP_NAME), 'plans');
 $plans = $plansApi->findAll();
+
+// Models the admin enabled under Shared AI Keys, offered per provider below.
+require_once INCLUDES_PATH . '/AISharedKeysAPI.php';
+$sharedKeysApi = new AISharedKeysAPI();
+$sharedModelsByProvider = [];
+foreach (['groq' => 'Groq', 'openrouter' => 'OpenRouter', 'gemini' => 'Gemini'] as $prov => $provLabel) {
+    $list = $sharedKeysApi->getSharedModels($prov);
+    if ($list !== []) {
+        $sharedModelsByProvider[$prov] = ['label' => $provLabel, 'models' => $list];
+    }
+}
 ?>
 
 <div>
@@ -94,6 +105,26 @@ $plans = $plansApi->findAll();
                 </div>
 
                 <div class="md:col-span-2">
+                    <label class="block text-sm font-bold text-gray-500 mb-2 uppercase tracking-widest">Models on the platform keys</label>
+                    <p class="mb-3 text-xs text-gray-500">Tick the models this plan may use on your shared keys. Leave a provider with nothing ticked to allow every model you enabled under Shared AI Keys. Expensive models belong in the higher plan only.</p>
+                    <?php if ($sharedModelsByProvider === []): ?>
+                        <p class="text-xs text-gray-400">No shared models are enabled yet. Add them under Admin &rarr; Shared AI Keys.</p>
+                    <?php else: foreach ($sharedModelsByProvider as $prov => $group): ?>
+                        <fieldset class="mb-3">
+                            <legend class="text-xs font-bold uppercase tracking-widest text-gray-700 mb-2"><?php echo e($group['label']); ?></legend>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <?php foreach ($group['models'] as $m): ?>
+                                    <label class="flex items-center gap-2 px-3 py-2 border-2 border-gray-100 rounded-xl cursor-pointer hover:border-gray-300">
+                                        <input type="checkbox" class="plan-model h-4 w-4 rounded border-gray-300 text-black focus:ring-black" data-provider="<?php echo e($prov); ?>" value="<?php echo e($m['modelId']); ?>">
+                                        <span class="text-sm font-medium truncate" title="<?php echo e($m['modelId']); ?>"><?php echo e($m['displayName']); ?></span>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                        </fieldset>
+                    <?php endforeach; endif; ?>
+                </div>
+
+                <div class="md:col-span-2">
                     <label class="block text-sm font-bold text-gray-500 mb-2 uppercase tracking-widest">Description</label>
                     <textarea name="description" rows="3" class="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:border-black outline-none transition-colors bg-white" placeholder="What does this plan include?"></textarea>
                 </div>
@@ -152,6 +183,8 @@ $plans = $plansApi->findAll();
                                 <?php else: foreach ($provs as $p): ?>
                                     <span class="inline-block text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 mr-1 mb-1 rounded bg-gray-100 text-gray-700"><?php echo e($p); ?></span>
                                 <?php endforeach; endif; ?>
+                                <?php $modelCount = array_sum(array_map('count', array_filter((array)($plan['allowedModels'] ?? []), 'is_array'))); ?>
+                                <div class="text-[11px] text-gray-500 mt-1"><?php echo $modelCount > 0 ? e($modelCount . ' chosen model' . ($modelCount === 1 ? '' : 's')) : 'All shared models'; ?></div>
                             </td>
                             <td class="px-6 py-4"><?php echo (int)($plan['monthlyRequestCap'] ?? 0) > 0 ? (int)$plan['monthlyRequestCap'] : 'unlimited'; ?></td>
                             <td class="px-6 py-4">
@@ -198,6 +231,11 @@ $plans = $plansApi->findAll();
             const providers = plan.providers || [];
             form.querySelectorAll('input[name="providers[]"]').forEach((cb) => {
                 cb.checked = providers.includes(cb.value);
+            });
+            const allowed = (plan.allowedModels && typeof plan.allowedModels === 'object') ? plan.allowedModels : {};
+            form.querySelectorAll('input.plan-model').forEach((cb) => {
+                const list = Array.isArray(allowed[cb.dataset.provider]) ? allowed[cb.dataset.provider] : [];
+                cb.checked = list.includes(cb.value);
             });
         } else {
             form.elements['active'].checked = true;
@@ -252,6 +290,10 @@ $plans = $plansApi->findAll();
         e.preventDefault();
         const id = form.elements['id'].value;
         const providers = Array.from(form.querySelectorAll('input[name="providers[]"]:checked')).map((c) => c.value);
+        const allowedModels = {};
+        form.querySelectorAll('input.plan-model:checked').forEach((cb) => {
+            (allowedModels[cb.dataset.provider] = allowedModels[cb.dataset.provider] || []).push(cb.value);
+        });
         const payload = {
             name: (form.elements['name'].value || '').trim(),
             price: parseFloat(form.elements['price'].value || '0'),
@@ -260,6 +302,7 @@ $plans = $plansApi->findAll();
             durationDays: parseInt(form.elements['durationDays'].value || '30', 10),
             monthlyRequestCap: parseInt(form.elements['monthlyRequestCap'].value || '0', 10),
             providers: providers,
+            allowedModels: allowedModels,
             description: form.elements['description'].value || '',
             active: form.elements['active'].checked,
             sortOrder: parseInt(form.elements['sortOrder'].value || '0', 10),

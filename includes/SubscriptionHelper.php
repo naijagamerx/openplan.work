@@ -309,22 +309,51 @@ if (!function_exists('sharedModelAllowList')) {
      * Models a subscriber may run on the platform key for $provider: the plan's own
      * `allowedModels[$provider]` list when the plan sets one, otherwise the models
      * the admin enabled for the shared keys. Empty means none are allowed.
+     * A plan's list never reaches past the shared list: a model the admin later
+     * disables under Shared AI Keys stops working for every plan at once.
      */
     function sharedModelAllowList(?array $subscription, string $provider): array {
         if (!$subscription) {
             return [];
         }
-        $planList = $subscription['allowedModels'][$provider] ?? null;
-        if (is_array($planList) && $planList !== []) {
-            return array_values(array_filter(array_map('strval', $planList), fn($id) => $id !== ''));
-        }
         require_once __DIR__ . '/AISharedKeysAPI.php';
         try {
-            return (new AISharedKeysAPI())->getSharedModelIds($provider);
+            $shared = (new AISharedKeysAPI())->getSharedModelIds($provider);
         } catch (Throwable $e) {
             error_log('sharedModelAllowList failed: ' . $e->getMessage());
             return [];
         }
+        $planList = $subscription['allowedModels'][$provider] ?? null;
+        if (is_array($planList) && $planList !== []) {
+            $planList = array_values(array_filter(array_map('strval', $planList), fn($id) => $id !== ''));
+            return array_values(array_intersect($planList, $shared));
+        }
+        return $shared;
+    }
+}
+
+if (!function_exists('planSharedModels')) {
+    /**
+     * Shared model records (modelId, displayName, isDefault) this subscriber may
+     * pick for $provider, in the admin's order. Used to fill model dropdowns, so a
+     * plan user is never offered a model the server would refuse.
+     */
+    function planSharedModels(?array $subscription, string $provider): array {
+        if (!$subscription || !subscriptionUnlocksProvider($subscription, $provider)) {
+            return [];
+        }
+        $allowed = sharedModelAllowList($subscription, $provider);
+        if ($allowed === []) {
+            return [];
+        }
+        require_once __DIR__ . '/AISharedKeysAPI.php';
+        try {
+            $models = (new AISharedKeysAPI())->getSharedModels($provider);
+        } catch (Throwable $e) {
+            error_log('planSharedModels failed: ' . $e->getMessage());
+            return [];
+        }
+        return array_values(array_filter($models, fn($m) => in_array((string)($m['modelId'] ?? ''), $allowed, true)));
     }
 }
 

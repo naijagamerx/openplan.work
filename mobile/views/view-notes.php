@@ -24,8 +24,18 @@ $hasOpenRouterKey = !empty($config['openrouterApiKey']);
 $hasAnyKey = $hasGroqKey || $hasOpenRouterKey;
 
 // Filter enabled models
-$groqModels = array_filter($models['groq'] ?? [], fn($m) => $m['enabled']);
-$openRouterModels = array_filter($models['openrouter'] ?? [], fn($m) => $m['enabled']);
+$groqModels = array_filter($models['groq'] ?? [], fn($m) => $m['enabled'] ?? true);
+$openRouterModels = array_filter($models['openrouter'] ?? [], fn($m) => $m['enabled'] ?? true);
+
+// A plan holder on the platform keys "has AI" and is offered only the models
+// their plan allows, the same rule as the AI assistant.
+require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+$notesPlanSub = getActiveSubscription(Auth::userId() ?? '');
+if ($notesPlanSub !== null && userUsesSharedKeys(is_array($config) ? $config : [], $notesPlanSub)) {
+    $groqModels = planSharedModels($notesPlanSub, 'groq');
+    $openRouterModels = planSharedModels($notesPlanSub, 'openrouter');
+    $hasAnyKey = $groqModels !== [] || $openRouterModels !== [];
+}
 
 // Fallback timeAgo function if not already defined
 if (!function_exists('timeAgo')) {

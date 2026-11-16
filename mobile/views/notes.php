@@ -30,8 +30,18 @@ $hasOpenRouterKey = !empty($config['openrouterApiKey']);
 $hasAnyKey = $hasGroqKey || $hasOpenRouterKey;
 
 // Filter enabled models
-$groqModels = array_filter($models['groq'] ?? [], fn($m) => $m['enabled']);
-$openRouterModels = array_filter($models['openrouter'] ?? [], fn($m) => $m['enabled']);
+$groqModels = array_filter($models['groq'] ?? [], fn($m) => $m['enabled'] ?? true);
+$openRouterModels = array_filter($models['openrouter'] ?? [], fn($m) => $m['enabled'] ?? true);
+
+// A plan holder on the platform keys "has AI" and is offered only the models
+// their plan allows, the same rule as the AI assistant.
+require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+$notesPlanSub = getActiveSubscription(Auth::userId() ?? '');
+if ($notesPlanSub !== null && userUsesSharedKeys(is_array($config) ? $config : [], $notesPlanSub)) {
+    $groqModels = planSharedModels($notesPlanSub, 'groq');
+    $openRouterModels = planSharedModels($notesPlanSub, 'openrouter');
+    $hasAnyKey = $groqModels !== [] || $openRouterModels !== [];
+}
 
 $notesAPI = new NotesAPI($db, 'notes');
 
@@ -637,9 +647,13 @@ async function generateNoteWithAI() {
             },
             body: JSON.stringify({ prompt, provider, model, csrf_token: CSRF_TOKEN })
         });
-        const result = await response.json();
+        const result = await response.json().catch(() => ({}));
         if (!result.success) {
-            alert('Generation failed: ' + (result.error || 'Unknown error'));
+            // Errors arrive as {error: {code, message}}; show the message, not "[object Object]".
+            const reason = (result.error && typeof result.error === 'object')
+                ? (result.error.message || 'Unknown error')
+                : (result.error || ('HTTP ' + response.status));
+            alert('Generation failed: ' + reason);
             return;
         }
 

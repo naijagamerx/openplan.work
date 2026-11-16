@@ -17,9 +17,14 @@ if (empty($masterPassword)) {
     </body></html>');
 }
 
+require_once INCLUDES_PATH . '/SubscriptionHelper.php';
 try {
     $db = new Database($masterPassword, Auth::userId());
     $config = $db->load('config');
+    // Effective "use platform keys" value from the global subscription (in memory
+    // only), the same as the desktop assistant. Without it a plan holder who never
+    // touched the Settings toggle was treated as "own keys" here.
+    $config = applyEffectiveSharedKeyFlag(is_array($config) ? $config : [], Auth::userId());
     $projects = $db->load('projects');
     $modelsLoad = $db->safeLoad('models');
     $models = $modelsLoad['success'] ? $modelsLoad['data'] : [];
@@ -36,16 +41,14 @@ $hasOllama         = !empty($models['ollama']);
 // `$hasAnyKey` is finalised below once we know whether the user is on shared
 // admin keys with an active subscription.
 
-require_once INCLUDES_PATH . '/SubscriptionHelper.php';
 $aiUseShared = !empty($config['useAdminSharedAiKeys']);
 $aiActiveSub = $aiUseShared ? getActiveSubscription(Auth::userId() ?? '') : null;
 
 if ($aiUseShared) {
-    require_once INCLUDES_PATH . '/AISharedKeysAPI.php';
-    $sharedKeysApi    = new AISharedKeysAPI();
-    $groqModels       = $sharedKeysApi->getSharedModels('groq');
-    $openRouterModels = $sharedKeysApi->getSharedModels('openrouter');
-    $geminiModels     = $sharedKeysApi->getSharedModels('gemini');
+    // Only the models this plan may run on the platform keys (plan allow-list).
+    $groqModels       = planSharedModels($aiActiveSub, 'groq');
+    $openRouterModels = planSharedModels($aiActiveSub, 'openrouter');
+    $geminiModels     = planSharedModels($aiActiveSub, 'gemini');
     $ollamaModels     = [];
 } else {
     // Own-keys path: only render models curated in ?page=model-settings.

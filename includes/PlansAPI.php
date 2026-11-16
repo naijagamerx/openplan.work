@@ -11,6 +11,7 @@ class PlansAPI extends BaseAPI {
             'durationDays',
             'providers',
             'monthlyRequestCap',
+            'allowedModels',
             'description',
             'active',
             'sortOrder',
@@ -28,6 +29,7 @@ class PlansAPI extends BaseAPI {
             throw new Exception('A plan must include at least one AI provider');
         }
         $data['monthlyRequestCap'] = max(0, (int)($data['monthlyRequestCap'] ?? 0));
+        $data['allowedModels'] = $this->normalizeAllowedModels($data['allowedModels'] ?? []);
         $data['durationDays'] = max(1, (int)($data['durationDays'] ?? 30));
         $data['price'] = round((float)($data['price'] ?? 0), 2);
         $data['currency'] = strtoupper(trim((string)($data['currency'] ?? 'USD'))) ?: 'USD';
@@ -47,6 +49,9 @@ class PlansAPI extends BaseAPI {
         }
         if (isset($data['monthlyRequestCap'])) {
             $data['monthlyRequestCap'] = max(0, (int)$data['monthlyRequestCap']);
+        }
+        if (array_key_exists('allowedModels', $data)) {
+            $data['allowedModels'] = $this->normalizeAllowedModels($data['allowedModels']);
         }
         if (isset($data['durationDays'])) {
             $data['durationDays'] = max(1, (int)$data['durationDays']);
@@ -80,6 +85,36 @@ class PlansAPI extends BaseAPI {
             return strcasecmp((string)($a['name'] ?? ''), (string)($b['name'] ?? ''));
         });
         return $plans;
+    }
+
+    /**
+     * Which models this plan may run on the platform's shared keys, per provider:
+     * {"groq": ["llama-3.1-8b-instant", ...], ...}. A provider with no list (or an
+     * empty one) allows every model the admin enabled under Shared AI Keys.
+     * Stored as an object so an empty value stays {} in JSON.
+     */
+    private function normalizeAllowedModels($value): array {
+        if (!is_array($value)) {
+            return [];
+        }
+        $clean = [];
+        foreach (['groq', 'openrouter', 'gemini', 'ollama'] as $provider) {
+            $list = $value[$provider] ?? null;
+            if (!is_array($list)) {
+                continue;
+            }
+            $ids = [];
+            foreach ($list as $id) {
+                $id = trim((string)$id);
+                if ($id !== '' && strlen($id) <= 200 && preg_match('/^[A-Za-z0-9._:\/@+-]+$/', $id) && !in_array($id, $ids, true)) {
+                    $ids[] = $id;
+                }
+            }
+            if ($ids !== []) {
+                $clean[$provider] = $ids;
+            }
+        }
+        return $clean;
     }
 
     private function normalizeProviders($value): array {
