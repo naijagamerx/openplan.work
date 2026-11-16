@@ -1241,14 +1241,29 @@ PROMPT;
      * keeps the original message). Never throws.
      */
     private function polishWithGroq(string $original, array $completedActions): string {
-        $groqKey = $this->config['groqApiKey'] ?? '';
-        if (empty($groqKey) || empty($original)) return '';
+        if (empty($original)) return '';
+        // Same key path as every other call: on the platform key this checks the
+        // plan's monthly cap and marks the message for usage counting.
+        try {
+            $resolved = $this->resolveProviderApiKey('groq');
+        } catch (APIException $e) {
+            return ''; // over quota: skip the optional polish, keep the original reply
+        }
+        $groqKey = $resolved['key'] ?? '';
+        if (empty($groqKey)) return '';
 
         // Pick the best Groq chat model available to the user. Prefer
         // llama-3.3-70b-versatile (12K TPM, strong writer), fall back to
         // gemma2-9b-it (15K TPM, fast), then gpt-oss-120b.
-        $models = $this->db->load('models') ?? [];
-        $groqModels = $models['groq'] ?? [];
+        // On the platform key only the plan's Groq models are candidates.
+        if (!empty($resolved['shared'])) {
+            require_once __DIR__ . '/SubscriptionHelper.php';
+            $planIds = sharedModelAllowList(getActiveSubscription(Auth::userId() ?? ''), 'groq');
+            $groqModels = array_map(fn($id) => ['modelId' => $id, 'enabled' => true], $planIds);
+        } else {
+            $models = $this->db->load('models') ?? [];
+            $groqModels = $models['groq'] ?? [];
+        }
         $preferred = ['llama-3.3-70b-versatile', 'gemma2-9b-it', 'openai/gpt-oss-120b'];
         $modelId = '';
         foreach ($preferred as $candidate) {
