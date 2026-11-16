@@ -3,6 +3,9 @@
 try {
     $db = new Database(getMasterPassword(), Auth::userId());
     $config = $db->load('config');
+    // Effective "use platform keys" value from the global subscription (in memory only).
+    require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+    $config = applyEffectiveSharedKeyFlag($config, Auth::userId());
     $projects = $db->load('projects');
     $modelsLoad = $db->safeLoad('models');
     $models = $modelsLoad['success'] ? $modelsLoad['data'] : [];

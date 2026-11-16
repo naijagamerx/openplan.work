@@ -45,6 +45,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
 
             case 'ai-quota':
                 $config['useAdminSharedAiKeys'] = isset($_POST['useAdminSharedAiKeys']);
+                // When the choice was made: an opt-out only applies to the plan active at that time.
+                $config['useAdminSharedAiKeysSetAt'] = date('c');
                 $db->save('config', $config);
                 $success = 'AI quota settings saved';
                 break;
@@ -256,7 +258,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
     <?php endif; ?>
 
     <!-- API Keys -->
-    <?php if (!empty($config['useAdminSharedAiKeys'])): ?>
+    <?php
+    require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+    $effectiveSharedKeys = userUsesSharedKeys($config, getActiveSubscription(Auth::userId() ?? ''));
+    ?>
+    <?php if ($effectiveSharedKeys): ?>
     <div class="settings-section bg-blue-50 border border-blue-200 rounded-xl p-5 text-sm text-blue-900" data-ss="ai-keys" data-ss-label="AI API Keys">
         <p class="font-semibold mb-1">Using shared platform AI keys</p>
         <p>Your own provider API keys are hidden because they are not in use. To paste your own keys, toggle <em>Shared Admin Keys</em> off in the section below.</p>
@@ -334,7 +340,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
     $usageTotal = (int)($usage['totalRequests'] ?? 0);
     $cap = (int)($activeSub['monthlyRequestCap'] ?? 0);
     $usagePct = ($cap > 0) ? min(100, ($usageTotal / $cap) * 100) : 0;
-    $useShared = !empty($config['useAdminSharedAiKeys']);
+    $useShared = userUsesSharedKeys($config, $activeSub);
     ?>
     <div class="settings-section bg-white rounded-xl border border-gray-200" data-ss="ai-quota" data-ss-label="AI Quota">
         <div class="p-5 border-b border-gray-200">

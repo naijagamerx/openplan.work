@@ -29,6 +29,9 @@ session_write_close();
 $masterPassword = getMasterPassword();
 $db = new Database($masterPassword, Auth::userId());
 $config = $db->load('config', true);
+// Effective "use platform keys" value from the global subscription (in memory only).
+require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+$config = applyEffectiveSharedKeyFlag($config, Auth::userId());
 
 // Shared-key overlay: if the user opted into platform AI and has an active
 // subscription, copy the admin's shared key for each unlocked provider into
@@ -91,8 +94,10 @@ try {
                 if (!$tierSub) {
                     errorResponse('No active subscription. Buy a plan to use platform AI keys.', 403);
                 }
-                if (!subscriptionUnlocksProvider($tierSub, $effectiveProvider)) {
-                    errorResponse('Your plan does not include the ' . $effectiveProvider . ' provider. Upgrade to access it.', 403);
+                $ownKeyField = ['groq' => 'groqApiKey', 'openrouter' => 'openrouterApiKey', 'gemini' => 'geminiApiKey'][$effectiveProvider] ?? null;
+                if (!subscriptionUnlocksProvider($tierSub, $effectiveProvider) && $ownKeyField !== null && empty($config[$ownKeyField])) {
+                    // Not in the plan and no key of their own for it (their own key is still allowed).
+                    errorResponse('Your plan does not include the ' . $effectiveProvider . ' provider. Upgrade, or add your own ' . $effectiveProvider . ' key in Settings.', 403);
                 }
             }
 
@@ -114,12 +119,11 @@ try {
                     $body['outputLength'] ?? 'normal',
                     !empty($body['smartMode'])
                 );
-                if (!empty($config['useAdminSharedAiKeys'])) {
-                    $countedProvider = $body['provider'] ?? $provider;
-                    $countedUserId = Auth::userId() ?? '';
-                    if ($countedUserId !== '' && !empty($countedProvider)) {
-                        incrementUsage($countedUserId, $countedProvider);
-                    }
+                // One request per user message, and only when a platform key was used.
+                $countedProvider = $agent->sharedKeyProviderUsed();
+                $countedUserId = Auth::userId() ?? '';
+                if ($countedProvider !== null && $countedUserId !== '') {
+                    incrementUsage($countedUserId, $countedProvider);
                 }
                 successResponse($result);
             } catch (Exception $e) {

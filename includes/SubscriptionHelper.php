@@ -61,6 +61,9 @@ if (!function_exists('getActiveSubscription')) {
                         if (isset($plan['monthlyRequestCap'])) {
                             $sub['monthlyRequestCap'] = (int)$plan['monthlyRequestCap'];
                         }
+                        if (isset($plan['allowedModels']) && is_array($plan['allowedModels'])) {
+                            $sub['allowedModels'] = $plan['allowedModels'];
+                        }
                         break;
                     }
                 } catch (Exception $e) {
@@ -198,6 +201,151 @@ if (!function_exists('overQuota')) {
         }
         $usage = getMonthlyUsage($userId);
         return ((int)($usage['totalRequests'] ?? 0)) >= $cap;
+    }
+}
+
+if (!function_exists('userUsesSharedKeys')) {
+    /**
+     * Whether this user's AI calls run on the platform's shared keys.
+     *
+     * Decided from the GLOBAL subscription record because a plan can be activated
+     * without the buyer's session (admin approval, PayFast notification), and no
+     * other session can open the buyer's encrypted config. While a subscription
+     * is active the answer is yes, unless the user switched it off in Settings
+     * after that subscription started.
+     */
+    function userUsesSharedKeys(array $config, ?array $subscription): bool {
+        if (!$subscription) {
+            return false;
+        }
+        if (!array_key_exists('useAdminSharedAiKeys', $config) || !empty($config['useAdminSharedAiKeys'])) {
+            return true;
+        }
+        $optedOutAt = strtotime((string)($config['useAdminSharedAiKeysSetAt'] ?? '')) ?: 0;
+        $startedAt = strtotime((string)($subscription['startsAt'] ?? $subscription['createdAt'] ?? '')) ?: 0;
+        return $optedOutAt < $startedAt;
+    }
+}
+
+if (!function_exists('applyEffectiveSharedKeyFlag')) {
+    /**
+     * Returns $config with useAdminSharedAiKeys set to its effective value.
+     * For use in memory only: never save the returned array.
+     */
+    function applyEffectiveSharedKeyFlag(array $config, ?string $userId): array {
+        $config['useAdminSharedAiKeys'] = userUsesSharedKeys($config, $userId ? getActiveSubscription($userId) : null);
+        return $config;
+    }
+}
+
+if (!function_exists('saas_lockSubscriptions')) {
+    /**
+     * Exclusive lock for a load-modify-save of the global subscriptions file.
+     * Database::save() only locks the write itself, so two writers (a payment
+     * notification and a page clearing a notice) could otherwise lose an update.
+     * Pass the handle to saas_unlockSubscriptions() in a finally block.
+     */
+    function saas_lockSubscriptions() {
+        $handle = @fopen(DATA_PATH . '/subscriptions.lock', 'c');
+        if ($handle !== false) {
+            flock($handle, LOCK_EX);
+        }
+        return $handle;
+    }
+
+    function saas_unlockSubscriptions($handle): void {
+        if ($handle !== false) {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
+    }
+}
+
+if (!function_exists('consumeSubscriptionNotice')) {
+    /**
+     * One-shot "your plan is active" notice, set on the global subscription when
+     * a payment activates or extends it. Returns it once, then clears it.
+     */
+    function consumeSubscriptionNotice(?string $userId): ?array {
+        if (!$userId) {
+            return null;
+        }
+        $lock = saas_lockSubscriptions();
+        try {
+            $db = saas_globalDatabase();
+            $subs = $db->load('subscriptions', true);
+            foreach ($subs as $i => $sub) {
+                if (($sub['userId'] ?? '') !== $userId || empty($sub['noticePending'])) {
+                    continue;
+                }
+                $subs[$i]['noticePending'] = false;
+                $db->save('subscriptions', $subs);
+                return [
+                    'planName' => (string)($sub['planSnapshot']['name'] ?? 'Your plan'),
+                    'expiresAt' => (string)($sub['expiresAt'] ?? ''),
+                    'providers' => is_array($sub['providers'] ?? null) ? $sub['providers'] : [],
+                ];
+            }
+        } catch (Throwable $e) {
+            error_log('consumeSubscriptionNotice failed: ' . $e->getMessage());
+        } finally {
+            saas_unlockSubscriptions($lock);
+        }
+        return null;
+    }
+}
+
+if (!function_exists('platformKeyCovers')) {
+    /** True when calls to $provider for this subscriber are paid by the platform's shared key. */
+    function platformKeyCovers(?array $subscription, string $provider): bool {
+        return $subscription !== null
+            && subscriptionUnlocksProvider($subscription, $provider)
+            && getAdminSharedKey($provider) !== null;
+    }
+}
+
+if (!function_exists('sharedModelAllowList')) {
+    /**
+     * Models a subscriber may run on the platform key for $provider: the plan's own
+     * `allowedModels[$provider]` list when the plan sets one, otherwise the models
+     * the admin enabled for the shared keys. Empty means none are allowed.
+     */
+    function sharedModelAllowList(?array $subscription, string $provider): array {
+        if (!$subscription) {
+            return [];
+        }
+        $planList = $subscription['allowedModels'][$provider] ?? null;
+        if (is_array($planList) && $planList !== []) {
+            return array_values(array_filter(array_map('strval', $planList), fn($id) => $id !== ''));
+        }
+        require_once __DIR__ . '/AISharedKeysAPI.php';
+        try {
+            return (new AISharedKeysAPI())->getSharedModelIds($provider);
+        } catch (Throwable $e) {
+            error_log('sharedModelAllowList failed: ' . $e->getMessage());
+            return [];
+        }
+    }
+}
+
+if (!function_exists('choosePlanModel')) {
+    /**
+     * The model to run on the platform key for one request.
+     * Returns [modelId, null] on success or [null, message] when it must be refused.
+     * $autoRequested: the client asked for "auto"/no model, so the plan's first model may be used.
+     */
+    function choosePlanModel(array $subscription, string $provider, ?string $model, bool $autoRequested): array {
+        $planModels = sharedModelAllowList($subscription, $provider);
+        if ($planModels === []) {
+            return [null, 'No ' . $provider . ' models are enabled for plan AI yet. Ask the admin, or add your own key in Settings.'];
+        }
+        if (in_array((string)$model, $planModels, true)) {
+            return [(string)$model, null];
+        }
+        if ($autoRequested) {
+            return [$planModels[0], null];
+        }
+        return [null, 'The model ' . $model . ' is not included in your plan. Choose a model from the list, or add your own API key in Settings to use it.'];
     }
 }
 

@@ -13,6 +13,8 @@ class AIAgent {
     private ?ConversationMemory $memory;
     private ?FunctionExecutor $executor;
     private RateLimiter $rateLimiter;
+    /** Provider whose platform (shared) key served this request, if any. Usage is counted once per message by the endpoint. */
+    private ?string $sharedKeyProviderUsed = null;
 
     /**
      * Maximum reasoning loops per chat() invocation. Each loop = one round-trip
@@ -332,12 +334,12 @@ PROMPT;
         if ($forceModel === 'auto') {
             $needsTools = $this->looksLikeActionRequest($message);
             $capability = $needsTools ? 'function_calling' : null;
-            $modelCandidates = $this->getAllCapableModels($capability, $provider);
+            $modelCandidates = $this->limitCandidatesToPlan($this->getAllCapableModels($capability, $provider), true, $provider, $capability);
             // Fallback: if user wanted an action but no function-capable model exists,
             // fall back to any enabled model. The chat-only deflection prompt above
             // will make Groq tell the user to switch providers.
             if ($needsTools && empty($modelCandidates)) {
-                $modelCandidates = $this->getAllCapableModels(null, $provider);
+                $modelCandidates = $this->limitCandidatesToPlan($this->getAllCapableModels(null, $provider), true, $provider, null);
             }
             if (empty($modelCandidates)) {
                 throw new APIException(
@@ -352,7 +354,12 @@ PROMPT;
             // providers so downstream tool dispatch knows to skip the functions array.
             $targetModel = $forceModel ?? $this->getModelForProvider($provider);
             $candidateCapability = self::isChatOnlyProvider($provider) ? 'chat' : 'both';
-            $modelCandidates = [['provider' => $provider, 'modelId' => $targetModel, 'capability' => $candidateCapability]];
+            $modelCandidates = $this->limitCandidatesToPlan(
+                [['provider' => $provider, 'modelId' => $targetModel, 'capability' => $candidateCapability]],
+                false,
+                $provider,
+                null
+            );
         }
 
         // Pre-flight token-budget check (chat-only providers only).
@@ -736,6 +743,14 @@ PROMPT;
     /**
      * Create an empty conversation and return its id for immediate UI polling.
      */
+    /**
+     * The provider whose platform key was used during this request, or null when
+     * the user's own key (or no AI call) was used.
+     */
+    public function sharedKeyProviderUsed(): ?string {
+        return $this->sharedKeyProviderUsed;
+    }
+
     public function startConversation(string $titleSeed = 'New Conversation'): string {
         $memory = new ConversationMemory($this->db);
         $conversationId = $memory->createConversation($titleSeed);
@@ -1405,7 +1420,9 @@ PROMPT;
             }
             $adminKey = getAdminSharedKey($provider);
             if (!empty($adminKey)) {
-                incrementUsage($userId, $provider);
+                // Not counted here: the agent loop can resolve a key several times
+                // per message. The endpoint counts once via sharedKeyProviderUsed().
+                $this->sharedKeyProviderUsed ??= $provider;
                 return ['key' => $adminKey, 'shared' => true];
             }
         }
@@ -1508,6 +1525,79 @@ PROMPT;
      * @param string|null $preferredProvider Prefer this provider first
      * @return array Array of ['provider' => x, 'modelId' => y, 'capability' => z]
      */
+    /**
+     * Keep paid-plan users inside their plan's models on the platform key.
+     *
+     * A candidate whose provider is paid by the platform key must use a model on
+     * the plan's allow-list (sharedModelAllowList). Candidates on the user's own key
+     * pass through. In auto mode the plan's models are added as candidates too, so a
+     * subscriber with no models of their own still gets answers. An explicit model
+     * that is not allowed is refused instead of silently swapped.
+     */
+    private function limitCandidatesToPlan(array $candidates, bool $auto, string $preferredProvider, ?string $requiredCapability): array {
+        if (empty($this->config['useAdminSharedAiKeys'])) {
+            return $candidates;
+        }
+        require_once __DIR__ . '/SubscriptionHelper.php';
+        $sub = getActiveSubscription(Auth::userId() ?? '');
+        if (!$sub) {
+            return $candidates;
+        }
+
+        $kept = [];
+        $seen = [];
+        $refused = null;
+        foreach ($candidates as $c) {
+            $p = (string)($c['provider'] ?? '');
+            $id = (string)($c['modelId'] ?? '');
+            $add = null;
+            if (!platformKeyCovers($sub, $p)) {
+                $add = $c; // runs on the user's own key
+            } elseif ($id === '' && !$auto) {
+                $first = sharedModelAllowList($sub, $p)[0] ?? null; // nothing chosen: use the plan's first model
+                if ($first !== null) {
+                    $add = ['provider' => $p, 'modelId' => $first, 'capability' => $c['capability'] ?? 'both'];
+                }
+            } elseif (in_array($id, sharedModelAllowList($sub, $p), true)) {
+                $add = $c;
+            } else {
+                $refused ??= $id;
+            }
+            if ($add !== null) {
+                $kept[] = $add;
+                $seen[$p . '|' . $add['modelId']] = true;
+            }
+        }
+
+        if ($auto) {
+            $providers = is_array($sub['providers'] ?? null) ? $sub['providers'] : [];
+            usort($providers, fn($a, $b) => ($b === $preferredProvider) <=> ($a === $preferredProvider));
+            foreach ($providers as $p) {
+                if (!is_string($p) || !platformKeyCovers($sub, $p)) {
+                    continue;
+                }
+                $capability = self::isChatOnlyProvider($p) ? 'chat' : 'both';
+                if ($requiredCapability !== null && $capability !== 'both' && $capability !== $requiredCapability) {
+                    continue;
+                }
+                foreach (sharedModelAllowList($sub, $p) as $id) {
+                    if (!isset($seen[$p . '|' . $id])) {
+                        $seen[$p . '|' . $id] = true;
+                        $kept[] = ['provider' => $p, 'modelId' => $id, 'capability' => $capability];
+                    }
+                }
+            }
+        } elseif ($kept === [] && $refused !== null) {
+            throw new APIException(
+                "The model {$refused} is not included in your plan. Choose a model from the list, or add your own API key in Settings to use it.",
+                'MODEL_NOT_IN_PLAN',
+                403
+            );
+        }
+
+        return $kept;
+    }
+
     private function getAllCapableModels(?string $requiredCapability = null, ?string $preferredProvider = null): array {
         $models = $this->db->load('models') ?? [];
         $allModels = [];

@@ -49,18 +49,9 @@ $projects = $db->load('projects');
 $habits = $db->load('habits');
 $habitCompletions = $db->load('habit_completions');
 
-// One-shot payment-approval flash (written by PaymentsAPI::approve on the admin side).
-$paymentApprovalFlash = null;
-try {
-    $flashConfig = $db->load('config', false);
-    if (is_array($flashConfig) && !empty($flashConfig['paymentApprovalFlash'])) {
-        $paymentApprovalFlash = $flashConfig['paymentApprovalFlash'];
-        $flashConfig['paymentApprovalFlash'] = null;
-        $db->save('config', $flashConfig);
-    }
-} catch (Throwable $e) {
-    error_log('mobile paymentApprovalFlash read failed: ' . $e->getMessage());
-}
+// One-shot "plan active" notice, kept on the global subscription record.
+require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+$paymentApprovalFlash = consumeSubscriptionNotice(Auth::userId());
 
 // Admin-only alert counts surfaced as a banner.
 $adminAlerts = null;

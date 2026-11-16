@@ -12,17 +12,9 @@ if ($masterPassword === '') {
     try {
         $db = new Database($masterPassword, Auth::userId());
 
-        // Consume one-shot payment approval flash flag (written by PaymentsAPI::approve).
-        try {
-            $flashConfig = $db->load('config', false);
-            if (is_array($flashConfig) && !empty($flashConfig['paymentApprovalFlash'])) {
-                $paymentApprovalFlash = $flashConfig['paymentApprovalFlash'];
-                $flashConfig['paymentApprovalFlash'] = null;
-                $db->save('config', $flashConfig);
-            }
-        } catch (Throwable $e) {
-            error_log('paymentApprovalFlash read failed: ' . $e->getMessage());
-        }
+        // One-shot "plan active" notice, kept on the global subscription record.
+        require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+        $paymentApprovalFlash = consumeSubscriptionNotice(Auth::userId());
 
         // Check for login success to request notification permission
         $loginSuccess = isset($_GET['login']) && $_GET['login'] === 'success';

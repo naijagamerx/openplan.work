@@ -204,10 +204,10 @@ class PaymentsAPI {
         $payments[$idx]['subscriptionId'] = $subscription['id'];
         $this->db->save('payments', $payments);
 
-        $this->enableSharedKeysForUser(
-            $payments[$idx]['userId'] ?? '',
-            $subscription
-        );
+        // Platform AI keys and the "payment approved" notice now follow from the
+        // global subscription record (see userUsesSharedKeys / consumeSubscriptionNotice).
+        // Nothing here may write to the buyer's own encrypted files: this runs in the
+        // admin's session, whose key cannot open them.
 
         if (class_exists('Audit')) {
             try {
@@ -221,33 +221,6 @@ class PaymentsAPI {
         $this->sendEmailToUser($payments[$idx]['userId'] ?? '', 'sendPaymentApprovedEmail', $payments[$idx]);
 
         return ['payment' => $payments[$idx], 'subscription' => $subscription];
-    }
-
-    private function enableSharedKeysForUser(string $userId, array $subscription): void {
-        if ($userId === '') {
-            return;
-        }
-        $masterPassword = getMasterPassword();
-        if ($masterPassword === '') {
-            return;
-        }
-        try {
-            $userDb = new Database($masterPassword, $userId);
-            $config = $userDb->load('config', false);
-            if (!is_array($config)) {
-                $config = [];
-            }
-            $config['useAdminSharedAiKeys'] = true;
-            $config['paymentApprovalFlash'] = [
-                'planName'  => (string)($subscription['planSnapshot']['name'] ?? 'Your plan'),
-                'expiresAt' => (string)($subscription['expiresAt'] ?? ''),
-                'providers' => is_array($subscription['providers'] ?? null) ? $subscription['providers'] : [],
-                'at'        => date('c')
-            ];
-            $userDb->save('config', $config);
-        } catch (Throwable $e) {
-            error_log('enableSharedKeysForUser failed: ' . $e->getMessage());
-        }
     }
 
     public function reject(string $paymentId, string $adminId, string $reason): array {
@@ -336,6 +309,16 @@ class PaymentsAPI {
     }
 
     private function upsertSubscription(array $payment): array {
+        require_once __DIR__ . '/SubscriptionHelper.php';
+        $lock = saas_lockSubscriptions();
+        try {
+            return $this->upsertSubscriptionLocked($payment);
+        } finally {
+            saas_unlockSubscriptions($lock);
+        }
+    }
+
+    private function upsertSubscriptionLocked(array $payment): array {
         $userId = $payment['userId'];
         $snapshot = $payment['planSnapshot'] ?? [];
         $durationDays = max(1, (int)($snapshot['durationDays'] ?? 30));
@@ -366,6 +349,7 @@ class PaymentsAPI {
             $subs[$existingIdx]['monthlyRequestCap'] = (int)($snapshot['monthlyRequestCap'] ?? 0);
             $subs[$existingIdx]['paymentId'] = $payment['id'];
             $subs[$existingIdx]['updatedAt'] = $nowIso;
+            $subs[$existingIdx]['noticePending'] = true;
             $this->db->save('subscriptions', $subs);
             return $subs[$existingIdx];
         }
@@ -382,6 +366,7 @@ class PaymentsAPI {
             'cancelledAt' => null,
             'providers' => $snapshot['providers'] ?? [],
             'monthlyRequestCap' => (int)($snapshot['monthlyRequestCap'] ?? 0),
+            'noticePending' => true,
             'createdAt' => $nowIso,
             'updatedAt' => $nowIso
         ];

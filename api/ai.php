@@ -281,6 +281,9 @@ if (!$apiLimit['allowed']) {
 
 // Resolve 'auto' model to the default or first enabled model for the provider
 // Models are stored as ['groq' => [...], 'openrouter' => [...], 'ollama' => [...], 'gemini' => [...]]
+// If none of the user's own models fits, $model stays 'auto': a paid plan may still
+// supply one on the platform key below, and the "not configured" error comes after that.
+$autoModelRequested = ($model === 'auto' || $model === null || $model === '');
 if ($model === 'auto' && !empty($provider)) {
     $allModels = $db->load('models') ?? [];
     $providerModels = $allModels[$provider] ?? [];
@@ -306,12 +309,13 @@ if ($model === 'auto' && !empty($provider)) {
 
     if ($resolvedModel) {
         $model = $resolvedModel;
-    } else {
-        errorResponse("No {$provider} model configured. Please configure a model in Model Settings.", 400, ERROR_VALIDATION);
     }
 }
 
 $config = $db->load('config', true);
+// Effective "use platform keys" value from the global subscription (in memory only).
+require_once INCLUDES_PATH . '/SubscriptionHelper.php';
+$config = applyEffectiveSharedKeyFlag($config, Auth::userId());
 
 $groqKey       = $config['groqApiKey'] ?? '';
 $openrouterKey = $config['openrouterApiKey'] ?? '';
@@ -343,22 +347,41 @@ if (empty($provider)) {
 // user's (likely empty) key with the admin's shared key for the remainder of
 // the request. This is the only place where the raw shared key is read on the
 // chat path.
+$usingSharedKey = false;
 if (!empty($config['useAdminSharedAiKeys'])) {
     require_once INCLUDES_PATH . '/SubscriptionHelper.php';
     $tierSub = getActiveSubscription(Auth::userId() ?? '');
-    if (!$tierSub) {
-        errorResponse('No active subscription. Buy a plan to use platform AI keys.', 403, 'NO_SUBSCRIPTION');
+    $sharedKey = ($tierSub && subscriptionUnlocksProvider($tierSub, $provider)) ? getAdminSharedKey($provider) : null;
+    // Actions that only save or list data never call a model, so quota and model rules don't apply to them.
+    $actionCallsModel = !in_array($action, ['import_tasks', 'save_prd', 'models', 'create_inventory_items', 'check_requirements'], true);
+    if (!empty($sharedKey) && $actionCallsModel) {
+        if (overQuota(Auth::userId() ?? '', $tierSub)) {
+            errorResponse('Monthly AI request quota reached for your plan. Upgrade, use your own API key, or wait for next month.', 429, 'QUOTA_EXCEEDED');
+        }
+        // The platform pays for this call, so the model must be one the plan allows.
+        [$planModel, $planModelError] = choosePlanModel($tierSub, $provider, $model, $autoModelRequested);
+        if ($planModelError !== null) {
+            errorResponse($planModelError, 403, 'MODEL_NOT_IN_PLAN');
+        }
+        $model = $planModel;
     }
-    if (!subscriptionUnlocksProvider($tierSub, $provider)) {
-        errorResponse('Your plan does not include the ' . $provider . ' provider. Upgrade to access it.', 403, 'PROVIDER_NOT_IN_PLAN');
-    }
-
-    $sharedKey = getAdminSharedKey($provider);
     if (!empty($sharedKey)) {
         if ($provider === 'groq')       { $groqKey = $sharedKey; }
         if ($provider === 'openrouter') { $openrouterKey = $sharedKey; }
         if ($provider === 'gemini')     { $geminiKey = $sharedKey; }
+        $usingSharedKey = true;
+    } elseif ($tierSub && !subscriptionUnlocksProvider($tierSub, $provider) && in_array($provider, ['groq', 'openrouter', 'gemini'], true)
+        && empty(['groq' => $groqKey, 'openrouter' => $openrouterKey, 'gemini' => $geminiKey][$provider])) {
+        // Not in the plan and no key of their own for it: say why instead of "key not configured".
+        errorResponse('Your plan does not include the ' . $provider . ' provider. Upgrade, or add your own ' . $provider . ' key in Settings.', 403, 'PROVIDER_NOT_IN_PLAN');
     }
+}
+// From here on the flag means "this request runs on a platform key", so usage is
+// only counted (aiCountSharedUsage) when the platform actually pays for the call.
+$config['useAdminSharedAiKeys'] = $usingSharedKey;
+
+if ($model === 'auto' && !empty($provider)) {
+    errorResponse("No {$provider} model configured. Please configure a model in Model Settings.", 400, ERROR_VALIDATION);
 }
 
 // Check API key / connectivity config
