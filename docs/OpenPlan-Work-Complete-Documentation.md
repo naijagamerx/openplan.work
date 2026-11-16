@@ -2,7 +2,7 @@
 
 **Version:** 1.0.0
 **Last Updated:** March 22, 2026
-**License:** MIT
+**License:** AGPL-3.0 (see [LICENSE](../LICENSE))
 
 ---
 
@@ -664,7 +664,7 @@ ini_set('display_errors', 1);
 
 ## License & Credits
 
-**License:** MIT
+**License:** GNU Affero General Public License v3.0 (AGPL-3.0). See [LICENSE](../LICENSE) and the License section of the [README](../README.md).
 **Author:** naijagamerx
 **Repository:** https://github.com/naijagamerx/openplan.work
 
