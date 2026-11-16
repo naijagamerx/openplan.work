@@ -5,6 +5,9 @@ require_once __DIR__ . '/../config.php';
 const POMODORO_SHARED_MUSIC_DIR = ROOT_PATH . '/assets/media/pomodoro';
 const POMODORO_LEGACY_MUSIC_DIR = DATA_PATH . '/uploads/pomodoro';
 const POMODORO_SHARED_MUSIC_METADATA = ROOT_PATH . '/assets/media/pomodoro/library.json';
+// Who uploaded each personal track. Kept server-side in data/ (web-blocked), because
+// the uploadedBy field on a user's own pomodoro_music records can be set by JSON import.
+const POMODORO_TRACK_OWNERS = DATA_PATH . '/pomodoro_track_owners.json';
 
 try {
     if (!Auth::check()) {
@@ -179,6 +182,7 @@ function handleMusicUpload(Database $db): void {
     $music[] = $record;
     $db->save('pomodoro_music', $music);
     setSharedTrackName($filename, $record['name']);
+    updateTrackOwners($filename, $record['uploadedBy']);
 
     echo json_encode(['success' => true, 'data' => $record]);
 }
@@ -210,6 +214,7 @@ function handleMusicDelete(Database $db, array $input): void {
         $filePath = resolveTrackFilePath($track);
         if ($filePath !== '' && is_file($filePath)) {
             unlink($filePath);
+            updateTrackOwners((string)($track['filename'] ?? ''), null);
         }
 
         array_splice($music, $index, 1);
@@ -221,14 +226,16 @@ function handleMusicDelete(Database $db, array $input): void {
     // Support deleting bundled/shared tracks discovered from shared folder.
     $bundledTrack = findBundledSharedTrackById($id);
     if ($bundledTrack && !empty($bundledTrack['filename'])) {
-        if (!Auth::isAdmin()) {
+        // Admins, or the uploader of a personal track whose own record was lost.
+        if (!canManageTrack($bundledTrack)) {
             http_response_code(403);
             echo json_encode(['success' => false, 'error' => ['code' => 'FORBIDDEN', 'message' => 'Shared tracks can only be deleted by admin']]);
             return;
         }
-        $filePath = POMODORO_SHARED_MUSIC_DIR . '/' . $bundledTrack['filename'];
-        if (is_file($filePath)) {
+        $filePath = trackPathInside(POMODORO_SHARED_MUSIC_DIR, (string)$bundledTrack['filename']);
+        if ($filePath !== '') {
             unlink($filePath);
+            updateTrackOwners((string)$bundledTrack['filename'], null);
             echo json_encode(['success' => true, 'data' => ['id' => $id]]);
             return;
         }
@@ -356,7 +363,8 @@ function normalizeAudioMime(string $mime, string $filename): string {
     if ($normalized === 'audio/x-m4a' || $normalized === 'video/mp4') {
         return 'audio/mp4';
     }
-    if ($normalized !== '') {
+    // The stored mime comes from the record; never send anything but a known audio type.
+    if (in_array($normalized, ['audio/mpeg', 'audio/wav', 'audio/mp4'], true)) {
         return $normalized;
     }
 
@@ -372,11 +380,16 @@ function normalizeAudioMime(string $mime, string $filename): string {
 
 function handleMusicRename(Database $db, array $input): void {
     $id = $input['id'] ?? '';
-    $name = trim($input['name'] ?? '');
+    $name = trim((string)($input['name'] ?? ''));
 
     if (!$id || !$name) {
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => ['code' => 'MISSING_PARAMS', 'message' => 'Track id and name required']]);
+        return;
+    }
+    $name = cleanTrackName($name);
+    if ($name === null) {
+        rejectTrackName();
         return;
     }
 
@@ -399,7 +412,7 @@ function handleMusicRename(Database $db, array $input): void {
     if (!$found) {
         $sharedTrack = findBundledSharedTrackById($id);
         if ($sharedTrack) {
-            if (!Auth::isAdmin()) {
+            if (!canManageTrack($sharedTrack)) {
                 http_response_code(403);
                 echo json_encode(['success' => false, 'error' => ['code' => 'FORBIDDEN', 'message' => 'Shared tracks can only be renamed by admin']]);
                 return;
@@ -434,32 +447,54 @@ function ensurePomodoroMusicDirectories(): void {
     }
 }
 
-function resolveTrackFilePath(array $track): string {
-    $filename = (string)($track['filename'] ?? '');
-    if ($filename === '') {
+/**
+ * Track filenames come from records a user can import, so they are only trusted
+ * when they are a plain audio filename: no folders, no "..", no leading dot.
+ */
+function isSafeTrackFilename(string $filename): bool {
+    return !str_contains($filename, '..')
+        && preg_match('/^[A-Za-z0-9][A-Za-z0-9 _.-]{0,127}\.(mp3|wav|m4a)$/i', $filename) === 1;
+}
+
+/** Full path of $filename inside $dir, or '' unless it is a real file that stays inside $dir. */
+function trackPathInside(string $dir, string $filename): string {
+    if (!isSafeTrackFilename($filename)) {
         return '';
     }
+    $base = realpath($dir);
+    $path = realpath($dir . '/' . $filename);
+    if ($base === false || $path === false || !is_file($path)) {
+        return '';
+    }
+    return str_starts_with($path, $base . DIRECTORY_SEPARATOR) ? $path : '';
+}
 
+/** Track names are shown in admin views; keep them to plain text. Returns null when invalid. */
+function cleanTrackName(string $name): ?string {
+    $name = trim($name);
+    if ($name === '' || mb_strlen($name) > 100 || preg_match('/[<>"\'`\\\\\x00-\x1F\x7F]/u', $name) === 1) {
+        return null;
+    }
+    return $name;
+}
+
+function rejectTrackName(): void {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => ['code' => 'INVALID_NAME', 'message' => 'Track name must be 1-100 characters and cannot contain quotes, backslashes or angle brackets']]);
+}
+
+function resolveTrackFilePath(array $track): string {
+    $filename = (string)($track['filename'] ?? '');
     $storage = strtolower(trim((string)($track['storage'] ?? '')));
-    if ($storage === 'legacy') {
-        $legacyPath = POMODORO_LEGACY_MUSIC_DIR . '/' . $filename;
-        if (is_file($legacyPath)) {
-            return $legacyPath;
-        }
-    } else {
-        $sharedPath = POMODORO_SHARED_MUSIC_DIR . '/' . $filename;
-        if (is_file($sharedPath)) {
-            return $sharedPath;
-        }
-    }
+    $dirs = $storage === 'legacy'
+        ? [POMODORO_LEGACY_MUSIC_DIR, POMODORO_SHARED_MUSIC_DIR]
+        : [POMODORO_SHARED_MUSIC_DIR, POMODORO_LEGACY_MUSIC_DIR];
 
-    $fallbackShared = POMODORO_SHARED_MUSIC_DIR . '/' . $filename;
-    if (is_file($fallbackShared)) {
-        return $fallbackShared;
-    }
-    $fallbackLegacy = POMODORO_LEGACY_MUSIC_DIR . '/' . $filename;
-    if (is_file($fallbackLegacy)) {
-        return $fallbackLegacy;
+    foreach ($dirs as $dir) {
+        $path = trackPathInside($dir, $filename);
+        if ($path !== '') {
+            return $path;
+        }
     }
 
     return '';
@@ -472,7 +507,8 @@ function migrateLegacyMusicToSharedDir(Database $db): void {
 
     foreach ($music as $i => $track) {
         $filename = (string)($track['filename'] ?? '');
-        if ($filename === '') {
+        // Never copy a file named by record data unless it is a plain audio filename.
+        if (!isSafeTrackFilename($filename)) {
             continue;
         }
         $legacyPath = POMODORO_LEGACY_MUSIC_DIR . '/' . $filename;
@@ -609,9 +645,14 @@ function handleSharedMusicUpload(): void {
         return;
     }
 
+    $displayName = trim((string)($_POST['name'] ?? ''));
+    if ($displayName !== '' && cleanTrackName($displayName) === null) {
+        rejectTrackName();
+        return;
+    }
+
     ensurePomodoroMusicDirectories();
     $baseName = preg_replace('/[^a-zA-Z0-9-_ ]/', '', pathinfo((string)$file['name'], PATHINFO_FILENAME));
-    $displayName = trim((string)($_POST['name'] ?? ''));
     $filename = uniqid('shared_', true);
     $filename = str_replace('.', '', $filename) . '.' . $allowed[$mime];
     $destination = POMODORO_SHARED_MUSIC_DIR . '/' . $filename;
@@ -656,10 +697,13 @@ function handleSharedMusicDelete(array $input): void {
     }
 
     $filename = (string)($track['filename'] ?? '');
-    $path = POMODORO_SHARED_MUSIC_DIR . '/' . $filename;
-    if (is_file($path)) {
-        unlink($path);
+    $path = trackPathInside(POMODORO_SHARED_MUSIC_DIR, $filename);
+    if ($path === '') {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'error' => ['code' => 'NOT_FOUND', 'message' => 'Track not found']]);
+        return;
     }
+    unlink($path);
     removeSharedTrackMetadata($filename);
 
     echo json_encode(['success' => true, 'data' => ['id' => $id]]);
@@ -671,6 +715,11 @@ function handleSharedMusicRename(array $input): void {
     if ($id === '' || $name === '') {
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => ['code' => 'MISSING_PARAMS', 'message' => 'Track id and name required']]);
+        return;
+    }
+    $name = cleanTrackName($name);
+    if ($name === null) {
+        rejectTrackName();
         return;
     }
 
@@ -747,16 +796,92 @@ function findFirstTrackById(array $tracks, string $id): ?array {
     return null;
 }
 
+/**
+ * A non-admin may manage a track only when it is a personal upload (pm_ prefix)
+ * and the server-side owner map says they uploaded it. The record's own
+ * uploadedBy is ignored: a user can write any value there through JSON import.
+ * Tracks uploaded before the owner map existed have no entry, so only an admin
+ * can delete or rename those.
+ */
 function canManageTrack(array $track): bool {
     if (Auth::isAdmin()) {
         return true;
     }
-    $ownerId = (string)($track['uploadedBy'] ?? '');
     $userId = (string)(Auth::userId() ?? '');
-    if ($ownerId === '' || $userId === '') {
+    $filename = (string)($track['filename'] ?? '');
+    if ($userId === '' || !str_starts_with($filename, 'pm_')) {
         return false;
     }
-    return hash_equals($ownerId, $userId);
+    $ownerId = loadTrackOwners()[$filename] ?? '';
+    return is_string($ownerId) && $ownerId !== '' && hash_equals($ownerId, $userId);
+}
+
+/**
+ * The owner map is guarded by a separate lock file: readers take a shared lock,
+ * the writer an exclusive one, and the writer replaces the map by writing a temp
+ * file and renaming it, so a reader never sees a half-written or empty map.
+ * The map is read once per request and cached.
+ */
+function trackOwnersLock(int $mode) {
+    $handle = @fopen(POMODORO_TRACK_OWNERS . '.lock', 'c');
+    if ($handle !== false) {
+        flock($handle, $mode);
+    }
+    return $handle;
+}
+
+function releaseTrackOwnersLock($handle): void {
+    if ($handle !== false) {
+        flock($handle, LOCK_UN);
+        fclose($handle);
+    }
+}
+
+function readTrackOwnersFile(): array {
+    $data = is_file(POMODORO_TRACK_OWNERS) ? json_decode((string)@file_get_contents(POMODORO_TRACK_OWNERS), true) : [];
+    return is_array($data) ? $data : [];
+}
+
+function loadTrackOwners(): array {
+    if (!isset($GLOBALS['__pomodoroTrackOwners'])) {
+        $lock = trackOwnersLock(LOCK_SH);
+        try {
+            $GLOBALS['__pomodoroTrackOwners'] = readTrackOwnersFile();
+        } finally {
+            releaseTrackOwnersLock($lock);
+        }
+    }
+    return $GLOBALS['__pomodoroTrackOwners'];
+}
+
+/** Set ($ownerId string) or remove ($ownerId null) the owner of $filename. */
+function updateTrackOwners(string $filename, ?string $ownerId): void {
+    if ($filename === '') {
+        return;
+    }
+    $lock = trackOwnersLock(LOCK_EX);
+    if ($lock === false) {
+        error_log('Pomodoro: cannot lock the track owner map (is data/ writable?)');
+        return;
+    }
+    try {
+        $owners = readTrackOwnersFile();
+        if ($ownerId === null || $ownerId === '') {
+            unset($owners[$filename]);
+        } else {
+            $owners[$filename] = $ownerId;
+        }
+        $tmp = POMODORO_TRACK_OWNERS . '.' . bin2hex(random_bytes(6)) . '.tmp';
+        $json = json_encode($owners, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if ($json === false || @file_put_contents($tmp, $json) === false || !@rename($tmp, POMODORO_TRACK_OWNERS)) {
+            @unlink($tmp);
+            error_log('Pomodoro: could not save the track owner map');
+            return;
+        }
+        $GLOBALS['__pomodoroTrackOwners'] = $owners;
+    } finally {
+        releaseTrackOwnersLock($lock);
+    }
 }
 
 function decorateTrackWithPermissions(array $track): array {

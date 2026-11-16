@@ -55,7 +55,20 @@ class Database {
         return new self($this->masterPassword, $userId);
     }
 
+    /**
+     * Collection names become file names, so they must be plain identifiers.
+     * Imported JSON keys reach save() directly; a key like "../../subscriptions"
+     * would otherwise write outside this database's directory.
+     */
+    public static function isValidCollectionName(string $collection): bool {
+        return strlen($collection) <= 64 && preg_match('/^[a-zA-Z0-9_-]+$/', $collection) === 1;
+    }
+
     protected function getFilePath(string $collection): string {
+        if (!self::isValidCollectionName($collection)) {
+            throw new InvalidArgumentException('Invalid collection name');
+        }
+
         if ($collection === 'users') {
             return DATA_PATH . '/users.json';
         }
@@ -290,9 +303,26 @@ class Database {
         return $export;
     }
 
+    /**
+     * Collections a per-user import must never write: account and login state,
+     * usage counters, and names that belong to the shared (global) store.
+     */
+    private const USER_IMPORT_BLOCKED = [
+        'users', 'key_check', 'sessions', 'rate_limits', 'scheduler_config', 'audit',
+        'ai_usage', 'admin_shared_keys', 'subscriptions', 'payments', 'payment_methods',
+        'plans', 'tickets', 'device_tokens', 'alexa_links',
+    ];
+
     public function importAll(array $data): bool {
+        // Validate everything first so a bad entry cannot leave a half-applied import.
         foreach ($data as $collection => $records) {
-            if ($collection === 'users' && $this->userId) {
+            if (!is_string($collection) || !self::isValidCollectionName($collection) || !is_array($records)) {
+                return false;
+            }
+        }
+
+        foreach ($data as $collection => $records) {
+            if ($this->userId && in_array($collection, self::USER_IMPORT_BLOCKED, true)) {
                 continue;
             }
 

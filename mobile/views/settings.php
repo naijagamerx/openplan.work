@@ -625,9 +625,9 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 
                     <div>
                         <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Upload New Favicon</label>
-                        <input type="file" name="favicon" id="favicon-input" accept="image/png,image/jpeg,image/svg+xml"
+                        <input type="file" name="favicon" id="favicon-input" accept="image/png,image/jpeg"
                                class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 py-3 px-4 text-sm focus:ring-2 focus:ring-black outline-none">
-                        <p class="text-xs text-gray-500 mt-1">Recommended: 512x512 PNG or SVG</p>
+                        <p class="text-xs text-gray-500 mt-1">Recommended: 512x512 PNG or JPG</p>
                     </div>
 
                     <div>

@@ -18,6 +18,27 @@ if (!Auth::check()) {
     exit;
 }
 
+// The favicon is site-wide, so only an admin may change it, and only by POST with a CSRF token
+// (reset used to work over a plain GET link).
+if (in_array($action, ['upload', 'reset'], true)) {
+    if (!Auth::isAdmin()) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Only an administrator can change the site icon']);
+        exit;
+    }
+    if (requestMethod() !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+        exit;
+    }
+    $csrfToken = $_POST['csrf_token'] ?? (getJsonBody()['csrf_token'] ?? '') ?: ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+    if (!Auth::isTokenAuth() && !Auth::validateCsrf((string) $csrfToken)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
+        exit;
+    }
+}
+
 $faviconDir = dirname(__DIR__) . '/assets/favicons/';
 
 if ($action === 'upload') {
@@ -40,10 +61,11 @@ if ($action === 'upload') {
     $file = $_FILES['favicon'];
     $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
 
-    // Validate file type
-    $allowed = ['png', 'jpg', 'jpeg', 'ico', 'svg'];
+    // Validate file type. SVG is not accepted: an SVG can carry script, and the favicon
+    // folder is served from this site's own origin.
+    $allowed = ['png', 'jpg', 'jpeg'];
     if (!in_array($ext, $allowed)) {
-        echo json_encode(['success' => false, 'error' => 'Invalid file type. Allowed: PNG, JPG, ICO, SVG']);
+        echo json_encode(['success' => false, 'error' => 'Invalid file type. Allowed: PNG, JPG']);
         exit;
     }
 

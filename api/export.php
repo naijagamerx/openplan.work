@@ -346,6 +346,11 @@ if ($action === 'import') {
                     errorResponse('ZIP contains unsupported files. Only encrypted workspace data files and shared Pomodoro assets are allowed.', 400, ERROR_VALIDATION);
                 }
 
+                // Shared music belongs to every user on the install; only an admin may replace it.
+                if ($isMusicFile && !Auth::isAdmin()) {
+                    continue;
+                }
+
                 $contents = $zip->getFromIndex($i);
                 if ($contents === false) {
                     $zip->close();

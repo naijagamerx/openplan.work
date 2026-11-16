@@ -175,8 +175,34 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// User records live here; controls carry only an index. escapeHtml() does not encode
+// quotes, so it must never be used to put user text inside an onclick/onchange handler.
+let usersCache = [];
+
+document.addEventListener('click', (event) => {
+    const button = event.target.closest('#users-list button[data-action]');
+    const user = button ? usersCache[Number(button.dataset.index)] : null;
+    if (!user) {
+        return;
+    }
+    if (button.dataset.action === 'ban') {
+        toggleBan(user.id);
+    } else if (button.dataset.action === 'delete') {
+        confirmDeleteUser(user.id, user.name || user.email || '');
+    }
+});
+
+document.addEventListener('change', (event) => {
+    const select = event.target.closest('#users-list select[data-index]');
+    const user = select ? usersCache[Number(select.dataset.index)] : null;
+    if (user) {
+        saveUserRole(user.id, select.value);
+    }
+});
+
 async function loadUsers() {
     const listEl = document.getElementById('users-list');
+    usersCache = [];
     listEl.innerHTML = `
         <div class="text-center py-8">
             <svg class="w-8 h-8 animate-spin text-gray-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
@@ -199,7 +225,8 @@ async function loadUsers() {
             return;
         }
 
-        listEl.innerHTML = users.map((user) => {
+        usersCache = users;
+        listEl.innerHTML = users.map((user, index) => {
             const isCurrentUser = user.id === '<?= Auth::userId() ?>';
             const isLastAdmin = user.role === 'admin' && users.filter(u => u.role === 'admin').length === 1;
             const canModify = !isLastAdmin || isCurrentUser;
@@ -231,7 +258,7 @@ async function loadUsers() {
                         </div>
                     </div>
                     <div class="flex items-center justify-between gap-2">
-                        <select onchange="saveUserRole('${escapeHtml(user.id)}', this.value)"
+                        <select data-index="${index}" aria-label="Role"
                                 class="flex-1 px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 dark:text-zinc-100"
                                 ${!canModify ? 'disabled' : ''}>
                             <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
@@ -239,7 +266,7 @@ async function loadUsers() {
                         </select>
                         
                         ${!isLastAdmin && user.role !== 'admin' ? `
-                            <button type="button" onclick="toggleBan('${escapeHtml(user.id)}')"
+                            <button type="button" data-action="ban" data-index="${index}"
                                     class="px-3 py-2 rounded-lg text-xs font-bold transition ${
                                         user.isBanned 
                                         ? 'bg-green-100 text-green-800 hover:bg-green-200' 
@@ -250,7 +277,7 @@ async function loadUsers() {
                         ` : ''}
 
                         ${!isLastAdmin ? `
-                            <button type="button" onclick="confirmDeleteUser('${escapeHtml(user.id)}', '${escapeHtml(user.name || user.email || '')}')"
+                            <button type="button" data-action="delete" data-index="${index}"
                                     class="p-2 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition shrink-0"
                                     title="Delete user">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

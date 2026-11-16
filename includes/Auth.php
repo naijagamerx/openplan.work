@@ -1850,8 +1850,16 @@ class Auth {
             foreach ($users as &$user) {
                 if (($user['id'] ?? '') === $userId) {
                     $userFound = true;
-                    unset($user['mcpApiToken']);
-                    unset($user['mcpApiTokenGeneratedAt']);
+                    // Clear every stored form of the token. isMcp() authenticates on
+                    // mcpApiTokenHash and unwraps mcpWrappedMaster, so leaving either
+                    // behind kept a "revoked" token working.
+                    unset(
+                        $user['mcpApiToken'],
+                        $user['mcpApiTokenHash'],
+                        $user['mcpApiTokenLast4'],
+                        $user['mcpWrappedMaster'],
+                        $user['mcpApiTokenGeneratedAt']
+                    );
                     $user['updatedAt'] = date('c');
                     break;
                 }

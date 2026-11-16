@@ -8,7 +8,7 @@
 </FilesMatch>
 
 # 2. Block sensitive file extensions and dependency manifests at the root
-<FilesMatch "\.(zip|tar|tar\.gz|tgz|gz|bz2|7z|rar|lock|log|sql|sqlite|db|bak|backup|swp|swo|orig|ini|cfg|conf|config|key|pem|crt|cer|p12|pfx)$">
+<FilesMatch "\.(zip|tar|tar\.gz|tgz|gz|bz2|7z|rar|lock|log|sql|sqlite|db|bak|backup|swp|swo|orig|ini|cfg|conf|config|key|pem|crt|cer|p12|pfx|properties|jks|keystore)$">
     Require all denied
 </FilesMatch>
 
@@ -25,6 +25,22 @@ RedirectMatch 403 ^/(includes|data|cron|datass|migration_backups|vendor|tests|te
 #     Negative lookahead keeps /release-artifacts/*.zip and /release-artifacts/data
 #     blocked while allowing /release-artifacts/android/<file>.apk.
 RedirectMatch 403 ^/release-artifacts(?!/android(/|$))
+
+# 4b. Dot-folders and source trees, at any depth. Rule 1 only matches a file whose
+#     own name starts with a dot, so /.git/config and /.zcode/config.json were served.
+#     RewriteRule paths are relative to this folder, so this also works when the app
+#     is installed in a subfolder (e.g. /taskmanager/). ACME's .well-known stays open.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule (^|/)\.(?!well-known(/|$)) - [F,L]
+    RewriteRule ^(android|flutter_app|mcp-server)(/|$) - [F,L]
+    # alexa-skill/ stays private except the interaction model the setup page links to.
+    RewriteRule ^alexa-skill(/(?!interaction-model\.json$)|$) - [F,L]
+    # Same folders as rule 4. RedirectMatch there is anchored at the domain root, so
+    # it misses subfolder installs (/openplan/data/users.json was served); these are not.
+    RewriteRule ^(includes|data|cron|datass|migration_backups|vendor|tests|test|scripts)(/|$) - [F,L]
+    RewriteRule ^release-artifacts(?!/android(/|$)) - [F,L]
+</IfModule>
 
 # 5. Standard hardening: disable directory listing
 Options -Indexes

@@ -15,6 +15,7 @@ $siteName = getSiteName() ?? 'LazyMan';
 // Probe whether the env vars are configured server-side (without exposing values).
 $ownerIdConfigured = (bool)getenv('ALEXA_OWNER_USER_ID');
 $masterKeyConfigured = (bool)getenv('LAZYMAN_MASTER_PASSWORD');
+$skillIdConfigured = (bool)getenv('ALEXA_SKILL_ID');
 ?>
 <!DOCTYPE html>
 <html class="light overflow-x-hidden" lang="en">
@@ -56,9 +57,13 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
       <span>LAZYMAN_MASTER_PASSWORD</span>
       <span class="<?= $masterKeyConfigured ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800' ?> px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest"><?= $masterKeyConfigured ? 'Set' : 'Not set' ?></span>
     </div>
-    <?php if (!$ownerIdConfigured || !$masterKeyConfigured): ?>
+    <div class="flex items-center justify-between text-xs">
+      <span>ALEXA_SKILL_ID</span>
+      <span class="<?= $skillIdConfigured ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800' ?> px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest"><?= $skillIdConfigured ? 'Set' : 'Not set' ?></span>
+    </div>
+    <?php if (!$ownerIdConfigured || !$masterKeyConfigured || !$skillIdConfigured): ?>
       <p class="text-[10px] text-yellow-800 bg-yellow-50 border border-yellow-200 p-2 mt-2">
-        Set both env vars in Hostinger control panel before testing. Without them the skill answers "Alexa skill not configured."
+        Set all three env vars in Hostinger control panel before testing. <code class="font-mono">ALEXA_SKILL_ID</code> is your skill's ID from the Alexa developer console (amzn1.ask.skill.…); without it the skill only works through account linking.
       </p>
     <?php endif; ?>
   </section>

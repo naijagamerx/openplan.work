@@ -48,11 +48,17 @@ switch ($action) {
             errorResponse('Method not allowed', 405);
         }
 
+        // Minting a long-lived MCP token needs a signed-in browser session.
+        // A device bearer token (or an existing MCP token) must not be able to
+        // mint one, or the new token outlives the device's revocation.
+        if (Auth::isTokenAuth()) {
+            errorResponse('Generate MCP tokens from a signed-in browser session', 403);
+        }
+
         $body = getJsonBody();
         $csrfToken = $body['csrf_token'] ?? '';
 
-        // CSRF validation
-        if (!Auth::isTokenAuth() && !Auth::validateCsrf($csrfToken)) {
+        if (!Auth::validateCsrf($csrfToken)) {
             errorResponse('Invalid CSRF token', 403);
         }
 

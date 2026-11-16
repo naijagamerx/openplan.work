@@ -127,9 +127,41 @@ function hideNotification() {
     }
 }
 
+// User records live here; row buttons carry only an index. Names and emails come from
+// sign-up forms, so they must never be written into inline onclick handlers.
+let usersCache = [];
+
+document.getElementById('users-table')?.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-action]');
+    const index = button ? Number(button.dataset.index) : -1;
+    const user = usersCache[index];
+    if (!user) {
+        return;
+    }
+    switch (button.dataset.action) {
+        case 'resend':
+            resendVerification(user.id);
+            break;
+        case 'ban':
+            toggleBan(user.id);
+            break;
+        case 'role': {
+            const select = document.querySelector(`#users-table select[data-index="${index}"]`);
+            if (select) {
+                saveUserRole(user.id, select.value);
+            }
+            break;
+        }
+        case 'delete':
+            confirmDeleteUser(user.id, user.name || '', user.email || '');
+            break;
+    }
+});
+
 async function loadUsers() {
     const table = document.getElementById('users-table');
     table.innerHTML = '<tr><td colspan="6" class="px-5 py-10 text-center text-gray-500">Loading users...</td></tr>';
+    usersCache = [];
 
     try {
         const response = await api.get('api/users.php?action=list');
@@ -143,7 +175,8 @@ async function loadUsers() {
             return;
         }
 
-        table.innerHTML = users.map((user) => {
+        usersCache = users;
+        table.innerHTML = users.map((user, index) => {
             const isVerified = user.emailVerifiedAt !== null && user.emailVerifiedAt !== '';
             const verificationBadge = isVerified
                 ? `<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">Verified</span>`
@@ -151,7 +184,7 @@ async function loadUsers() {
 
             const verificationHtml = <?= json_encode($verificationEnabled) ?> ? verificationBadge : `<span class="text-xs text-gray-400">N/A</span>`;
             const resendBtn = (!isVerified && <?= json_encode($verificationEnabled) ?>)
-                ? `<button type="button" onclick='resendVerification(${JSON.stringify(user.id).replace(/'/g, "&#39;")})' class="text-xs underline text-blue-600 hover:text-blue-800">Resend</button>`
+                ? `<button type="button" data-action="resend" data-index="${index}" class="text-xs underline text-blue-600 hover:text-blue-800">Resend</button>`
                 : '';
 
             return `
@@ -162,7 +195,7 @@ async function loadUsers() {
                 </td>
                 <td class="px-5 py-4 text-sm text-gray-700">${escapeHtml(user.email || '')}</td>
                 <td class="px-5 py-4">
-                    <select data-user-id="${escapeHtml(user.id)}" class="user-role-select px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    <select data-index="${index}" class="user-role-select px-3 py-2 border border-gray-300 rounded-lg text-sm" aria-label="Role">
                         <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
                         <option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option>
                     </select>
@@ -181,7 +214,7 @@ async function loadUsers() {
                     <div class="inline-flex items-center gap-2">
                         <button 
                             type="button" 
-                            onclick='toggleBan(${JSON.stringify(user.id).replace(/'/g, "&#39;")})' 
+                            data-action="ban" data-index="${index}"
                             class="px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                                 user.isBanned 
                                 ? 'bg-green-100 text-green-800 hover:bg-green-200' 
@@ -191,11 +224,11 @@ async function loadUsers() {
                         >
                             ${user.isBanned ? 'Unban' : 'Ban'}
                         </button>
-                        <button type="button" onclick='saveUserRole(${JSON.stringify(user.id).replace(/'/g, "&#39;")})' class="px-4 py-2 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition">Save</button>
+                        <button type="button" data-action="role" data-index="${index}" class="px-4 py-2 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition">Save</button>
                         ${user.canDelete ? `
                             <button
                                 type="button"
-                                onclick='confirmDeleteUser(${JSON.stringify(user.id).replace(/'/g, "&#39;")}, ${JSON.stringify(user.name || "").replace(/'/g, "&#39;")}, ${JSON.stringify(user.email || "").replace(/'/g, "&#39;")})'
+                                data-action="delete" data-index="${index}"
                                 class="p-2 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition"
                                 title="Delete user and all data"
                                 aria-label="Delete user and all data"
@@ -230,16 +263,11 @@ async function resendVerification(userId) {
     }
 }
 
-async function saveUserRole(userId) {
-    const select = document.querySelector(`select[data-user-id="${CSS.escape(userId)}"]`);
-    if (!select) {
-        return;
-    }
-
+async function saveUserRole(userId, role) {
     try {
         const response = await api.post('api/users.php?action=update_role', {
             user_id: userId,
-            role: select.value,
+            role,
             csrf_token: CSRF_TOKEN
         });
 

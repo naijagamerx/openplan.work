@@ -116,6 +116,31 @@ define('ASSETS_PATH', ROOT_PATH . '/assets');
 define('VIEWS_PATH', ROOT_PATH . '/views');
 define('INCLUDES_PATH', ROOT_PATH . '/includes');
 
+// data/ is not in the repository, so a fresh self-hosted install creates it at
+// runtime with no web protection of its own. Write the deny file once if it is
+// missing; an existing one (as on production) is never touched.
+if (!is_file(DATA_PATH . '/.htaccess')) {
+    if (!is_dir(DATA_PATH)) {
+        @mkdir(DATA_PATH, 0755, true);
+    }
+    @file_put_contents(DATA_PATH . '/.htaccess', <<<'HTACCESS'
+# /data/ holds account and encrypted workspace files. Never serve anything from it.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
+<FilesMatch "\.(php|phtml|php3|php4|php5|php7|php8|phar)$">
+    SetHandler default-handler
+    ForceType text/plain
+</FilesMatch>
+Options -Indexes -ExecCGI
+
+HTACCESS, LOCK_EX);
+}
+
 // Session Settings
 define('SESSION_LIFETIME', 3600); // 1 hour
 define('SESSION_STORAGE_LIFETIME', 2592000); // 30 days (session storage/cookie lifetime)

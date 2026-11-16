@@ -100,9 +100,27 @@ document.addEventListener('DOMContentLoaded', () => {
     loadSharedMusic();
 });
 
+// Track data lives here; buttons carry only a row index. Names never go into inline handlers,
+// because a quote in a track name would otherwise break out and run as script.
+let sharedTracks = [];
+
+document.getElementById('shared-music-list')?.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-action]');
+    const track = button ? sharedTracks[Number(button.dataset.index)] : null;
+    if (!track) {
+        return;
+    }
+    if (button.dataset.action === 'rename') {
+        renameSharedTrack(track.id, track.name || '');
+    } else if (button.dataset.action === 'delete') {
+        deleteSharedTrack(track.id, track.name || track.filename || '');
+    }
+});
+
 async function loadSharedMusic() {
     const tbody = document.getElementById('shared-music-list');
     tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-10 text-center text-gray-500">Loading shared music...</td></tr>';
+    sharedTracks = [];
 
     try {
         const response = await api.get('api/pomodoro.php?action=shared_music_list');
@@ -116,7 +134,8 @@ async function loadSharedMusic() {
             return;
         }
 
-        tbody.innerHTML = tracks.map((track) => `
+        sharedTracks = tracks;
+        tbody.innerHTML = tracks.map((track, index) => `
             <tr class="hover:bg-gray-50">
                 <td class="px-6 py-4">
                     <div class="font-medium text-gray-900">${escapeHtml(track.name || 'Untitled')}</div>
@@ -126,8 +145,8 @@ async function loadSharedMusic() {
                 <td class="px-6 py-4 text-sm text-gray-600">${formatBytes(track.size || 0)}</td>
                 <td class="px-6 py-4">
                     <div class="flex items-center justify-end gap-2">
-                        <button type="button" onclick='renameSharedTrack(${JSON.stringify(track.id)}, ${JSON.stringify(track.name || "")})' class="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition">Rename</button>
-                        <button type="button" onclick='deleteSharedTrack(${JSON.stringify(track.id)}, ${JSON.stringify(track.name || track.filename || "")})' class="px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition">Delete</button>
+                        <button type="button" data-action="rename" data-index="${index}" class="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition">Rename</button>
+                        <button type="button" data-action="delete" data-index="${index}" class="px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition">Delete</button>
                     </div>
                 </td>
             </tr>

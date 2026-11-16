@@ -76,25 +76,26 @@ if ($method === 'POST') {
 
         // Define included directories and files
         $includedDirectories = ['api', 'android', 'assets', 'cron', 'includes', 'mobile', 'templates', 'views'];
+        // .user.ini is never shipped: on the host it can carry the master password.
         $includedRootFiles = [
-            '.env.example', '.gitignore', '.user.ini', 'cacert.pem',
+            '.env.example', '.gitignore', 'cacert.pem',
             'composer.json', 'composer.lock', 'config.php', 'index.php',
             'manifest.php', 'migrate.php', 'mobile-logout.php',
             'setup_models.php', 'robots.txt', 'sitemap.xml'
         ];
 
         if ($exportType === 'hosted' && file_exists(ROOT_PATH . '/.env')) {
-            // Read .env file
-            $envContent = file_get_contents(ROOT_PATH . '/.env');
-            
-            // Remove sensitive lines
-            $cleanEnv = preg_replace('/^LAZYMAN_MASTER_PASSWORD=.*$/m', 'LAZYMAN_MASTER_PASSWORD=', $envContent);
-            $cleanEnv = preg_replace('/^DB_PASSWORD=.*$/m', 'DB_PASSWORD=', $cleanEnv);
-            $cleanEnv = preg_replace('/^GROQ_API_KEY=.*$/m', 'GROQ_API_KEY=', $cleanEnv);
-            $cleanEnv = preg_replace('/^OPENROUTER_API_KEY=.*$/m', 'OPENROUTER_API_KEY=', $cleanEnv);
-            $cleanEnv = preg_replace('/^SMTP_PASSWORD=.*$/m', 'SMTP_PASSWORD=', $cleanEnv);
-            $cleanEnv = preg_replace('/^CRON_KEY=.*$/m', 'CRON_KEY=', $cleanEnv);
-            
+            // Blank the value of every key whose name looks secret, instead of a
+            // fixed list of six names that missed any newer secret.
+            $envContent = (string) file_get_contents(ROOT_PATH . '/.env');
+            $cleanEnv = preg_replace_callback(
+                '/^([ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=).*$/m',
+                static fn (array $m): string => (releaseExportIsSecretName($m[2]) || preg_match('/_USER(NAME)?$/i', $m[2]))
+                    ? $m[1]
+                    : $m[0],
+                $envContent
+            );
+
             // Write cleaned .env to staging
             file_put_contents($stagingPath . '/.env', $cleanEnv);
         }
@@ -125,7 +126,12 @@ if ($method === 'POST') {
             '/^android\/build\//',
             '/^android\/app\/build\//',
             '/^android\/local\.properties$/',
-            '/^android\/\.gradle-v2\.json$/'
+            '/^android\/\.gradle-v2\.json$/',
+            // Secrets and tool folders: every dot-file/dot-dir except .htaccess
+            // (android/.claude, .remember, .idea, .user.ini), plus signing files.
+            '/(^|\/)\.(?!htaccess$)[^\/]+$/',
+            '/(^|\/)(keystore|local)\.properties$/',
+            '/\.(jks|keystore|p12|pfx)$/i'
         ];
 
         if ($exportType !== 'local') {
@@ -237,6 +243,20 @@ if ($method === 'POST') {
             'generatedReleaseArtifacts' => ['android']
         ];
         file_put_contents($stagingPath . '/release-manifest.json', json_encode($releaseManifest, JSON_PRETTY_PRINT));
+
+        // Last gate before anything is zipped: refuse the export if any staged
+        // file still holds a secret. Report paths only, never the values.
+        $secretHits = releaseExportFindSecrets($stagingPath, releaseExportKnownSecretValues());
+        if ($secretHits !== []) {
+            releaseExportRecursiveDelete($stagingPath);
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error' => 'Export blocked: ' . count($secretHits) . ' file(s) look like they contain secrets. Remove them and try again.',
+                'files' => $secretHits
+            ]);
+            exit;
+        }
 
         // Create ZIP
         releaseExportCreateZip($stagingPath, $zipPath);
@@ -354,6 +374,92 @@ function releaseExportRecursiveDelete(string $dir): void {
         }
     }
     @rmdir($dir);
+}
+
+function releaseExportIsSecretName(string $name): bool {
+    return preg_match('/PASS|SECRET|KEY|TOKEN|PEPPER|SALT|PRIVATE|CREDENTIAL/i', $name) === 1;
+}
+
+/**
+ * Secret values this server actually knows (session master password plus any
+ * secret-named variable from .env or the process environment), so the export
+ * can be checked for them literally.
+ */
+function releaseExportKnownSecretValues(): array {
+    $values = [];
+    $add = static function ($value) use (&$values): void {
+        $value = trim((string) $value, " \t\r\n\"'");
+        if (strlen($value) >= 8) {
+            $values[$value] = true;
+        }
+    };
+
+    $add(function_exists('getMasterPassword') ? getMasterPassword() : '');
+    foreach ([(array) getenv(), $_ENV] as $source) {
+        foreach ($source as $name => $value) {
+            if (is_string($name) && releaseExportIsSecretName($name)) {
+                $add($value);
+            }
+        }
+    }
+    $envFile = ROOT_PATH . '/.env';
+    if (is_file($envFile) && preg_match_all('/^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=(.*)$/m', (string) file_get_contents($envFile), $m, PREG_SET_ORDER)) {
+        foreach ($m as $line) {
+            if (releaseExportIsSecretName($line[1])) {
+                $add($line[2]);
+            }
+        }
+    }
+    return array_keys($values);
+}
+
+/**
+ * Returns [['file' => relative path, 'reason' => why], ...] for staged files that
+ * must not ship: secret-bearing file names, known secret values, provider keys,
+ * private keys, or a non-empty master-password assignment.
+ */
+function releaseExportFindSecrets(string $dir, array $knownValues): array {
+    $hits = [];
+    $forbiddenNames = ['.user.ini', 'keystore.properties', 'local.properties', 'master_password.php'];
+    $binaryExt = '/\.(mp3|wav|m4a|ogg|png|jpe?g|gif|webp|ico|woff2?|ttf|otf|eot|zip|apk|aab|jar|gz|pdf|mp4|webm)$/i';
+    $patterns = [
+        'provider API key' => '/gsk_[A-Za-z0-9]{20,}|sk-or-v1-[0-9a-f]{32,}|sk-ant-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{35}/',
+        'private key' => '/-----BEGIN [A-Z ]*PRIVATE KEY-----/',
+        'master password assignment' => '/LAZYMAN_MASTER_PASSWORD["\'\]]?[ \t]*=[ \t]*["\']?[^\s"\']|SetEnv[ \t]+LAZYMAN_MASTER_PASSWORD[ \t]+\S/i',
+    ];
+
+    $base = rtrim(str_replace('\\', '/', $dir), '/') . '/';
+    $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS));
+    foreach ($files as $file) {
+        if (!$file->isFile()) {
+            continue;
+        }
+        $relative = substr(str_replace('\\', '/', $file->getPathname()), strlen($base));
+        $name = strtolower($file->getFilename());
+
+        if (in_array($name, $forbiddenNames, true) || preg_match('/\.(jks|keystore|p12|pfx)$/', $name)) {
+            $hits[] = ['file' => $relative, 'reason' => 'secret-bearing file'];
+            continue;
+        }
+        if ($file->getSize() > 2 * 1024 * 1024 || preg_match($binaryExt, $name)) {
+            continue;
+        }
+
+        $content = (string) file_get_contents($file->getPathname());
+        foreach ($knownValues as $value) {
+            if (str_contains($content, $value)) {
+                $hits[] = ['file' => $relative, 'reason' => 'contains a configured secret value'];
+                continue 2;
+            }
+        }
+        foreach ($patterns as $reason => $pattern) {
+            if (preg_match($pattern, $content)) {
+                $hits[] = ['file' => $relative, 'reason' => $reason];
+                continue 2;
+            }
+        }
+    }
+    return $hits;
 }
 
 function releaseExportShouldExclude(string $path, array $patterns): bool {

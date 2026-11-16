@@ -109,7 +109,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
 async function generateToken() {
   if (!confirm('Generate a new MCP token? Any existing AI clients using the old token will stop working until updated.')) return;
   try {
-    const r = await fetch((APP_URL ? APP_URL + '/' : '') + 'api/users.php?action=generate_mcp_token', {
+    const r = await fetch((APP_URL ? APP_URL + '/' : '') + 'api/mcp.php?action=generate_token', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
       body: JSON.stringify({ csrf_token: CSRF_TOKEN })
     });
@@ -126,7 +126,7 @@ async function generateToken() {
 async function revokeToken() {
   if (!confirm('Revoke the current token? All AI clients will lose access.')) return;
   try {
-    const r = await fetch((APP_URL ? APP_URL + '/' : '') + 'api/users.php?action=revoke_mcp_token', {
+    const r = await fetch((APP_URL ? APP_URL + '/' : '') + 'api/mcp.php?action=revoke_token', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
       body: JSON.stringify({ csrf_token: CSRF_TOKEN })
     });

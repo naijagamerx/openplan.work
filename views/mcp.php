@@ -494,40 +494,42 @@ async function loadMcpToken() {
     }
 }
 
-function renderTokenSection(tokenData) {
+// The server stores only a hash of the token, so the full value exists once: in the
+// generate response. freshToken carries it; on later loads only the masked hint is known.
+function renderTokenSection(tokenData, freshToken = null) {
     const container = document.getElementById('tokenSection');
 
     if (tokenData.hasToken) {
+        const copyIcon = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>`;
         container.innerHTML = `
             <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                        <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        <span class="font-semibold text-gray-900">Active MCP API Token</span>
-                    </div>
-                    <span class="text-xs text-gray-500">Generated: ${tokenData.generatedAt ? new Date(tokenData.generatedAt).toLocaleDateString() : 'Recently'}</span>
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span class="font-semibold text-gray-900">Active MCP API Token</span>
                 </div>
+
+                ${freshToken ? `
+                <div class="bg-yellow-50 border border-yellow-300 rounded-lg p-3 text-sm text-yellow-900">
+                    <strong>Copy this token now.</strong> For your security it is shown only once. After you leave this page only the last 4 characters are kept.
+                </div>` : ''}
 
                 <div class="bg-gray-50 rounded-lg p-4">
                     <div class="flex items-center justify-between gap-4">
-                        <code class="text-sm font-mono text-gray-800 break-all" id="mcpTokenDisplay">${tokenData.token}</code>
-                        <button onclick="copyToken()" class="flex-shrink-0 px-3 py-1.5 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-medium transition" title="Copy token">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                            </svg>
-                        </button>
+                        <code class="text-sm font-mono text-gray-800 break-all" id="mcpTokenDisplay"></code>
+                        ${freshToken ? `<button onclick="copyToken()" class="flex-shrink-0 px-3 py-1.5 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-medium transition" title="Copy token">${copyIcon}</button>` : ''}
                     </div>
                 </div>
 
                 <div class="flex gap-3 flex-wrap">
+                    ${freshToken ? `
                     <button onclick="copyToken()" class="px-4 py-2 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
-                        </svg>
+                        ${copyIcon}
                         Copy Token
-                    </button>
+                    </button>` : ''}
                     <button onclick="regenerateToken()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition">
                         Regenerate
                     </button>
@@ -537,13 +539,17 @@ function renderTokenSection(tokenData) {
                 </div>
 
                 <p class="text-xs text-gray-500">
-                    ⚠️ <strong>Important:</strong> Regenerating invalidates your current token. Update your mcp.json after regenerating.
+                    ${freshToken
+                        ? '⚠️ <strong>Important:</strong> Regenerating invalidates this token. Update your mcp.json after regenerating.'
+                        : 'Only the last 4 characters are shown. Lost the token? Regenerate a new one and update your mcp.json.'}
                 </p>
             </div>
         `;
 
-        // Update the config display with the actual token
-        updateConfigDisplay(tokenData.token);
+        document.getElementById('mcpTokenDisplay').textContent = freshToken || tokenData.token || '';
+        if (freshToken) {
+            updateConfigDisplay(freshToken);
+        }
     } else {
         container.innerHTML = `
             <div class="text-center py-6">
@@ -572,10 +578,10 @@ async function generateToken() {
         const data = await response.json();
 
         if (data.success) {
-            showToast('Token generated successfully!', 'success');
-            loadMcpToken();
+            showToast('Token generated. Copy it now.', 'success');
+            renderTokenSection({ hasToken: true }, data.data?.token || null);
         } else {
-            showToast(data.message || 'Failed to generate token', 'error');
+            showToast(data.error?.message || data.message || 'Failed to generate token', 'error');
         }
     } catch (error) {
         console.error('Token generation error:', error);
@@ -599,10 +605,10 @@ async function regenerateToken() {
         const data = await response.json();
 
         if (data.success) {
-            showToast('Token regenerated successfully!', 'success');
-            loadMcpToken();
+            showToast('New token generated. Copy it now.', 'success');
+            renderTokenSection({ hasToken: true }, data.data?.token || null);
         } else {
-            showToast(data.message || 'Failed to regenerate token', 'error');
+            showToast(data.error?.message || data.message || 'Failed to regenerate token', 'error');
         }
     } catch (error) {
         console.error('Token regeneration error:', error);
@@ -627,9 +633,10 @@ async function revokeToken() {
 
         if (data.success) {
             showToast('Token revoked successfully', 'success');
+            updateConfigDisplay('your-token-here');
             loadMcpToken();
         } else {
-            showToast(data.message || 'Failed to revoke token', 'error');
+            showToast(data.error?.message || data.message || 'Failed to revoke token', 'error');
         }
     } catch (error) {
         console.error('Token revocation error:', error);

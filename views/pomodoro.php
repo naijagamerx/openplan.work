@@ -1110,6 +1110,25 @@ function closeMusicLibrary() {
     modal.classList.remove('flex');
 }
 
+// Track data lives here; buttons carry only an index, never the track name
+// (a quote in a name would break out of an inline handler and run as script).
+let libraryTracks = [];
+
+document.addEventListener('click', (event) => {
+    const button = event.target.closest('#music-library-list button[data-action]');
+    const track = button ? libraryTracks[Number(button.dataset.index)] : null;
+    if (!track) {
+        return;
+    }
+    if (button.dataset.action === 'play') {
+        playLibraryTrack(track.id);
+    } else if (button.dataset.action === 'rename') {
+        renameLibraryTrack(track.id, track.name || 'Track');
+    } else if (button.dataset.action === 'delete') {
+        deleteLibraryTrack(track.id);
+    }
+});
+
 async function loadMusicLibrary() {
     const list = document.getElementById('music-library-list');
     const countEl = document.getElementById('library-track-count');
@@ -1145,7 +1164,8 @@ async function loadMusicLibrary() {
             return;
         }
 
-        list.innerHTML = tracks.map(track => {
+        libraryTracks = tracks;
+        list.innerHTML = tracks.map((track, index) => {
             const sizeMB = ((track.size || 0) / (1024 * 1024)).toFixed(1);
             const date = track.uploadedAt ? new Date(track.uploadedAt).toLocaleDateString() : 'Unknown';
             const canDelete = !!track.canDelete;
@@ -1162,16 +1182,16 @@ async function loadMusicLibrary() {
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button onclick='playLibraryTrack(${JSON.stringify(track.id)})' class="p-2 hover:bg-slate-100 rounded-lg transition-colors" title="Play">
+                        <button type="button" data-action="play" data-index="${index}" class="p-2 hover:bg-slate-100 rounded-lg transition-colors" title="Play">
                             <span class="material-symbols-outlined text-slate-600">play_arrow</span>
                         </button>
                         ${canRename ? `
-                        <button onclick='renameLibraryTrack(${JSON.stringify(track.id)}, ${JSON.stringify(track.name || "Track")})' class="p-2 hover:bg-slate-100 rounded-lg transition-colors" title="Rename">
+                        <button type="button" data-action="rename" data-index="${index}" class="p-2 hover:bg-slate-100 rounded-lg transition-colors" title="Rename">
                             <span class="material-symbols-outlined text-slate-600">edit</span>
                         </button>
                         ` : ''}
                         ${canDelete ? `
-                        <button onclick='deleteLibraryTrack(${JSON.stringify(track.id)})' class="p-2 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                        <button type="button" data-action="delete" data-index="${index}" class="p-2 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
                             <span class="material-symbols-outlined text-red-500">delete</span>
                         </button>
                         ` : ''}

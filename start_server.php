@@ -6,6 +6,13 @@
  * the continuous scheduler loop.
  */
 
+// Command-line only. Over HTTP this would let any visitor kill and spawn
+// processes on the host.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('Forbidden');
+}
+
 // Configuration
 define('PHP_PATH', __DIR__ . DIRECTORY_SEPARATOR . 'php' . DIRECTORY_SEPARATOR . 'php.exe');
 define('SERVER_PORT', 4041);

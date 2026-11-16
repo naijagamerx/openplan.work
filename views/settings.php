@@ -189,7 +189,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
         </form>
     </div>
 
-    <!-- Favicon Settings -->
+    <?php if (Auth::isAdmin()): ?>
+    <!-- Favicon Settings (site-wide, so admin only — matches mobile settings) -->
     <div class="settings-section bg-white rounded-xl border border-gray-200" data-ss="appearance" data-ss-label="Appearance">
         <div class="p-5 border-b border-gray-200">
             <h3 class="font-semibold text-gray-900">Favicon</h3>
@@ -223,9 +224,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Upload Favicon Image</label>
-                    <input type="file" name="favicon" id="favicon-input" accept="image/png,image/jpeg,image/svg+xml"
+                    <input type="file" name="favicon" id="favicon-input" accept="image/png,image/jpeg"
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none">
-                    <p class="text-xs text-gray-500 mt-1">Recommended: 512x512 PNG or SVG. Will be auto-resized.</p>
+                    <p class="text-xs text-gray-500 mt-1">Recommended: 512x512 PNG or JPG. Will be auto-resized.</p>
                 </div>
 
                 <div>
@@ -252,6 +253,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['section'])) {
             </form>
         </div>
     </div>
+    <?php endif; ?>
 
     <!-- API Keys -->
     <?php if (!empty($config['useAdminSharedAiKeys'])): ?>
@@ -2090,8 +2092,8 @@ document.getElementById('change-master-password-form').addEventListener('submit'
     }
 });
 
-// Favicon Upload Functionality
-document.getElementById('favicon-upload-form').addEventListener('submit', async (e) => {
+// Favicon Upload Functionality (the form is only rendered for admins)
+document.getElementById('favicon-upload-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const form = e.target;

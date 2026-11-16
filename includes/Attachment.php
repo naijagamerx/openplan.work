@@ -82,6 +82,11 @@ class Attachment {
             throw new Exception('File type not allowed');
         }
 
+        // The task ID becomes a directory name, so it must be a plain identifier.
+        if (!self::isSafeSegment($taskId)) {
+            throw new Exception('Invalid task ID');
+        }
+
         // Generate unique filename
         $extension = $this->getExtension($file['name'], $mimeType);
         $filename = $this->generateFilename($extension);
@@ -121,6 +126,32 @@ class Attachment {
         return $attachment;
     }
 
+    private static function isSafeSegment(string $value): bool {
+        return preg_match('/^[a-zA-Z0-9_-]{1,64}$/', $value) === 1;
+    }
+
+    /**
+     * Resolve an attachment record to its file on disk, or null if the record
+     * does not point at a real file inside uploads/tasks/. The location is rebuilt
+     * from taskId + filename (both checked); the record's own "path" field is
+     * ignored, because imported records can set it to anything (e.g. "../.env").
+     */
+    private function resolveStoredPath(array $attachment): ?string {
+        $taskId = (string) ($attachment['taskId'] ?? '');
+        $filename = (string) ($attachment['filename'] ?? '');
+        if (!self::isSafeSegment($taskId) || preg_match('/^[a-zA-Z0-9_-][a-zA-Z0-9._-]{0,127}$/', $filename) !== 1) {
+            return null;
+        }
+
+        $baseDir = realpath($this->uploadPath . '/tasks');
+        $filepath = realpath($this->uploadPath . '/tasks/' . $taskId . '/' . $filename);
+        if ($baseDir === false || $filepath === false || !is_file($filepath)) {
+            return null;
+        }
+
+        return str_starts_with($filepath, $baseDir . DIRECTORY_SEPARATOR) ? $filepath : null;
+    }
+
     /**
      * Get all attachments for a task
      */
@@ -131,8 +162,7 @@ class Attachment {
         foreach ($attachments as $attachment) {
             if ($attachment['taskId'] === $taskId) {
                 // Check if file exists
-                $filepath = $this->uploadPath . '/' . $attachment['path'];
-                if (file_exists($filepath)) {
+                if ($this->resolveStoredPath($attachment) !== null) {
                     $attachment['exists'] = true;
                     $attachment['sizeFormatted'] = $this->formatSize($attachment['size']);
                 } else {
@@ -159,8 +189,7 @@ class Attachment {
         foreach ($attachments as $attachment) {
             if ($attachment['id'] === $id) {
                 // Check if file exists
-                $filepath = $this->uploadPath . '/' . $attachment['path'];
-                if (file_exists($filepath)) {
+                if ($this->resolveStoredPath($attachment) !== null) {
                     $attachment['exists'] = true;
                     $attachment['sizeFormatted'] = $this->formatSize($attachment['size']);
                 } else {
@@ -185,12 +214,21 @@ class Attachment {
             return;
         }
 
-        $filepath = $this->uploadPath . '/' . $attachment['path'];
+        $filepath = $this->resolveStoredPath($attachment);
+        if ($filepath === null) {
+            http_response_code(404);
+            echo 'File not found';
+            return;
+        }
+
+        // Record fields are user-controlled: only send a known type and a cleaned name.
+        $mimeType = in_array($attachment['mimeType'] ?? '', self::ALLOWED_TYPES, true) ? $attachment['mimeType'] : 'application/octet-stream';
+        $downloadName = preg_replace('/[\x00-\x1F\x7F"\\\\\/]/', '_', (string) ($attachment['originalName'] ?? 'attachment'));
 
         // Set headers for download
-        header('Content-Type: ' . $attachment['mimeType']);
-        header('Content-Disposition: attachment; filename="' . $attachment['originalName'] . '"');
-        header('Content-Length: ' . $attachment['size']);
+        header('Content-Type: ' . $mimeType);
+        header('Content-Disposition: attachment; filename="' . $downloadName . '"');
+        header('Content-Length: ' . filesize($filepath));
         header('Cache-Control: no-cache, must-revalidate');
         header('Pragma: no-cache');
 
@@ -209,9 +247,9 @@ class Attachment {
             return false;
         }
 
-        // Delete file
-        $filepath = $this->uploadPath . '/' . $attachment['path'];
-        if (file_exists($filepath)) {
+        // Delete file (only if it really is an attachment file inside uploads/tasks/)
+        $filepath = $this->resolveStoredPath($attachment);
+        if ($filepath !== null) {
             unlink($filepath);
         }
 
