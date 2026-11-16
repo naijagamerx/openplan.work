@@ -413,7 +413,14 @@ class Auth {
         if (self::normalizeRole($user['role'] ?? null) === self::ROLE_ADMIN && self::isLastAdmin($userId)) {
             return ['success' => false, 'error' => 'You cannot delete the last administrator account'];
         }
-        
+
+        // A renewing PayFast card subscription would keep charging the card after
+        // the account is gone, so it must be cancelled first (My Subscription).
+        require_once __DIR__ . '/PaymentsAPI.php';
+        if ((new PaymentsAPI())->findActiveCardSubscription($userId) !== null) {
+            return ['success' => false, 'error' => 'Cancel the card subscription under My Subscription first, so PayFast stops charging the card. Then delete the account.'];
+        }
+
         // 2. Delete user folder and contents
         $userDir = DATA_PATH . '/users/' . $userId;
         if (is_dir($userDir)) {

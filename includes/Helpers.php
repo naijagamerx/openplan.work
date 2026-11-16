@@ -572,3 +572,12 @@ function getSidebarLogoHtml(int $size = 40): string {
         <path d="M6 17.3333V30.6667H24V17.3333H6Z" fill="white" opacity="0.5"/>
     </svg>';
 }
+
+/**
+ * Version of the Terms, Privacy and Refund pages (views/partials/legal/).
+ * Shown as "Last updated" and stored on each payment the buyer accepted them for.
+ * Change it whenever the wording of any of the three pages changes.
+ */
+function legalPolicyVersion(): string {
+    return '2026-11-16';
+}

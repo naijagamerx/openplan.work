@@ -65,7 +65,7 @@ class PaymentsAPI {
         }
     }
 
-    public function submit(string $userId, string $planId, string $methodId, array $proofFile): array {
+    public function submit(string $userId, string $planId, string $methodId, array $proofFile, array $termsAccepted = []): array {
         if ($userId === '') {
             throw new Exception('Missing user');
         }
@@ -116,6 +116,7 @@ class PaymentsAPI {
                 'size' => $stored['size']
             ],
             'status' => 'pending',
+            'termsAccepted' => $termsAccepted ?: null,
             'submittedAt' => date('c'),
             'reviewedAt' => null,
             'reviewedBy' => null,
@@ -347,7 +348,7 @@ class PaymentsAPI {
      * Reuses the user's own unpaid checkout for the same plan and amount from
      * the last 24 hours, so repeated clicks do not pile up records.
      */
-    public function createCardCheckout(string $userId, array $plan, float $amount, ?array $frequency): array {
+    public function createCardCheckout(string $userId, array $plan, float $amount, ?array $frequency, array $termsAccepted = []): array {
         require_once __DIR__ . '/PayFast.php';
         if ($userId === '' || empty($plan['id'])) {
             throw new Exception('Missing user or plan');
@@ -390,6 +391,7 @@ class PaymentsAPI {
                 'graceDays' => $frequency !== null ? PayFast::GRACE_DAYS : 0,
                 'proof' => null,
                 'status' => 'awaiting_gateway',
+                'termsAccepted' => $termsAccepted ?: null,
                 'submittedAt' => date('c'),
                 'reviewedAt' => null,
                 'reviewedBy' => null,

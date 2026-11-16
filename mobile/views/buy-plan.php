@@ -89,12 +89,24 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
       <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500">Pay by card</p>
       <p class="text-sm text-gray-700 mt-1">
         <?php if ($cardRenews !== ''): ?>
-          <span class="font-bold">R<?= htmlspecialchars(number_format($cardAmount, 2)) ?></span> <?= htmlspecialchars($cardRenews) ?>. Renews automatically; cancel any time in My Subscription.
+          <span class="font-bold">R<?= htmlspecialchars(number_format($cardAmount, 2)) ?></span> <?= htmlspecialchars($cardRenews) ?>.
         <?php else: ?>
           <span class="font-bold">R<?= htmlspecialchars(number_format($cardAmount, 2)) ?></span> once, for <?= (int)($plan['durationDays'] ?? 30) ?> days.
         <?php endif; ?>
       </p>
       <p class="text-[10px] text-gray-500 mt-1">Secure checkout by PayFast. Your plan starts as soon as the payment clears.</p>
+      <ul class="text-[11px] text-gray-600 mt-2 space-y-1 list-disc pl-4">
+        <li>Charged in South African rand (ZAR). You enter your card on PayFast's page; we never see your card details.</li>
+        <?php if ($cardRenews !== ''): ?>
+          <li>Renews <?= htmlspecialchars($cardRenews) ?> at R<?= htmlspecialchars(number_format($cardAmount, 2)) ?> until you cancel. Cancel any time in My Subscription and keep access until the paid period ends.</li>
+          <?php if (($cardFrequency[0] ?? 0) === 6): ?><li>Cancel an annual plan early and you can ask for a refund of the unused full months.</li><?php endif; ?>
+        <?php endif; ?>
+        <li>Full refund if you ask within 7 days of your first payment for a plan.</li>
+      </ul>
+      <label class="flex items-start gap-2 mt-3 text-xs text-gray-700">
+        <input type="checkbox" id="card-accept-terms" class="mt-0.5 accent-black w-4 h-4 shrink-0">
+        <span>I have read and accept the <a href="?page=terms" target="_blank" rel="noopener" class="underline">Terms</a> and the <a href="?page=refunds" target="_blank" rel="noopener" class="underline">Refund and Cancellation Policy</a>.</span>
+      </label>
       <button type="button" id="card-pay-btn" class="mt-3 w-full bg-black text-white py-3 font-bold text-xs uppercase tracking-widest active:scale-95 transition-transform touch-target">
         Pay R<?= htmlspecialchars(number_format($cardAmount, 2)) ?> by card
       </button>
@@ -148,7 +160,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
           <input type="file" name="proof" required accept=".png,.jpg,.jpeg,.webp,.pdf,image/png,image/jpeg,image/webp,application/pdf" class="w-full text-xs">
         </div>
 
-        <p class="text-[10px] text-gray-500">By submitting, you confirm payment was made manually using the selected method.</p>
+        <label class="flex items-start gap-2 text-xs text-gray-700"><input type="checkbox" name="acceptTerms" value="1" required class="mt-0.5 accent-black w-4 h-4 shrink-0"><span>I paid with the method above, and I accept the <a href="?page=terms" target="_blank" rel="noopener" class="underline">Terms</a> and the <a href="?page=refunds" target="_blank" rel="noopener" class="underline">Refund and Cancellation Policy</a>.</span></label>
 
         <button type="submit" id="submit-btn" class="w-full bg-black text-white py-3 font-bold text-xs uppercase tracking-widest active:scale-95 transition-transform touch-target">
           I Have Paid
@@ -170,6 +182,13 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
   const cardBtn = document.getElementById('card-pay-btn');
   if (cardBtn) {
     cardBtn.addEventListener('click', async () => {
+      const accept = document.getElementById('card-accept-terms');
+      if (!accept || !accept.checked) {
+        const msg = 'Please accept the Terms and the Refund and Cancellation Policy first.';
+        if (window.Mobile && Mobile.ui && Mobile.ui.toast) { Mobile.ui.toast(msg); } else { alert(msg); }
+        if (accept) { accept.focus(); }
+        return;
+      }
       const label = cardBtn.innerHTML;
       cardBtn.disabled = true;
       cardBtn.innerHTML = 'Opening PayFast...';
@@ -177,7 +196,7 @@ include MOBILE_VIEW_PATH . '/partials/header-mobile.php';
         const response = await fetch((APP_URL ? APP_URL + '/' : '') + 'api/payfast.php?action=checkout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
-          body: JSON.stringify({ planId: <?= json_encode($planId, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>, returnTo: 'mobile', csrf_token: CSRF_TOKEN })
+          body: JSON.stringify({ planId: <?= json_encode($planId, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>, returnTo: 'mobile', acceptTerms: true, csrf_token: CSRF_TOKEN })
         });
         const result = await response.json();
         const data = result && result.data;

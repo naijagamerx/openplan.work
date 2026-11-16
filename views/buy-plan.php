@@ -63,12 +63,24 @@ $cardCancelled = ($_GET['payfast'] ?? '') === 'cancelled';
                     <h3 class="font-bold text-lg">Pay by card</h3>
                     <p class="text-sm text-gray-500 mt-1">
                         <?php if ($cardRenews !== ''): ?>
-                            R<?php echo e(number_format($cardAmount, 2)); ?> <?php echo e($cardRenews); ?>. Renews automatically; cancel any time in My Subscription.
+                            R<?php echo e(number_format($cardAmount, 2)); ?> <?php echo e($cardRenews); ?>.
                         <?php else: ?>
                             R<?php echo e(number_format($cardAmount, 2)); ?> once, for <?php echo (int)($plan['durationDays'] ?? 30); ?> days.
                         <?php endif; ?>
                         Secure checkout by PayFast. Your plan starts as soon as the payment clears.
                     </p>
+                    <ul class="text-xs text-gray-600 mt-3 space-y-1 list-disc pl-4">
+                        <li>Charged in South African rand (ZAR). You enter your card on PayFast's page; we never see your card details.</li>
+                        <?php if ($cardRenews !== ''): ?>
+                            <li>Renews <?php echo e($cardRenews); ?> at R<?php echo e(number_format($cardAmount, 2)); ?> until you cancel. Cancel any time in My Subscription and keep access until the paid period ends.</li>
+                            <?php if (($cardFrequency[0] ?? 0) === 6): ?><li>Cancel an annual plan early and you can ask for a refund of the unused full months.</li><?php endif; ?>
+                        <?php endif; ?>
+                        <li>Full refund if you ask within 7 days of your first payment for a plan.</li>
+                    </ul>
+                    <label class="flex items-start gap-2 mt-3 text-xs text-gray-700 cursor-pointer">
+                        <input type="checkbox" id="card-accept-terms" class="mt-0.5 rounded border-gray-300">
+                        <span>I have read and accept the <a href="?page=terms" target="_blank" rel="noopener" class="underline">Terms</a> and the <a href="?page=refunds" target="_blank" rel="noopener" class="underline">Refund and Cancellation Policy</a>.</span>
+                    </label>
                 </div>
                 <button type="button" id="card-pay-btn" class="shrink-0 px-8 py-3 bg-black text-white rounded-xl text-sm font-bold uppercase tracking-widest hover:bg-gray-800 transition">
                     Pay R<?php echo e(number_format($cardAmount, 2)); ?>
@@ -133,7 +145,7 @@ $cardCancelled = ($_GET['payfast'] ?? '') === 'cancelled';
                 </div>
 
                 <div class="flex items-center justify-between pt-4 border-t border-gray-100">
-                    <p class="text-xs text-gray-500">By submitting, you confirm payment was made manually using the selected method.</p>
+                    <label class="flex items-start gap-2 text-xs text-gray-600 cursor-pointer max-w-md"><input type="checkbox" name="acceptTerms" value="1" required class="mt-0.5 rounded border-gray-300"><span>I paid with the method above, and I accept the <a href="?page=terms" target="_blank" rel="noopener" class="underline">Terms</a> and the <a href="?page=refunds" target="_blank" rel="noopener" class="underline">Refund and Cancellation Policy</a>.</span></label>
                     <button type="submit" id="submit-btn" class="px-8 py-3 bg-black text-white rounded-xl text-sm font-bold uppercase tracking-widest hover:bg-gray-800 transition inline-flex items-center gap-2">
                         I Have Paid
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
@@ -150,6 +162,12 @@ $cardCancelled = ($_GET['payfast'] ?? '') === 'cancelled';
     const cardBtn = document.getElementById('card-pay-btn');
     if (cardBtn) {
         cardBtn.addEventListener('click', async () => {
+            const accept = document.getElementById('card-accept-terms');
+            if (!accept || !accept.checked) {
+                showToast('Please accept the Terms and the Refund and Cancellation Policy first.', 'error');
+                if (accept) { accept.focus(); }
+                return;
+            }
             const label = cardBtn.innerHTML;
             cardBtn.disabled = true;
             cardBtn.innerHTML = 'Opening PayFast...';
@@ -157,7 +175,7 @@ $cardCancelled = ($_GET['payfast'] ?? '') === 'cancelled';
                 const response = await fetch((typeof APP_URL !== 'undefined' ? APP_URL + '/' : '') + 'api/payfast.php?action=checkout', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
-                    body: JSON.stringify({ planId: <?php echo json_encode($planId, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>, csrf_token: CSRF_TOKEN })
+                    body: JSON.stringify({ planId: <?php echo json_encode($planId, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>, acceptTerms: true, csrf_token: CSRF_TOKEN })
                 });
                 const result = await response.json();
                 const data = result && result.data;

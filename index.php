@@ -12,8 +12,8 @@ require_once __DIR__ . '/includes/DeviceDetector.php';
 // Get the requested page
 $rawPage = $_GET['page'] ?? 'homepage';
 $page = preg_replace('/[^a-z0-9_-]/i', '', $rawPage);
-$publicMarketingPages = ['homepage', 'docs', 'pricing', 'how-it-works', 'mobile'];
-$publicPages = array_merge($publicMarketingPages, ['login', 'master-code', 'setup', 'register', 'thank-you', 'forgot-password', 'reset-password', 'verify-email', 'privacy', 'terms']);
+$publicMarketingPages = ['homepage', 'docs', 'pricing', 'how-it-works', 'mobile', 'terms', 'privacy', 'refunds'];
+$publicPages = array_merge($publicMarketingPages, ['login', 'master-code', 'setup', 'register', 'thank-you', 'forgot-password', 'reset-password', 'verify-email']);
 $verificationAllowedPages = ['verification-required', 'verify-email', 'logout'];
 
 // Public marketing routes always use their own responsive page layouts.
@@ -471,7 +471,7 @@ $pageTitle = ucfirst(str_replace('-', ' ', $page)) . ' | ' . getSiteName();
 $fullPageViews = array_merge($publicMarketingPages, ['setup', 'notes-three-pane-sample']);
 
 // Include the appropriate layout
-$authLayoutPages = ['login', 'master-code', 'register', 'thank-you', 'forgot-password', 'reset-password', 'verify-email', 'verification-required', 'privacy', 'terms'];
+$authLayoutPages = ['login', 'master-code', 'register', 'thank-you', 'forgot-password', 'reset-password', 'verify-email', 'verification-required'];
 if (in_array($page, $authLayoutPages, true)) {
     include VIEWS_PATH . '/layouts/auth.php';
 } elseif (in_array($page, $fullPageViews)) {

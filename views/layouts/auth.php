@@ -316,6 +316,7 @@ $ogImageUrl = APP_URL . '/' . $seoOgImage;
                 <div class="flex gap-4">
                     <a class="hover:text-black transition-colors" href="?page=privacy">Privacy</a>
                     <a class="hover:text-black transition-colors" href="?page=terms">Terms</a>
+                    <a class="hover:text-black transition-colors" href="?page=refunds">Refunds</a>
                 </div>
             </footer>
         </div>

@@ -210,3 +210,19 @@ html.js [data-dashboard-shot]:not(.is-revealed) { clip-path: inset(0 0 100% 0); 
     .public-topic { transition: none; }
     html.js [data-dashboard-shot]:not(.is-revealed) { clip-path: none; }
 }
+
+/* Legal pages: Terms, Privacy, Refunds (views/partials/legal/desktop.php) */
+.public-legal-hero h1 { max-width: 18ch; font-size: clamp(2.6rem, 5vw, 4.4rem); }
+.public-legal-updated { margin: -.4rem 0 1.4rem; color: var(--muted); font-size: .78rem; }
+.public-docs-links a[aria-current="page"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.public-legal .public-docs-section h2 { max-width: none; font-size: clamp(1.45rem, 2.4vw, 1.9rem); }
+.public-legal .public-docs-section a { text-decoration: underline; text-underline-offset: .2em; }
+.public-legal dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .45rem 1.4rem; margin-top: 1rem; font-size: .9rem; }
+.public-legal dt { font-weight: 700; }
+.public-legal dd { margin: 0; color: var(--ink-soft); overflow-wrap: anywhere; }
+.public-legal-missing { margin-bottom: 2rem; border-color: var(--ink); }
+@media (max-width: 760px) {
+    .public-legal-hero h1 { max-width: 16ch; font-size: clamp(2.2rem, 9vw, 3rem); }
+    .public-legal dl { grid-template-columns: 1fr; gap: .1rem; }
+    .public-legal dd { margin-bottom: .6rem; }
+}

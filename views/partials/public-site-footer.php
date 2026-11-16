@@ -18,6 +18,11 @@
         </div>
         <div class="footer-bottom">
             <span>© <?php echo date('Y'); ?> <?php echo e($siteName); ?></span>
+            <nav class="site-footer__legal" aria-label="Legal">
+                <a href="<?php echo e($publicRouteUrl('terms')); ?>">Terms</a>
+                <a href="<?php echo e($publicRouteUrl('privacy')); ?>">Privacy</a>
+                <a href="<?php echo e($publicRouteUrl('refunds')); ?>">Refunds and cancellation</a>
+            </nav>
             <a href="#top">Back to top ↑</a>
         </div>
     </div>

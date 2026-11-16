@@ -48,7 +48,7 @@ require_once __DIR__ . '/config.php';
 $page = $_GET['page'] ?? 'dashboard';
 
 // Ensure user is authenticated for protected pages
-$publicPages = ['login', 'setup', 'register', 'logout', '404'];
+$publicPages = ['login', 'setup', 'register', 'logout', '404', 'terms', 'privacy', 'refunds'];
 
 if (!in_array($page, $publicPages)) {
     if (!Auth::check()) {

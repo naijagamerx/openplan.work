@@ -3,7 +3,7 @@
  * PayFast card checkout (South Africa, ZAR) for signed-in users.
  *
  * GET  ?action=status                          -> {enabled, sandbox}
- * POST ?action=checkout  {planId, returnTo?}   -> {action, fields}: the browser posts
+ * POST ?action=checkout  {planId, acceptTerms: true, returnTo?}   -> {action, fields}: the browser posts
  *                                                 these signed fields to PayFast
  * POST ?action=cancel                          -> stops the card subscription at PayFast;
  *                                                 the plan stays active until it expires
@@ -63,7 +63,14 @@ try {
                 errorResponse('You already have a card subscription that renews automatically. Cancel it on My Subscription before starting another.', 409, 'ALREADY_SUBSCRIBED');
             }
 
-            $record = $payments->createCardCheckout($userId, $plan, $amount, $frequency);
+            // PayFast requires the buyer to accept the refund policy on the checkout
+            // screen; keep a record of which version they accepted.
+            if (($body['acceptTerms'] ?? false) !== true) {
+                errorResponse('Please accept the Terms and the Refund and Cancellation Policy first.', 400, 'TERMS_NOT_ACCEPTED');
+            }
+            $termsAccepted = ['version' => legalPolicyVersion(), 'at' => date('c')];
+
+            $record = $payments->createCardCheckout($userId, $plan, $amount, $frequency, $termsAccepted);
 
             $base = $config['siteUrl'];
             $appBase = (($body['returnTo'] ?? '') === 'mobile') ? $base . '/mobile' : $base;

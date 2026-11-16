@@ -103,9 +103,13 @@ if ($planId === '' || $methodId === '') {
 if (empty($_FILES['proof'])) {
     errorResponse('Payment proof file is required', 400, 'VALIDATION');
 }
+if (($_POST['acceptTerms'] ?? '') !== '1') {
+    errorResponse('Please accept the Terms and the Refund and Cancellation Policy first.', 400, 'TERMS_NOT_ACCEPTED');
+}
+$termsAccepted = ['version' => legalPolicyVersion(), 'at' => date('c')];
 
 try {
-    $payment = $api->submit(Auth::userId(), $planId, $methodId, $_FILES['proof']);
+    $payment = $api->submit(Auth::userId(), $planId, $methodId, $_FILES['proof'], $termsAccepted);
     successResponse($payment, 'Payment submitted');
 } catch (Throwable $e) {
     errorResponse($e->getMessage(), 400, 'ERROR');
